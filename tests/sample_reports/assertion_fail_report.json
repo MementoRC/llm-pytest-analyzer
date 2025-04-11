@@ -1,0 +1,28 @@
+{
+  "created": 1712621338.818604,
+  "duration": 0.01588892936706543,
+  "exitcode": 1,
+  "root": "/tmp/pytest-of-user/pytest-1/assertion_fail0",
+  "summary": {
+    "failed": 1,
+    "total": 1
+  },
+  "tests": [
+    {
+      "nodeid": "test_assertion_fail.py::test_simple_fail",
+      "lineno": 4,
+      "outcome": "failed",
+      "message": "AssertionError: Values are not equal\nassert 1 == 2",
+      "duration": 0.00019192695617675781,
+      "call": {
+        "traceback": [
+          {
+            "path": "test_assertion_fail.py",
+            "lineno": 7,
+            "message": "AssertionError: Values are not equal"
+          }
+        ]
+      }
+    }
+  ]
+}

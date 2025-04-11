@@ -1,0 +1,19 @@
+{
+  "created": 1712621338.818604,
+  "duration": 0.01588892936706543,
+  "exitcode": 0,
+  "root": "/tmp/pytest-of-user/pytest-1/passing0",
+  "summary": {
+    "failed": 0,
+    "total": 1,
+    "passed": 1
+  },
+  "tests": [
+    {
+      "nodeid": "test_passing.py::test_simple_pass",
+      "lineno": 4,
+      "outcome": "passed",
+      "duration": 0.00019192695617675781
+    }
+  ]
+}

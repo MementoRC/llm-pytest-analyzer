@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+  <testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="0.016">
+    <testcase classname="test_assertion_fail" name="test_simple_fail" time="0.000">
+      <failure message="AssertionError: Values are not equal&#10;assert 1 == 2">def test_simple_fail():
+    x = 1
+    y = 2
+&gt;   assert x == y, "Values are not equal"
+E   AssertionError: Values are not equal
+E   assert 1 == 2
+
+test_assertion_fail.py:7: AssertionError</failure>
+    </testcase>
+  </testsuite>
+</testsuites>
