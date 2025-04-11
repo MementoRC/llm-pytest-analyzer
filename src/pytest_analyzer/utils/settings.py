@@ -21,8 +21,15 @@ class Settings:
     preferred_format: str = "json"  # Preferred output format: json, xml, or text
     
     # Analysis settings
-    max_suggestions: int = 3   # Maximum suggestions per failure
+    max_suggestions: int = 3   # Maximum suggestions overall
+    max_suggestions_per_failure: int = 3  # Maximum suggestions per failure
     min_confidence: float = 0.5  # Minimum confidence for suggestions
+    
+    # LLM settings
+    use_llm: bool = False      # Whether to use LLM-based suggestions
+    llm_timeout: int = 60      # Timeout for LLM requests in seconds
+    llm_api_key: Optional[str] = None  # API key for LLM service
+    llm_model: str = "auto"    # Model to use (auto selects available models)
     
     # Path settings
     project_root: Optional[Path] = None  # Root directory of the project

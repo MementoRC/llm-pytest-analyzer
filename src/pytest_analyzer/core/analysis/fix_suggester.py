@@ -2,7 +2,7 @@ import logging
 import re
 from typing import List, Dict, Any, Optional
 
-from ..models.test_failure import TestFailure, FixSuggestion
+from ..models.pytest_failure import PytestFailure, FixSuggestion
 from ...utils.resource_manager import with_timeout
 
 logger = logging.getLogger(__name__)
@@ -26,12 +26,12 @@ class FixSuggester:
         self.min_confidence = min_confidence
         
     @with_timeout(60)
-    def suggest_fixes(self, failure: TestFailure) -> List[FixSuggestion]:
+    def suggest_fixes(self, failure: PytestFailure) -> List[FixSuggestion]:
         """
         Suggest fixes for a test failure.
         
         Args:
-            failure: TestFailure object to analyze
+            failure: PytestFailure object to analyze
             
         Returns:
             List of suggested fixes
@@ -47,46 +47,53 @@ class FixSuggester:
             logger.error(f"Error suggesting fixes: {e}")
             return []
             
-    def _generate_suggestions(self, failure: TestFailure) -> List[FixSuggestion]:
+    def _generate_suggestions(self, failure: PytestFailure) -> List[FixSuggestion]:
         """
         Generate suggestions based on the error type.
         
         Args:
-            failure: TestFailure object to analyze
+            failure: PytestFailure object to analyze
             
         Returns:
             List of suggested fixes
         """
-        error_type = failure.error_type.lower()
+        error_type = failure.error_type
         
-        if 'assertion' in error_type:
+        # Check for exact match first
+        if error_type == "AssertionError":
             return self._suggest_assertion_fixes(failure)
-        elif 'attribute' in error_type:
+            
+        # For other error types, use case-insensitive comparison
+        error_type_lower = error_type.lower()
+        
+        if 'assertion' in error_type_lower:
+            return self._suggest_assertion_fixes(failure)
+        elif 'attribute' in error_type_lower:
             return self._suggest_attribute_fixes(failure)
-        elif 'import' in error_type:
+        elif 'import' in error_type_lower:
             return self._suggest_import_fixes(failure)
-        elif 'type' in error_type:
+        elif 'type' in error_type_lower:
             return self._suggest_type_fixes(failure)
-        elif 'name' in error_type:
+        elif 'name' in error_type_lower:
             return self._suggest_name_fixes(failure)
-        elif 'syntax' in error_type:
+        elif 'syntax' in error_type_lower:
             return self._suggest_syntax_fixes(failure)
         else:
             return self._suggest_generic_fixes(failure)
             
-    def _suggest_assertion_fixes(self, failure: TestFailure) -> List[FixSuggestion]:
+    def _suggest_assertion_fixes(self, failure: PytestFailure) -> List[FixSuggestion]:
         """
         Suggest fixes for assertion errors.
         
         Args:
-            failure: TestFailure object to analyze
+            failure: PytestFailure object to analyze
             
         Returns:
             List of suggested fixes
         """
         suggestions = []
         
-        # Extract the actual and expected values
+        # Extract the actual and expected values from the traceback
         exp_vs_act_match = re.search(r'E\s+assert\s+(.+?)\s*==\s*(.+)', failure.traceback)
         if exp_vs_act_match:
             actual = exp_vs_act_match.group(1).strip()
@@ -118,7 +125,57 @@ class FixSuggester:
                 explanation=f"The test expected {expected} but got {actual}. If {expected} is the correct value, update the implementation."
             ))
             
-        elif 'AssertionError' in failure.traceback:
+        # Try to extract from error message if traceback didn't work
+        elif "assert" in failure.error_message:
+            exp_vs_act_match = re.search(r'assert\s+(.+?)\s*==\s*(.+)', failure.error_message)
+            if exp_vs_act_match:
+                actual = exp_vs_act_match.group(1).strip()
+                expected = exp_vs_act_match.group(2).strip()
+                
+                # Suggest updating the assertion
+                suggestions.append(FixSuggestion(
+                    failure=failure,
+                    suggestion=f"Change the assertion to expect {actual} instead of {expected}",
+                    confidence=0.7,
+                    code_changes={
+                        'type': 'assertion',
+                        'actual': actual,
+                        'expected': expected
+                    },
+                    explanation=f"The test expected {expected} but got {actual}. If {actual} is the correct value, update the assertion."
+                ))
+                
+                # Suggest fixing the implementation
+                suggestions.append(FixSuggestion(
+                    failure=failure,
+                    suggestion=f"Fix the implementation to return {expected} instead of {actual}",
+                    confidence=0.7,
+                    code_changes={
+                        'type': 'implementation',
+                        'actual': actual,
+                        'expected': expected
+                    },
+                    explanation=f"The test expected {expected} but got {actual}. If {expected} is the correct value, update the implementation."
+                ))
+            else:
+                # Extract the assertion statement
+                assert_match = re.search(r'assert\s+(.+)', failure.error_message)
+                if assert_match:
+                    assertion = assert_match.group(1).strip()
+                    
+                    suggestions.append(FixSuggestion(
+                        failure=failure,
+                        suggestion=f"Review the assertion: assert {assertion}",
+                        confidence=0.6,
+                        code_changes={
+                            'type': 'assertion',
+                            'assertion': assertion
+                        },
+                        explanation=f"The assertion 'assert {assertion}' failed. Check if the condition is correct."
+                    ))
+        
+        # If we still don't have suggestions, look for AssertionError in traceback
+        if not suggestions and 'AssertionError' in failure.traceback:
             # Extract the assertion statement
             assert_match = re.search(r'>\s+assert\s+(.+)', failure.traceback)
             if assert_match:
@@ -135,14 +192,23 @@ class FixSuggester:
                     explanation=f"The assertion 'assert {assertion}' failed. Check if the condition is correct."
                 ))
                 
+        # Generic fallback if no specific pattern was found
+        if not suggestions:
+            suggestions.append(FixSuggestion(
+                failure=failure,
+                suggestion="Review the assertion logic in the test",
+                confidence=0.5,
+                explanation="The assertion failed. Review the test logic and the expected values."
+            ))
+            
         return suggestions
         
-    def _suggest_attribute_fixes(self, failure: TestFailure) -> List[FixSuggestion]:
+    def _suggest_attribute_fixes(self, failure: PytestFailure) -> List[FixSuggestion]:
         """
         Suggest fixes for attribute errors.
         
         Args:
-            failure: TestFailure object to analyze
+            failure: PytestFailure object to analyze
             
         Returns:
             List of suggested fixes
@@ -178,12 +244,12 @@ class FixSuggester:
             
         return suggestions
         
-    def _suggest_import_fixes(self, failure: TestFailure) -> List[FixSuggestion]:
+    def _suggest_import_fixes(self, failure: PytestFailure) -> List[FixSuggestion]:
         """
         Suggest fixes for import errors.
         
         Args:
-            failure: TestFailure object to analyze
+            failure: PytestFailure object to analyze
             
         Returns:
             List of suggested fixes
@@ -224,12 +290,12 @@ class FixSuggester:
                 
         return suggestions
         
-    def _suggest_type_fixes(self, failure: TestFailure) -> List[FixSuggestion]:
+    def _suggest_type_fixes(self, failure: PytestFailure) -> List[FixSuggestion]:
         """
         Suggest fixes for type errors.
         
         Args:
-            failure: TestFailure object to analyze
+            failure: PytestFailure object to analyze
             
         Returns:
             List of suggested fixes
@@ -284,12 +350,12 @@ class FixSuggester:
             
         return suggestions
         
-    def _suggest_name_fixes(self, failure: TestFailure) -> List[FixSuggestion]:
+    def _suggest_name_fixes(self, failure: PytestFailure) -> List[FixSuggestion]:
         """
         Suggest fixes for name errors.
         
         Args:
-            failure: TestFailure object to analyze
+            failure: PytestFailure object to analyze
             
         Returns:
             List of suggested fixes
@@ -335,12 +401,12 @@ class FixSuggester:
             
         return suggestions
         
-    def _suggest_syntax_fixes(self, failure: TestFailure) -> List[FixSuggestion]:
+    def _suggest_syntax_fixes(self, failure: PytestFailure) -> List[FixSuggestion]:
         """
         Suggest fixes for syntax errors.
         
         Args:
-            failure: TestFailure object to analyze
+            failure: PytestFailure object to analyze
             
         Returns:
             List of suggested fixes
@@ -413,12 +479,12 @@ class FixSuggester:
             
         return suggestions
         
-    def _suggest_generic_fixes(self, failure: TestFailure) -> List[FixSuggestion]:
+    def _suggest_generic_fixes(self, failure: PytestFailure) -> List[FixSuggestion]:
         """
         Suggest fixes for generic errors.
         
         Args:
-            failure: TestFailure object to analyze
+            failure: PytestFailure object to analyze
             
         Returns:
             List of suggested fixes

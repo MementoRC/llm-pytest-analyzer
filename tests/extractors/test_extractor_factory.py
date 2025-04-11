@@ -3,11 +3,11 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from ...core.extraction.extractor_factory import get_extractor, ExtractorFactory
-from ...core.extraction.json_extractor import JsonResultExtractor
-from ...core.extraction.xml_extractor import XmlResultExtractor
-from ...utils.path_resolver import PathResolver
-from ...utils.settings import Settings
+from src.pytest_analyzer.core.extraction.extractor_factory import get_extractor, ExtractorFactory
+from src.pytest_analyzer.core.extraction.json_extractor import JsonResultExtractor
+from src.pytest_analyzer.core.extraction.xml_extractor import XmlResultExtractor
+from src.pytest_analyzer.utils.path_resolver import PathResolver
+from src.pytest_analyzer.utils.settings import Settings
 
 
 @pytest.fixture

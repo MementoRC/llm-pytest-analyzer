@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from ...utils.path_resolver import PathResolver
+from src.pytest_analyzer.utils.path_resolver import PathResolver
 
 
 @pytest.fixture

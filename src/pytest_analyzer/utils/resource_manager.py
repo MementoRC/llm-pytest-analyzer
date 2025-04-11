@@ -21,27 +21,31 @@ class MemoryLimitError(Exception):
 
 
 @contextmanager
-def timeout_context(seconds: int):
+def timeout_context(seconds: float):
     """Context manager for timing out operations"""
     def handler(signum, frame):
         raise TimeoutError(f"Operation exceeded time limit of {seconds} seconds")
     
+    # Check for negative timeout
+    if seconds < 0:
+        raise ValueError("Timeout seconds must be non-negative")
+    
     # Store original handler
     original_handler = signal.getsignal(signal.SIGALRM)
     
-    # Set new handler and alarm
+    # Set new handler and timer
     signal.signal(signal.SIGALRM, handler)
-    signal.alarm(seconds)
+    signal.setitimer(signal.ITIMER_REAL, seconds)  # Use setitimer for float support
     
     try:
         yield
     finally:
-        # Reset alarm and restore original handler
-        signal.alarm(0)
+        # Reset timer and restore original handler
+        signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, original_handler)
 
 
-def with_timeout(seconds: int) -> Callable[[Callable[..., T]], Callable[..., T]]:
+def with_timeout(seconds: float) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """Decorator for adding timeout to functions"""
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)

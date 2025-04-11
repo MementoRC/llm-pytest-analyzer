@@ -1,4 +1,4 @@
-"""Tests for the TestAnalyzerService."""
+"""Tests for the PytestAnalyzerService."""
 import subprocess
 
 import pytest
@@ -6,15 +6,15 @@ from unittest.mock import patch, MagicMock, mock_open
 from pathlib import Path
 import tempfile
 
-from ..core.analyzer_service import TestAnalyzerService
-from ..core.models.test_failure import TestFailure, FixSuggestion
-from ..utils.settings import Settings
+from src.pytest_analyzer.core.analyzer_service import PytestAnalyzerService
+from src.pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
+from src.pytest_analyzer.utils.settings import Settings
 
 
 @pytest.fixture
 def test_failure():
     """Create a test failure for testing."""
-    return TestFailure(
+    return PytestFailure(
         test_name="test_function",
         test_file="test_file.py",
         error_type="AssertionError",
@@ -30,7 +30,7 @@ def mock_extractor():
     """Create a mock extractor."""
     mock = MagicMock()
     mock.extract_failures.return_value = [
-        TestFailure(
+        PytestFailure(
             test_name="test_function",
             test_file="test_file.py",
             error_type="AssertionError",
@@ -43,22 +43,24 @@ def mock_extractor():
 
 @pytest.fixture
 def analyzer_service():
-    """Create a TestAnalyzerService instance."""
+    """Create a PytestAnalyzerService instance."""
     settings = Settings(
         max_failures=10,
         max_suggestions=3,
         min_confidence=0.5,
     )
-    return TestAnalyzerService(settings=settings)
+    return PytestAnalyzerService(settings=settings)
 
 
-@patch('pytest_analyzer.core.extraction.extractor_factory.get_extractor')
-def test_analyze_pytest_output(mock_get_extractor, mock_extractor, analyzer_service):
+@patch('src.pytest_analyzer.core.analyzer_service.get_extractor')
+@patch('src.pytest_analyzer.core.analysis.fix_suggester.FixSuggester.suggest_fixes')
+def test_analyze_pytest_output(mock_suggest_fixes, mock_get_extractor, mock_extractor, analyzer_service):
     """Test analyzing pytest output from a file."""
     # Setup
     mock_get_extractor.return_value = mock_extractor
+    mock_suggest_fixes.return_value = []  # Mock suggest_fixes to return empty list
     
-    with tempfile.NamedTemporaryFile() as tmp:
+    with tempfile.NamedTemporaryFile(suffix='.json') as tmp:
         # Execute
         with patch('pathlib.Path.exists', return_value=True):
             suggestions = analyzer_service.analyze_pytest_output(tmp.name)
@@ -66,10 +68,11 @@ def test_analyze_pytest_output(mock_get_extractor, mock_extractor, analyzer_serv
         # Assert
         mock_get_extractor.assert_called_once()
         mock_extractor.extract_failures.assert_called_once()
+        mock_suggest_fixes.assert_called()
         assert len(suggestions) == 0  # No suggestions since we mocked the suggester
 
 
-@patch('pytest_analyzer.core.extraction.extractor_factory.get_extractor')
+@patch('src.pytest_analyzer.core.extraction.extractor_factory.get_extractor')
 def test_analyze_pytest_output_nonexistent_file(mock_get_extractor, analyzer_service):
     """Test analyzing a nonexistent pytest output file."""
     # Execute
@@ -81,12 +84,13 @@ def test_analyze_pytest_output_nonexistent_file(mock_get_extractor, analyzer_ser
     assert len(suggestions) == 0
 
 
-@patch('pytest_analyzer.core.extraction.pytest_plugin.collect_failures_with_plugin')
-def test_run_and_analyze_plugin(mock_collect, analyzer_service):
+@patch('src.pytest_analyzer.core.analyzer_service.collect_failures_with_plugin')
+@patch('src.pytest_analyzer.core.analysis.fix_suggester.FixSuggester.suggest_fixes')
+def test_run_and_analyze_plugin(mock_suggest_fixes, mock_collect, analyzer_service):
     """Test running and analyzing tests with plugin integration."""
     # Setup
     mock_collect.return_value = [
-        TestFailure(
+        PytestFailure(
             test_name="test_function",
             test_file="test_file.py",
             error_type="AssertionError",
@@ -94,6 +98,7 @@ def test_run_and_analyze_plugin(mock_collect, analyzer_service):
             traceback="Traceback...",
         )
     ]
+    mock_suggest_fixes.return_value = []  # Mock suggest_fixes to return empty list
     
     analyzer_service.settings.preferred_format = "plugin"
     
@@ -102,15 +107,18 @@ def test_run_and_analyze_plugin(mock_collect, analyzer_service):
     
     # Assert
     mock_collect.assert_called_once_with(["test_path"])
+    mock_suggest_fixes.assert_called()
     assert len(suggestions) == 0  # No suggestions since we mocked the suggester
 
 
 @patch('subprocess.run')
-@patch('pytest_analyzer.core.extraction.extractor_factory.get_extractor')
-def test_run_and_analyze_json(mock_get_extractor, mock_run, mock_extractor, analyzer_service):
+@patch('src.pytest_analyzer.core.analyzer_service.get_extractor')
+@patch('src.pytest_analyzer.core.analysis.fix_suggester.FixSuggester.suggest_fixes')
+def test_run_and_analyze_json(mock_suggest_fixes, mock_get_extractor, mock_run, mock_extractor, analyzer_service):
     """Test running and analyzing tests with JSON output."""
     # Setup
     mock_get_extractor.return_value = mock_extractor
+    mock_suggest_fixes.return_value = []  # Mock suggest_fixes to return empty list
     
     analyzer_service.settings.preferred_format = "json"
     
@@ -122,15 +130,18 @@ def test_run_and_analyze_json(mock_get_extractor, mock_run, mock_extractor, anal
     mock_run.assert_called_once()
     mock_get_extractor.assert_called_once()
     mock_extractor.extract_failures.assert_called_once()
+    mock_suggest_fixes.assert_called()
     assert len(suggestions) == 0  # No suggestions since we mocked the suggester
 
 
 @patch('subprocess.run')
-@patch('pytest_analyzer.core.extraction.extractor_factory.get_extractor')
-def test_run_and_analyze_xml(mock_get_extractor, mock_run, mock_extractor, analyzer_service):
+@patch('src.pytest_analyzer.core.analyzer_service.get_extractor')
+@patch('src.pytest_analyzer.core.analysis.fix_suggester.FixSuggester.suggest_fixes')
+def test_run_and_analyze_xml(mock_suggest_fixes, mock_get_extractor, mock_run, mock_extractor, analyzer_service):
     """Test running and analyzing tests with XML output."""
     # Setup
     mock_get_extractor.return_value = mock_extractor
+    mock_suggest_fixes.return_value = []  # Mock suggest_fixes to return empty list
     
     analyzer_service.settings.preferred_format = "xml"
     
@@ -142,6 +153,7 @@ def test_run_and_analyze_xml(mock_get_extractor, mock_run, mock_extractor, analy
     mock_run.assert_called_once()
     mock_get_extractor.assert_called_once()
     mock_extractor.extract_failures.assert_called_once()
+    mock_suggest_fixes.assert_called()
     assert len(suggestions) == 0  # No suggestions since we mocked the suggester
 
 

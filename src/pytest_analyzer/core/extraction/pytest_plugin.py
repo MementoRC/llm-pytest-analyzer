@@ -3,7 +3,7 @@ import logging
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 
-from ..models.test_failure import TestFailure
+from ..models.pytest_failure import PytestFailure
 
 logger = logging.getLogger(__name__)
 
@@ -22,18 +22,21 @@ class FailureCollectorPlugin:
     """
     
     def __init__(self):
-        self.failures: List[TestFailure] = []
+        self.failures: List[PytestFailure] = []
         self.test_items: Dict[str, Any] = {}
         
     @pytest.hookimpl(hookwrapper=True)
     def pytest_collection_modifyitems(self, items):
         """Store test items for later reference."""
         for item in items:
-            self.test_items[item.nodeid] = {
-                'path': str(item.path) if hasattr(item, 'path') else None,
-                'module': item.module.__name__ if hasattr(item, 'module') else None,
-                'function': item.function.__name__ if hasattr(item, 'function') else None,
-            }
+            try:
+                self.test_items[item.nodeid] = {
+                    'path': str(item.path) if hasattr(item, 'path') else None,
+                    'module': item.module.__name__ if hasattr(item, 'module') else None,
+                    'function': item.function.__name__ if hasattr(item, 'function') else None,
+                }
+            except Exception as e:
+                logger.error(f"Error processing test item {getattr(item, 'nodeid', 'unknown')}: {e}")
         yield
         
     @pytest.hookimpl(hookwrapper=True)
@@ -42,7 +45,8 @@ class FailureCollectorPlugin:
         outcome = yield
         report = outcome.get_result()
         
-        if report.failed:
+        # Only process failures during the 'call' phase
+        if report.when == 'call' and report.failed:
             try:
                 self._process_failure(item, report)
             except Exception as e:
@@ -81,8 +85,8 @@ class FailureCollectorPlugin:
                 error_type = crash.message.split(':', 1)[0] if ':' in crash.message else "AssertionError"
                 error_message = crash.message
         
-        # Create TestFailure object
-        failure = TestFailure(
+        # Create PytestFailure object
+        failure = PytestFailure(
             test_name=item.nodeid,
             test_file=str(item.path) if hasattr(item, 'path') else "",
             line_number=line_number,
@@ -95,12 +99,12 @@ class FailureCollectorPlugin:
         
         self.failures.append(failure)
         
-    def get_failures(self) -> List[TestFailure]:
+    def get_failures(self) -> List[PytestFailure]:
         """Get the collected failures."""
         return self.failures
 
 
-def collect_failures_with_plugin(pytest_args: List[str]) -> List[TestFailure]:
+def collect_failures_with_plugin(pytest_args: List[str]) -> List[PytestFailure]:
     """
     Run pytest with the FailureCollectorPlugin to collect failures.
     
@@ -108,7 +112,7 @@ def collect_failures_with_plugin(pytest_args: List[str]) -> List[TestFailure]:
         pytest_args: Arguments to pass to pytest
         
     Returns:
-        List of TestFailure objects
+        List of PytestFailure objects
     """
     plugin = FailureCollectorPlugin()
     pytest.main(pytest_args, plugins=[plugin])

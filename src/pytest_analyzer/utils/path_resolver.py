@@ -74,18 +74,19 @@ class PathResolver:
         """
         path = Path(path) if isinstance(path, str) else path
         
+        # First, check if the path is in a mock directory
+        for prefix, mock_location in self.mock_dirs.items():
+            try:
+                # Use is_relative_to (Python 3.9+) to check if path is under mock_location
+                if path.is_relative_to(mock_location):
+                    rel_to_mock = path.relative_to(mock_location)
+                    return Path(prefix) / rel_to_mock
+            except ValueError:
+                continue
+                
+        # If not in a mock directory, try to make it relative to the project root
         try:
             return path.relative_to(self.project_root)
         except ValueError:
-            # If the path cannot be made relative to the project root,
-            # check if it's in a mock directory
-            for prefix, mock_location in self.mock_dirs.items():
-                try:
-                    if str(path).startswith(str(mock_location)):
-                        rel_to_mock = path.relative_to(mock_location)
-                        return Path(prefix) / rel_to_mock
-                except ValueError:
-                    continue
-                    
             # Return the path as is if it can't be relativized
             return path

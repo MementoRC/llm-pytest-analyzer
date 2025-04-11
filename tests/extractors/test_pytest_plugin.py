@@ -3,8 +3,8 @@ import pytest
 import sys
 from unittest.mock import MagicMock, patch
 
-from ...core.extraction.pytest_plugin import FailureCollectorPlugin, collect_failures_with_plugin
-from ...core.models.test_failure import TestFailure
+from src.pytest_analyzer.core.extraction.pytest_plugin import FailureCollectorPlugin, collect_failures_with_plugin
+from src.pytest_analyzer.core.models.pytest_failure import PytestFailure
 
 
 class MockPytestPlugin:
@@ -36,18 +36,34 @@ def test_plugin_initialization(plugin):
 
 def test_plugin_collection_modifyitems(plugin):
     """Test the pytest_collection_modifyitems hook."""
-    # Create mock pytest items
+    # Create mock pytest items with full attributes
     item1 = MagicMock()
     item1.nodeid = "test_file.py::test_function1"
     item1.path = "test_file.py"
+    item1.module = MagicMock(__name__='test_module1')
+    item1.function = MagicMock(__name__='test_function1')
     
     item2 = MagicMock()
     item2.nodeid = "test_file.py::test_function2"
     item2.path = "test_file.py"
+    item2.module = MagicMock(__name__='test_module2')
+    item2.function = MagicMock(__name__='test_function2')
     
-    # Call the hook
+    # Create the items list
     items = [item1, item2]
-    plugin.pytest_collection_modifyitems(items)
+    
+    # Get the generator from the hook
+    gen = plugin.pytest_collection_modifyitems(items)
+    
+    # Run code up to the yield
+    gen.send(None)  # Equivalent to next(gen)
+    
+    # Complete the generator
+    try:
+        next(gen)
+    except StopIteration:
+        # This is expected - the generator should finish
+        pass
     
     # Verify the results
     assert len(plugin.test_items) == 2
@@ -55,21 +71,38 @@ def test_plugin_collection_modifyitems(plugin):
     assert plugin.test_items[item2.nodeid]['path'] == "test_file.py"
 
 
-@patch('logging.Logger.error')
+@patch('src.pytest_analyzer.core.extraction.pytest_plugin.logger.error')
 def test_plugin_collection_modifyitems_error(mock_logger_error, plugin):
     """Test error handling in the pytest_collection_modifyitems hook."""
     # Create a mock item that raises an exception when accessed
     item = MagicMock()
     item.nodeid = "test_file.py::test_function"
-    type(item).path = property(side_effect=Exception("Test error"))
     
-    # Call the hook
+    # Define a function that raises an exception when called
+    def raise_error(*args, **kwargs):
+        raise Exception("Test error")
+    
+    # Set the path property to use our function
+    type(item).path = property(fget=raise_error)
+    
+    # Create the items list
     items = [item]
-    # The hook should catch the exception and continue
-    plugin.pytest_collection_modifyitems(items)
+    
+    # Get the generator from the hook
+    gen = plugin.pytest_collection_modifyitems(items)
+    
+    # Run code up to the yield
+    gen.send(None)  # Equivalent to next(gen)
+    
+    # Complete the generator
+    try:
+        next(gen)
+    except StopIteration:
+        # This is expected - the generator should finish
+        pass
     
     # Verify the error was logged
-    assert mock_logger_error.called
+    mock_logger_error.assert_called_once()
 
 
 def test_plugin_runtest_makereport_failed(plugin):
@@ -80,25 +113,32 @@ def test_plugin_runtest_makereport_failed(plugin):
     item.path = "test_file.py"
     
     call = MagicMock()
+    call.when = 'call'  # Set the phase to 'call'
     
     report = MagicMock()
     report.failed = True
+    report.when = 'call'  # Match the phase from call
     report.longrepr = "Assert failed"
     
     # Mock the _process_failure method
     plugin._process_failure = MagicMock()
     
-    # Call the hook
+    # Create the outcome object to be sent back into the generator
     outcome = MagicMock()
     outcome.get_result.return_value = report
     
-    # The hook uses the yield statement, so we need to set up a generator
-    # that yields the outcome
-    def mock_generator():
-        yield outcome
+    # Get the generator from the hook
+    gen = plugin.pytest_runtest_makereport(item, call)
     
-    # Call the hook through its wrapper
-    next(plugin.pytest_runtest_makereport(item, call))
+    # Run code up to the yield
+    gen.send(None)  # Equivalent to next(gen)
+    
+    # Send the outcome back to resume after the yield
+    try:
+        gen.send(outcome)
+    except StopIteration:
+        # This is expected - the generator should finish
+        pass
     
     # Verify that _process_failure was called
     plugin._process_failure.assert_called_once_with(item, report)
@@ -135,7 +175,7 @@ def test_plugin_runtest_makereport_passed(plugin):
     plugin._process_failure.assert_not_called()
 
 
-@patch('logging.Logger.error')
+@patch('src.pytest_analyzer.core.extraction.pytest_plugin.logger.error')
 def test_plugin_runtest_makereport_error(mock_logger_error, plugin):
     """Test error handling in the pytest_runtest_makereport hook."""
     # Create mock pytest objects
@@ -144,25 +184,32 @@ def test_plugin_runtest_makereport_error(mock_logger_error, plugin):
     item.path = "test_file.py"
     
     call = MagicMock()
+    call.when = 'call'  # Set the phase to 'call'
     
     report = MagicMock()
     report.failed = True
+    report.when = 'call'  # Match the phase from call
     report.longrepr = "Assert failed"
     
     # Mock the _process_failure method to raise an exception
     plugin._process_failure = MagicMock(side_effect=Exception("Test error"))
     
-    # Call the hook
+    # Create the outcome object to be sent back into the generator
     outcome = MagicMock()
     outcome.get_result.return_value = report
     
-    # The hook uses the yield statement, so we need to set up a generator
-    # that yields the outcome
-    def mock_generator():
-        yield outcome
+    # Get the generator from the hook
+    gen = plugin.pytest_runtest_makereport(item, call)
     
-    # Call the hook through its wrapper
-    next(plugin.pytest_runtest_makereport(item, call))
+    # Run code up to the yield
+    gen.send(None)  # Equivalent to next(gen)
+    
+    # Send the outcome back to resume after the yield
+    try:
+        gen.send(outcome)
+    except StopIteration:
+        # This is expected - the generator should finish
+        pass
     
     # Verify that the error was logged
     mock_logger_error.assert_called_once()
@@ -204,7 +251,7 @@ def test_collect_failures_with_plugin(mock_pytest_main):
     # Create a mock plugin
     mock_plugin = MagicMock()
     mock_plugin.get_failures.return_value = [
-        TestFailure(
+        PytestFailure(
             test_name="test_file.py::test_function",
             test_file="test_file.py",
             error_type="AssertionError",

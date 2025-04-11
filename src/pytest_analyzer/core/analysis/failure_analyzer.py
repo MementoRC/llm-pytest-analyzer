@@ -2,7 +2,7 @@ import logging
 import re
 from typing import List, Dict, Any, Optional, Tuple
 
-from ..models.test_failure import TestFailure, FixSuggestion
+from ..models.pytest_failure import PytestFailure, FixSuggestion
 from ...utils.resource_manager import with_timeout
 
 logger = logging.getLogger(__name__)
@@ -44,12 +44,12 @@ class FailureAnalyzer:
         }
         
     @with_timeout(60)
-    def analyze_failure(self, failure: TestFailure) -> List[FixSuggestion]:
+    def analyze_failure(self, failure: PytestFailure) -> List[FixSuggestion]:
         """
         Analyze a test failure and suggest fixes.
         
         Args:
-            failure: TestFailure object to analyze
+            failure: PytestFailure object to analyze
             
         Returns:
             List of suggested fixes
@@ -87,12 +87,12 @@ class FailureAnalyzer:
             
         return error_type
         
-    def _analyze_assertion_error(self, failure: TestFailure) -> List[FixSuggestion]:
+    def _analyze_assertion_error(self, failure: PytestFailure) -> List[FixSuggestion]:
         """
         Analyze an assertion error and suggest fixes.
         
         Args:
-            failure: TestFailure object to analyze
+            failure: PytestFailure object to analyze
             
         Returns:
             List of suggested fixes
@@ -119,12 +119,12 @@ class FailureAnalyzer:
             
         return suggestions
         
-    def _analyze_assert_statement(self, failure: TestFailure) -> Tuple[str, float]:
+    def _analyze_assert_statement(self, failure: PytestFailure) -> Tuple[str, float]:
         """
         Analyze an assert statement and suggest a fix.
         
         Args:
-            failure: TestFailure object to analyze
+            failure: PytestFailure object to analyze
             
         Returns:
             Tuple of (suggestion, confidence)
@@ -164,12 +164,12 @@ class FailureAnalyzer:
         # No specific pattern matched
         return "", 0.0
         
-    def _analyze_attribute_error(self, failure: TestFailure) -> List[FixSuggestion]:
+    def _analyze_attribute_error(self, failure: PytestFailure) -> List[FixSuggestion]:
         """
         Analyze an attribute error and suggest fixes.
         
         Args:
-            failure: TestFailure object to analyze
+            failure: PytestFailure object to analyze
             
         Returns:
             List of suggested fixes
@@ -206,12 +206,12 @@ class FailureAnalyzer:
             
         return suggestions
         
-    def _analyze_import_error(self, failure: TestFailure) -> List[FixSuggestion]:
+    def _analyze_import_error(self, failure: PytestFailure) -> List[FixSuggestion]:
         """
         Analyze an import error and suggest fixes.
         
         Args:
-            failure: TestFailure object to analyze
+            failure: PytestFailure object to analyze
             
         Returns:
             List of suggested fixes
@@ -248,12 +248,12 @@ class FailureAnalyzer:
             
         return suggestions
         
-    def _analyze_type_error(self, failure: TestFailure) -> List[FixSuggestion]:
+    def _analyze_type_error(self, failure: PytestFailure) -> List[FixSuggestion]:
         """
         Analyze a type error and suggest fixes.
         
         Args:
-            failure: TestFailure object to analyze
+            failure: PytestFailure object to analyze
             
         Returns:
             List of suggested fixes
@@ -305,12 +305,12 @@ class FailureAnalyzer:
             
         return suggestions
         
-    def _analyze_name_error(self, failure: TestFailure) -> List[FixSuggestion]:
+    def _analyze_name_error(self, failure: PytestFailure) -> List[FixSuggestion]:
         """
         Analyze a name error and suggest fixes.
         
         Args:
-            failure: TestFailure object to analyze
+            failure: PytestFailure object to analyze
             
         Returns:
             List of suggested fixes
@@ -346,12 +346,12 @@ class FailureAnalyzer:
             
         return suggestions
         
-    def _analyze_index_error(self, failure: TestFailure) -> List[FixSuggestion]:
+    def _analyze_index_error(self, failure: PytestFailure) -> List[FixSuggestion]:
         """
         Analyze an index error and suggest fixes.
         
         Args:
-            failure: TestFailure object to analyze
+            failure: PytestFailure object to analyze
             
         Returns:
             List of suggested fixes
@@ -382,12 +382,12 @@ class FailureAnalyzer:
             
         return suggestions
         
-    def _analyze_key_error(self, failure: TestFailure) -> List[FixSuggestion]:
+    def _analyze_key_error(self, failure: PytestFailure) -> List[FixSuggestion]:
         """
         Analyze a key error and suggest fixes.
         
         Args:
-            failure: TestFailure object to analyze
+            failure: PytestFailure object to analyze
             
         Returns:
             List of suggested fixes
@@ -421,12 +421,12 @@ class FailureAnalyzer:
             
         return suggestions
         
-    def _analyze_value_error(self, failure: TestFailure) -> List[FixSuggestion]:
+    def _analyze_value_error(self, failure: PytestFailure) -> List[FixSuggestion]:
         """
         Analyze a value error and suggest fixes.
         
         Args:
-            failure: TestFailure object to analyze
+            failure: PytestFailure object to analyze
             
         Returns:
             List of suggested fixes
@@ -461,12 +461,12 @@ class FailureAnalyzer:
             
         return suggestions
         
-    def _analyze_syntax_error(self, failure: TestFailure) -> List[FixSuggestion]:
+    def _analyze_syntax_error(self, failure: PytestFailure) -> List[FixSuggestion]:
         """
         Analyze a syntax error and suggest fixes.
         
         Args:
-            failure: TestFailure object to analyze
+            failure: PytestFailure object to analyze
             
         Returns:
             List of suggested fixes
@@ -524,12 +524,12 @@ class FailureAnalyzer:
             
         return suggestions
         
-    def _analyze_generic_error(self, failure: TestFailure) -> List[FixSuggestion]:
+    def _analyze_generic_error(self, failure: PytestFailure) -> List[FixSuggestion]:
         """
         Analyze a generic error and suggest fixes.
         
         Args:
-            failure: TestFailure object to analyze
+            failure: PytestFailure object to analyze
             
         Returns:
             List of suggested fixes

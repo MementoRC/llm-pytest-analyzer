@@ -1,58 +1,70 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
-name = "pytest_analyzer"
-version = "0.1.0"
-description = "Enhanced pytest analyzer with robust extraction strategies"
-authors = [
-    {name = "Claude", email = "noreply@anthropic.com"}
-]
+name = "pytest-analyzer"
+dynamic = ["version"]
+description = "Analyzes pytest test results to identify patterns and suggest fixes."
+readme = "README.md"
 requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [
+    { name = "Your Name", email = "your.email@example.com" },
+]
+keywords = ["pytest", "testing", "analysis", "reporting", "debugging"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Framework :: Pytest",
     "Topic :: Software Development :: Testing",
-    "Topic :: Software Development :: Testing :: Unit",
+    "Topic :: Software Development :: Quality Assurance",
 ]
+
 dependencies = [
     "pytest>=7.0.0",
+    "pytest-cov>=6.0.0",
     "pytest-json-report>=1.5.0",
     "rich>=12.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "black",
-    "isort",
+    "pytest-cov",
+    "ruff",
     "mypy",
+]
+
+test = [
     "pytest-cov",
 ]
 
 [project.scripts]
 pytest-analyzer = "pytest_analyzer.cli.analyzer_cli:main"
 
-[tool.setuptools]
-packages = ["pytest_analyzer"]
+[project.urls]
+Homepage = "https://github.com/yourusername/pytest_analyzer"
+Repository = "https://github.com/yourusername/pytest_analyzer"
+Issues = "https://github.com/yourusername/pytest_analyzer/issues"
 
-[tool.black]
-line-length = 88
+[tool.hatch.version]
+path = "src/pytest_analyzer/__version__.py"
 
-[tool.isort]
-profile = "black"
-line_length = 88
+[tool.pixi]
+package-dir = {"" = "src"}
 
-[tool.mypy]
-python_version = "3.8"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
+[tool.pixi.build]
+packages = ["src/pytest_analyzer"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_default_fixture_loop_scope = "function"

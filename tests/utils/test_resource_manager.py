@@ -5,7 +5,7 @@ import signal
 import resource
 from unittest.mock import patch, MagicMock
 
-from ...utils.resource_manager import (
+from src.pytest_analyzer.utils.resource_manager import (
     timeout_context, with_timeout, limit_memory,
     ResourceMonitor, TimeoutError, MemoryLimitError
 )
@@ -155,8 +155,17 @@ def test_resource_monitor_context_manager_with_exception():
 @patch('resource.getrusage')
 def test_resource_monitor_check_time_limit(mock_getrusage, mock_time):
     """Test checking the time limit."""
-    # Mock time.time to return different values
-    mock_time.side_effect = [0, 61]  # Start time, current time
+    # Use a callable for more flexibility
+    time_values = {"calls": 0}
+    
+    def mock_time_func():
+        time_values["calls"] += 1
+        if time_values["calls"] == 1:  # First call in __enter__
+            return 0
+        else:  # Subsequent calls in check() and __exit__
+            return 61
+            
+    mock_time.side_effect = mock_time_func
     
     # Create a monitor with a time limit
     monitor = ResourceMonitor(max_time_seconds=60)
@@ -192,8 +201,17 @@ def test_resource_monitor_check_memory_limit(mock_getrusage, mock_time):
 @patch('resource.getrusage')
 def test_resource_monitor_check_within_limits(mock_getrusage, mock_time):
     """Test checking resource usage within limits."""
-    # Mock time.time to return different values
-    mock_time.side_effect = [0, 30]  # Start time, current time
+    # Use a callable for more flexibility
+    time_values = {"calls": 0}
+    
+    def mock_time_func():
+        time_values["calls"] += 1
+        if time_values["calls"] == 1:  # First call in __enter__
+            return 0
+        else:  # Subsequent calls in check() and __exit__
+            return 30
+            
+    mock_time.side_effect = mock_time_func
     
     # Mock getrusage to return memory usage
     mock_usage = MagicMock()

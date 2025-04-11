@@ -5,10 +5,10 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch, mock_open, MagicMock
 
-from ...core.extraction.json_extractor import JsonResultExtractor
-from ...core.models.test_failure import TestFailure
-from ...utils.path_resolver import PathResolver
-from ...utils.resource_manager import TimeoutError
+from src.pytest_analyzer.core.extraction.json_extractor import JsonResultExtractor
+from src.pytest_analyzer.core.models.pytest_failure import PytestFailure
+from src.pytest_analyzer.utils.path_resolver import PathResolver
+from src.pytest_analyzer.utils.resource_manager import TimeoutError
 
 
 @pytest.fixture
@@ -112,28 +112,33 @@ def test_extract_failures_no_tests(tmp_path, json_extractor):
     assert failures == []
 
 
-@patch('pytest_analyzer.utils.resource_manager.ResourceMonitor')
-def test_extract_failures_timeout(mock_resource_monitor, tmp_path, json_extractor, sample_json_data):
-    """Test handling of timeout during extraction."""
-    # Make ResourceMonitor raise a TimeoutError
-    mock_monitor = MagicMock()
-    mock_monitor.__enter__.side_effect = TimeoutError("Timeout")
-    mock_resource_monitor.return_value = mock_monitor
+@patch('src.pytest_analyzer.core.extraction.json_extractor.JsonResultExtractor._parse_json_report')
+def test_extract_failures_timeout(mock_parse_json, tmp_path, json_extractor, sample_json_data):
+    """Test handling of timeout during extraction (simulating @with_timeout triggering)."""
+    # Configure the mock _parse_json_report to raise TimeoutError
+    mock_parse_json.side_effect = TimeoutError("Simulated Timeout")
     
     # Create a temporary JSON file
     json_path = tmp_path / "report.json"
     with open(json_path, 'w') as f:
         json.dump(sample_json_data, f)
     
-    # Extract failures
+    # Extract failures - the TimeoutError should be caught in the try/except block
     failures = json_extractor.extract_failures(json_path)
     
-    # Verify results
+    # Verify results - should return empty list when an exception occurs
     assert failures == []
+    
+    # Verify _parse_json_report was called with the correct path
+    mock_parse_json.assert_called_once_with(json_path)
 
 
-def test_create_failure_from_test():
-    """Test creating a TestFailure object from a test entry."""
+@patch('src.pytest_analyzer.utils.path_resolver.PathResolver.resolve_path')
+def test_create_failure_from_test(mock_resolve_path):
+    """Test creating a PytestFailure object from a test entry."""
+    # Configure the mock to return the input path
+    mock_resolve_path.side_effect = lambda path: path
+    
     # Create a JsonResultExtractor instance
     extractor = JsonResultExtractor()
     
@@ -153,7 +158,7 @@ def test_create_failure_from_test():
         }
     }
     
-    # Create a TestFailure object
+    # Create a PytestFailure object
     failure = extractor._create_failure_from_test(test_entry)
     
     # Verify the result
@@ -168,27 +173,30 @@ def test_create_failure_from_test():
 
 
 def test_create_failure_from_test_exception():
-    """Test handling of exceptions during TestFailure creation."""
+    """Test handling of exceptions during PytestFailure creation."""
     # Create a JsonResultExtractor instance
     extractor = JsonResultExtractor()
     
     # Test data with missing required fields
     test_entry = {}
     
-    # Create a TestFailure object
+    # Create a PytestFailure object
     failure = extractor._create_failure_from_test(test_entry)
     
     # Verify the result
     assert failure is None
 
 
-def test_path_resolver_integration():
+def test_path_resolver_integration(tmp_path):
     """Test integration with PathResolver."""
-    # Create a custom path resolver
-    path_resolver = PathResolver(project_root=Path('/project'))
+    # Create a custom path resolver with a temporary directory
+    path_resolver = PathResolver(project_root=tmp_path)
     
     # Create a JsonResultExtractor with the custom path resolver
     extractor = JsonResultExtractor(path_resolver=path_resolver)
     
     # Verify that the path resolver is used
     assert extractor.path_resolver is path_resolver
+    
+    # Verify the mock directory was created
+    assert (tmp_path / "mocked").exists()
