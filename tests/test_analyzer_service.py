@@ -106,7 +106,8 @@ def test_run_and_analyze_plugin(mock_suggest_fixes, mock_collect, analyzer_servi
     suggestions = analyzer_service.run_and_analyze("test_path")
     
     # Assert
-    mock_collect.assert_called_once_with(["test_path"])
+    # Expect the call with additional flags added by the service
+    mock_collect.assert_called_once_with(["test_path", "-s", "--disable-warnings"])
     mock_suggest_fixes.assert_called()
     assert len(suggestions) == 0  # No suggestions since we mocked the suggester
 

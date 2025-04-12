@@ -70,14 +70,38 @@ class TestCLIFixIntegration:
                 
                 # Mock service to return suggestions
                 mock_service = mock_service_class.return_value
-                mock_service.run_and_analyze.return_value = ["suggestion1", "suggestion2"]
+                # Create proper FixSuggestion objects to return
+                failure = PytestFailure(
+                    test_name="test_module::test_function",
+                    test_file="/path/to/test_file.py",
+                    error_type="AssertionError",
+                    error_message="assert 1 == 2",
+                    traceback="...",
+                    line_number=10,
+                    relevant_code="assert value == expected"
+                )
+                suggestions = [
+                    FixSuggestion(
+                        failure=failure,
+                        suggestion="Fix the assertion",
+                        confidence=0.9,
+                        code_changes={
+                            "/path/to/source_file.py": "corrected code content",
+                            "fingerprint": "abcdef123456",
+                            "source": "llm"
+                        },
+                        explanation="Fix explanation"
+                    )
+                ]
+                mock_service.run_and_analyze.return_value = suggestions
                 
                 # Run CLI main
                 main()
                 
                 # Check that apply_suggestions_interactively was called
                 mock_apply.assert_called_once()
-                assert mock_apply.call_args[0][0] == ["suggestion1", "suggestion2"], "Should pass suggestions to apply_suggestions_interactively"
+                # Verify that the first argument is our suggestions list
+                assert mock_apply.call_args[0][0] == suggestions, "Should pass suggestions to apply_suggestions_interactively"
     
     def test_auto_apply_flag(self):
         """Test that --auto-apply flag enables automatic fix application."""
@@ -99,14 +123,39 @@ class TestCLIFixIntegration:
                 
                 # Mock service to return suggestions
                 mock_service = mock_service_class.return_value
-                mock_service.run_and_analyze.return_value = ["suggestion1", "suggestion2"]
+                # Create proper FixSuggestion objects to return
+                failure = PytestFailure(
+                    test_name="test_module::test_function",
+                    test_file="/path/to/test_file.py",
+                    error_type="AssertionError",
+                    error_message="assert 1 == 2",
+                    traceback="...",
+                    line_number=10,
+                    relevant_code="assert value == expected"
+                )
+                suggestions = [
+                    FixSuggestion(
+                        failure=failure,
+                        suggestion="Fix the assertion",
+                        confidence=0.9,
+                        code_changes={
+                            "/path/to/source_file.py": "corrected code content",
+                            "fingerprint": "abcdef123456",
+                            "source": "llm"
+                        },
+                        explanation="Fix explanation"
+                    )
+                ]
+                mock_service.run_and_analyze.return_value = suggestions
                 
                 # Run CLI main
                 main()
                 
                 # Check that apply_suggestions_interactively was called
                 mock_apply.assert_called_once()
-                assert mock_apply.call_args[0][0] == ["suggestion1", "suggestion2"], "Should pass suggestions to apply_suggestions_interactively"
+                # Verify that the first argument is our suggestions list
+                assert mock_apply.call_args[0][0] == suggestions, "Should pass suggestions to apply_suggestions_interactively"
+                # Verify that the args parameter has auto_apply=True
                 assert mock_apply.call_args[0][2].auto_apply, "Should pass args with auto_apply=True"
     
     def test_no_apply_flags(self):
@@ -129,7 +178,30 @@ class TestCLIFixIntegration:
                 
                 # Mock service to return suggestions
                 mock_service = mock_service_class.return_value
-                mock_service.run_and_analyze.return_value = ["suggestion1", "suggestion2"]
+                # Create proper FixSuggestion objects to return
+                failure = PytestFailure(
+                    test_name="test_module::test_function",
+                    test_file="/path/to/test_file.py",
+                    error_type="AssertionError",
+                    error_message="assert 1 == 2",
+                    traceback="...",
+                    line_number=10,
+                    relevant_code="assert value == expected"
+                )
+                suggestions = [
+                    FixSuggestion(
+                        failure=failure,
+                        suggestion="Fix the assertion",
+                        confidence=0.9,
+                        code_changes={
+                            "/path/to/source_file.py": "corrected code content",
+                            "fingerprint": "abcdef123456",
+                            "source": "llm"
+                        },
+                        explanation="Fix explanation"
+                    )
+                ]
+                mock_service.run_and_analyze.return_value = suggestions
                 
                 # Run CLI main
                 main()

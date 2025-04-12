@@ -53,7 +53,8 @@ class PytestAnalyzerService:
         # Initialize fix applier for applying suggestions
         self.fix_applier = FixApplier(
             project_root=self.settings.project_root,
-            backup_suffix=".pytest-analyzer.bak"
+            backup_suffix=".pytest-analyzer.bak",
+            verbose_test_output=False  # Default to quiet mode for validation
         )
         
     @with_timeout(300)
@@ -135,9 +136,15 @@ class PytestAnalyzerService:
             
             # Add quiet-related arguments if needed
             if quiet:
-                # Suppress pytest output
-                if '-q' not in args_copy and '--quiet' not in args_copy:
-                    args_copy.append('-q')
+                # Suppress pytest output (using super quiet mode)
+                if '-qq' not in args_copy:
+                    # First remove any existing -q flags
+                    args_copy = [arg for arg in args_copy if arg != '-q' and arg != '--quiet']
+                    # Add super quiet mode flag
+                    args_copy.append('-qq')
+                # Add short traceback flag for cleaner output
+                if '--tb=short' not in args_copy:
+                    args_copy.append('--tb=short')
                 # Disable warnings
                 if '-W' not in args_copy and '--disable-warnings' not in args_copy:
                     args_copy.append('--disable-warnings')
@@ -213,9 +220,15 @@ class PytestAnalyzerService:
         
         if quiet:
             # Even in quiet mode, show minimal progress indicators
-            # Make sure quiet mode is reflected in pytest args
-            if "-q" not in pytest_args and "--quiet" not in pytest_args:
-                pytest_args.append("-q")
+            # Make sure quiet mode is reflected in pytest args (using super quiet mode)
+            if "-qq" not in pytest_args:
+                # First remove any existing -q flags
+                pytest_args = [arg for arg in pytest_args if arg != '-q' and arg != '--quiet']
+                # Add super quiet mode flag
+                pytest_args.append("-qq")
+            # Add short traceback flag for cleaner output
+            if '--tb=short' not in pytest_args:
+                pytest_args.append('--tb=short')
             
             # Create minimal progress display
             with Progress(
@@ -334,7 +347,7 @@ class PytestAnalyzerService:
             
             try:
                 # Determine if we're in quiet mode
-                quiet_mode = '-q' in args or '--quiet' in args
+                quiet_mode = '-q' in args or '-qq' in args or '--quiet' in args
                 # Determine if we want to show progress (requires -s to avoid pytest capturing output)
                 progress_mode = not quiet_mode and ('-s' in args or '--capture=no' in args)
                 
@@ -397,7 +410,7 @@ class PytestAnalyzerService:
             
             try:
                 # Determine if we're in quiet mode
-                quiet_mode = '-q' in args or '--quiet' in args
+                quiet_mode = '-q' in args or '-qq' in args or '--quiet' in args
                 # Determine if we want to show progress (requires -s to avoid pytest capturing output)
                 progress_mode = not quiet_mode and ('-s' in args or '--capture=no' in args)
                 
@@ -684,8 +697,12 @@ class PytestAnalyzerService:
         logger.info(f"Modifying files: {list(code_changes_to_apply.keys())}")
         logger.info(f"Validating with tests: {tests_to_validate}")
         
-        # Apply the fix
-        result = self.fix_applier.apply_fix(code_changes_to_apply, tests_to_validate)
+        # Apply the fix (using quiet test output by default)
+        result = self.fix_applier.apply_fix(
+            code_changes_to_apply, 
+            tests_to_validate,
+            verbose_test_output=False  # Use quiet mode for validation tests
+        )
         
         # Log the result
         if result.success:
