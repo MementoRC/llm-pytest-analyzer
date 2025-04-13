@@ -1,6 +1,8 @@
 from pathlib import Path
 import os
 import logging
+import atexit
+import shutil
 from typing import Optional, Union, Dict
 
 logger = logging.getLogger(__name__)
@@ -8,6 +10,20 @@ logger = logging.getLogger(__name__)
 
 class PathResolver:
     """Handles path resolution across different environments."""
+    
+    # Track all temporary directories created for cleanup
+    _temp_dirs = []
+    
+    @classmethod
+    def _cleanup_temp_dirs(cls):
+        """Clean up all temporary directories on exit."""
+        for temp_dir in cls._temp_dirs:
+            try:
+                if temp_dir.exists():
+                    logger.info(f"Cleaning up temporary directory: {temp_dir}")
+                    shutil.rmtree(temp_dir)
+            except Exception as e:
+                logger.warning(f"Error cleaning up temporary directory {temp_dir}: {e}")
     
     def __init__(self, project_root: Optional[Path] = None, 
                  mock_dirs: Optional[Dict[str, Path]] = None):
@@ -21,9 +37,26 @@ class PathResolver:
         self.project_root = project_root or Path.cwd()
         self.mock_dirs = mock_dirs or {}
         self.mock_root = self.project_root / "mocked"
+        self.using_temp_dir = False
         
         # Ensure mock root exists
-        self.mock_root.mkdir(parents=True, exist_ok=True)
+        try:
+            self.mock_root.mkdir(parents=True, exist_ok=True)
+        except PermissionError:
+            # If we can't create in the project root, fall back to a temp directory
+            import tempfile
+            temp_dir_path = Path(tempfile.mkdtemp(prefix="pytest_analyzer_"))
+            self.mock_root = temp_dir_path
+            self.using_temp_dir = True
+            
+            # Add to cleanup list
+            PathResolver._temp_dirs.append(temp_dir_path)
+            
+            # Register cleanup at exit if this is the first temporary directory
+            if len(PathResolver._temp_dirs) == 1:
+                atexit.register(PathResolver._cleanup_temp_dirs)
+                
+            logger.info(f"Using temporary mock directory: {self.mock_root}")
         
     def resolve_path(self, path_str: str) -> Path:
         """

@@ -144,7 +144,8 @@ def setup_parser() -> argparse.ArgumentParser:
     llm_group.add_argument(
         "--use-llm",
         action="store_true",
-        help="Enable LLM-based suggestions (requires API access)"
+        help="Enable LLM-based suggestions (requires API access)",
+        default=True
     )
     llm_group.add_argument(
         "--llm-timeout",
@@ -189,6 +190,11 @@ def setup_parser() -> argparse.ArgumentParser:
         "--quiet", "-q",
         action="store_true",
         help="Equivalent to --verbosity=0 (minimal output)"
+    )
+    verbosity_group.add_argument(
+        "-qq",
+        action="store_true",
+        help="Super quiet mode - only show failures, minimal output"
     )
     verbosity_group.add_argument(
         "--raw-output", 
@@ -426,9 +432,16 @@ def main() -> int:
     parser = setup_parser()
     args = parser.parse_args()
     
-    # Handle quiet argument (--quiet overrides --verbosity)
+    # Handle quiet arguments (--quiet and -qq override --verbosity)
     if args.quiet:
         args.verbosity = 0
+    elif getattr(args, 'qq', False):  # Check if -qq is set
+        args.verbosity = 0  # Set verbosity to minimal
+        # Also add -qq flag to pytest args for super quiet mode
+        if not args.pytest_args:
+            args.pytest_args = "-qq --tb=short --disable-warnings"
+        else:
+            args.pytest_args += " -qq --tb=short --disable-warnings"
     
     # Configure logging
     if args.debug:

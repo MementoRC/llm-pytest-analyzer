@@ -26,7 +26,7 @@ class Settings:
     min_confidence: float = 0.5  # Minimum confidence for suggestions
     
     # LLM settings
-    use_llm: bool = False      # Whether to use LLM-based suggestions
+    use_llm: bool = True      # Whether to use LLM-based suggestions
     llm_timeout: int = 60      # Timeout for LLM requests in seconds
     llm_api_key: Optional[str] = None  # API key for LLM service
     llm_model: str = "auto"    # Model to use (auto selects available models)
