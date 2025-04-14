@@ -11,12 +11,12 @@ from src.pytest_analyzer.core.models.pytest_failure import PytestFailure
 
 
 @pytest.fixture
-def analyzer_service():
-    """Create a basic analyzer service instance."""
+def analyzer_service(mock_llm_client):
+    """Create a basic analyzer service instance with LLM mocking."""
     settings = Settings()
-    # Disable LLM by default
-    settings.use_llm = False
-    return PytestAnalyzerService(settings=settings)
+    # Always use LLM (but with a mock client)
+    settings.use_llm = True
+    return PytestAnalyzerService(settings=settings, llm_client=mock_llm_client)
 
 
 @pytest.fixture

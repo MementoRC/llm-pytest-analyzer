@@ -10,7 +10,6 @@ from .models.pytest_failure import PytestFailure, FixSuggestion
 from .extraction.extractor_factory import get_extractor
 from .extraction.pytest_plugin import collect_failures_with_plugin
 from .analysis.failure_analyzer import FailureAnalyzer
-from .analysis.fix_suggester import FixSuggester
 from .analysis.llm_suggester import LLMSuggester
 from .analysis.failure_grouper import group_failures, select_representative_failure
 from .analysis.fix_applier import FixApplier, FixApplicationResult
@@ -37,18 +36,16 @@ class PytestAnalyzerService:
         :param llm_client: Optional client for language model API
         """
         self.settings = settings or Settings()
+        self.settings.use_llm = True  # Force LLM usage
         self.path_resolver = PathResolver(self.settings.project_root)
         self.analyzer = FailureAnalyzer(max_suggestions=self.settings.max_suggestions)
-        self.suggester = FixSuggester(min_confidence=self.settings.min_confidence)
         
-        # Initialize LLM suggester if enabled
-        self.llm_suggester = None
-        if self.settings.use_llm:
-            self.llm_suggester = LLMSuggester(
-                llm_client=llm_client,
-                min_confidence=self.settings.min_confidence,
-                timeout_seconds=self.settings.llm_timeout
-            )
+        # Always initialize LLM suggester - no rule-based suggester
+        self.llm_suggester = LLMSuggester(
+            llm_client=llm_client,
+            min_confidence=self.settings.min_confidence,
+            timeout_seconds=self.settings.llm_timeout
+        )
             
         # Initialize fix applier for applying suggestions
         self.fix_applier = FixApplier(
@@ -460,11 +457,10 @@ class PytestAnalyzerService:
         parent_task_id: Optional[TaskID] = None
     ) -> List[FixSuggestion]:
         """
-        Generate fix suggestions for the given failures.
+        Generate fix suggestions for the given failures using LLM-based approach.
         
-        This method combines rule-based and LLM-based suggestions when LLM integration
-        is enabled in the settings. When LLM is enabled, it groups similar failures
-        to avoid redundant LLM calls.
+        This method uses LLM to generate suggestions for test failures.
+        It groups similar failures to avoid redundant LLM calls for efficiency.
         
         :param failures: List of test failures
         :param quiet: Whether to suppress logging output
@@ -474,140 +470,118 @@ class PytestAnalyzerService:
         """
         all_suggestions = []
         
-        # Add task for rule-based suggestions if progress is active
-        rule_task_id: Optional[TaskID] = None
+        # Return early if there are no failures to analyze
+        if not failures:
+            return all_suggestions
+            
+        # Add task for LLM-based suggestions if progress is active
+        llm_task_id: Optional[TaskID] = None
         if progress and parent_task_id is not None:
-            rule_task_id = progress.add_task(
-                "[cyan]Generating rule-based suggestions...",
+            llm_task_id = progress.add_task(
+                "[cyan]Generating LLM-based suggestions...",
                 total=len(failures),
                 parent=parent_task_id
             )
         
-        # Generate rule-based suggestions for all failures individually
-        for i, failure in enumerate(failures):
-            try:
-                with ResourceMonitor(max_time_seconds=self.settings.analyzer_timeout):
-                    rule_based_suggestions = self.suggester.suggest_fixes(failure)
-                    all_suggestions.extend(rule_based_suggestions)
+        # Group similar failures to avoid redundant LLM calls
+        try:
+            # Add task for grouping if progress is active
+            group_task_id: Optional[TaskID] = None
+            if progress and parent_task_id is not None:
+                group_task_id = progress.add_task(
+                    "[cyan]Grouping similar failures...",
+                    total=1,
+                    parent=parent_task_id
+                )
+            
+            # Group similar failures to avoid redundant LLM calls
+            project_root = str(self.path_resolver.project_root) if self.path_resolver else None
+            failure_groups = group_failures(failures, project_root)
+            
+            # Mark grouping task complete if active
+            if progress and group_task_id is not None:
+                progress.update(
+                    group_task_id, 
+                    description=f"[green]Grouped {len(failures)} failures into {len(failure_groups)} distinct groups",
+                    completed=True
+                )
+            
+            if not quiet:
+                logger.info(f"Grouped {len(failures)} failures into {len(failure_groups)} distinct groups")
+            
+            # Add task for LLM suggestions if progress is active
+            llm_task_id: Optional[TaskID] = None
+            if progress and parent_task_id is not None and failure_groups:
+                llm_task_id = progress.add_task(
+                    "[cyan]Getting LLM suggestions...",
+                    total=len(failure_groups),
+                    parent=parent_task_id
+                )
+            
+            # Process each group with a single LLM call
+            for i, (fingerprint, group) in enumerate(failure_groups.items()):
+                # Skip empty groups (shouldn't happen, but being defensive)
+                if not group:
+                    continue
                     
-                    # Update progress if active
-                    if progress and rule_task_id is not None:
-                        progress.update(
-                            rule_task_id, 
-                            advance=1,
-                            description=f"[cyan]Rule-based suggestions: {i+1}/{len(failures)}"
-                        )
-            except Exception as e:
-                logger.error(f"Error generating rule-based suggestions: {e}")
-        
-        # Mark rule-based task complete if active
-        if progress and rule_task_id is not None:
-            progress.update(
-                rule_task_id, 
-                description="[green]Rule-based suggestions complete",
-                completed=True
-            )
-        
-        # Generate LLM-based suggestions if enabled, grouping similar failures
-        if self.llm_suggester and self.settings.use_llm and failures:
-            try:
-                # Add task for grouping if progress is active
-                group_task_id: Optional[TaskID] = None
-                if progress and parent_task_id is not None:
-                    group_task_id = progress.add_task(
-                        "[cyan]Grouping similar failures...",
-                        total=1,
-                        parent=parent_task_id
-                    )
+                # Select the most representative failure from the group
+                representative = select_representative_failure(group)
                 
-                # Group similar failures to avoid redundant LLM calls
-                project_root = str(self.path_resolver.project_root) if self.path_resolver else None
-                failure_groups = group_failures(failures, project_root)
-                
-                # Mark grouping task complete if active
-                if progress and group_task_id is not None:
+                # Update progress before LLM call if active
+                if progress and llm_task_id is not None:
                     progress.update(
-                        group_task_id, 
-                        description=f"[green]Grouped {len(failures)} failures into {len(failure_groups)} distinct groups",
-                        completed=True
+                        llm_task_id,
+                        description=f"[cyan]Getting LLM suggestion {i+1}/{len(failure_groups)}: {representative.test_name}"
                     )
                 
                 if not quiet:
-                    logger.info(f"Grouped {len(failures)} failures into {len(failure_groups)} distinct groups")
+                    logger.info(f"Generating LLM suggestions for group: {fingerprint} ({len(group)} similar failures)")
+                    logger.info(f"Representative test: {representative.test_name}")
                 
-                # Add task for LLM suggestions if progress is active
-                llm_task_id: Optional[TaskID] = None
-                if progress and parent_task_id is not None and failure_groups:
-                    llm_task_id = progress.add_task(
-                        "[cyan]Getting LLM suggestions...",
-                        total=len(failure_groups),
-                        parent=parent_task_id
-                    )
-                
-                # Process each group with a single LLM call
-                for i, (fingerprint, group) in enumerate(failure_groups.items()):
-                    # Skip empty groups (shouldn't happen, but being defensive)
-                    if not group:
-                        continue
+                # Generate suggestions for the representative failure
+                try:
+                    with ResourceMonitor(max_time_seconds=self.settings.llm_timeout):
+                        llm_suggestions = self.llm_suggester.suggest_fixes(representative)
                         
-                    # Select the most representative failure from the group
-                    representative = select_representative_failure(group)
-                    
-                    # Update progress before LLM call if active
-                    if progress and llm_task_id is not None:
-                        progress.update(
-                            llm_task_id,
-                            description=f"[cyan]Getting LLM suggestion {i+1}/{len(failure_groups)}: {representative.test_name}"
-                        )
-                    
-                    if not quiet:
-                        logger.info(f"Generating LLM suggestions for group: {fingerprint} ({len(group)} similar failures)")
-                        logger.info(f"Representative test: {representative.test_name}")
-                    
-                    # Generate suggestions for the representative failure
-                    try:
-                        with ResourceMonitor(max_time_seconds=self.settings.llm_timeout):
-                            llm_suggestions = self.llm_suggester.suggest_fixes(representative)
+                        # Create a FixSuggestion for each failure in the group using the same solution
+                        for suggestion in llm_suggestions:
+                            # Mark the suggestion as LLM-based
+                            if not suggestion.code_changes:
+                                suggestion.code_changes = {}
+                            suggestion.code_changes['source'] = 'llm'
                             
-                            # Create a FixSuggestion for each failure in the group using the same solution
-                            for suggestion in llm_suggestions:
-                                # Mark the suggestion as LLM-based
-                                if not suggestion.code_changes:
-                                    suggestion.code_changes = {}
-                                suggestion.code_changes['source'] = 'llm'
-                                
-                                # The original suggestion is for the representative failure
-                                all_suggestions.append(suggestion)
-                                
-                                # For other failures in the group, create similar suggestions
-                                for other_failure in group:
-                                    if other_failure is not representative:
-                                        # Create a new suggestion with the same content but different failure reference
-                                        duplicate_suggestion = FixSuggestion(
-                                            failure=other_failure,
-                                            suggestion=suggestion.suggestion,
-                                            explanation=suggestion.explanation,
-                                            confidence=suggestion.confidence,
-                                            code_changes=dict(suggestion.code_changes) if suggestion.code_changes else None
-                                        )
-                                        all_suggestions.append(duplicate_suggestion)
-                    except Exception as e:
-                        logger.error(f"Error generating LLM suggestions for group {fingerprint}: {e}")
-                    
-                    # Update progress after LLM call if active
-                    if progress and llm_task_id is not None:
-                        progress.advance(llm_task_id)
-                        
-                # Mark LLM task complete if active
+                            # The original suggestion is for the representative failure
+                            all_suggestions.append(suggestion)
+                            
+                            # For other failures in the group, create similar suggestions
+                            for other_failure in group:
+                                if other_failure is not representative:
+                                    # Create a new suggestion with the same content but different failure reference
+                                    duplicate_suggestion = FixSuggestion(
+                                        failure=other_failure,
+                                        suggestion=suggestion.suggestion,
+                                        explanation=suggestion.explanation,
+                                        confidence=suggestion.confidence,
+                                        code_changes=dict(suggestion.code_changes) if suggestion.code_changes else None
+                                    )
+                                    all_suggestions.append(duplicate_suggestion)
+                except Exception as e:
+                    logger.error(f"Error generating LLM suggestions for group {fingerprint}: {e}")
+                
+                # Update progress after LLM call if active
                 if progress and llm_task_id is not None:
-                    progress.update(
-                        llm_task_id, 
-                        description="[green]LLM suggestions complete",
-                        completed=True
-                    )
-                        
-            except Exception as e:
-                logger.error(f"Error during failure grouping: {e}")
+                    progress.advance(llm_task_id)
+                    
+            # Mark LLM task complete if active
+            if progress and llm_task_id is not None:
+                progress.update(
+                    llm_task_id, 
+                    description="[green]LLM suggestions complete",
+                    completed=True
+                )
+                    
+        except Exception as e:
+            logger.error(f"Error during failure grouping: {e}")
         
         # Sort suggestions by confidence (highest first)
         all_suggestions.sort(key=lambda s: s.confidence, reverse=True)
