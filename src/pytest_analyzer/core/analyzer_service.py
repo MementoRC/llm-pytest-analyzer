@@ -208,7 +208,7 @@ class Context:
             if completed:
                 update_kwargs['completed'] = True
 
-            update_kwargs.update(kwargs)
+            update_kwargs |= kwargs
 
             self.progress.update(task_id, **update_kwargs)
 
