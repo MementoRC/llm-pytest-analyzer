@@ -15,13 +15,14 @@ from pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggest
 
 
 @pytest.mark.e2e
-def test_api_direct_usage(sample_json_report):
+def test_api_direct_usage(sample_json_report, mock_llm_client):
     """Test direct API usage with a test report."""
-    # Create a settings object
+    # Create a settings object with LLM enabled
     settings = Settings()
+    settings.use_llm = True
     
-    # Create the analyzer service
-    service = PytestAnalyzerService(settings=settings)
+    # Create the analyzer service with mock LLM client
+    service = PytestAnalyzerService(settings=settings, llm_client=mock_llm_client)
     
     # Analyze the report
     suggestions = service.analyze_pytest_output(sample_json_report)
@@ -80,7 +81,7 @@ def test_api_with_llm(sample_json_report):
 
 @pytest.mark.e2e
 @pytest.mark.xfail(reason="Known failure in API run/analyze flow - difficult to mock subprocess and file operations")
-def test_api_with_run_and_analyze(sample_assertion_file, sample_json_report, patch_subprocess):
+def test_api_with_run_and_analyze(sample_assertion_file, sample_json_report, patch_subprocess, mock_llm_client):
     """Test API usage with run_and_analyze method."""
     # Configure the mock subprocess to return a successful result
     with open(sample_json_report, 'r') as f:
@@ -99,12 +100,13 @@ def test_api_with_run_and_analyze(sample_assertion_file, sample_json_report, pat
             with patch('tempfile.NamedTemporaryFile') as mock_temp:
                 mock_temp.return_value.__enter__.return_value = mock_tmp_file
                 
-                # Create a settings object
+                # Create a settings object with LLM enabled
                 settings = Settings()
                 settings.preferred_format = "json"
+                settings.use_llm = True
                 
-                # Create the analyzer service
-                service = PytestAnalyzerService(settings=settings)
+                # Create the analyzer service with mock LLM client
+                service = PytestAnalyzerService(settings=settings, llm_client=mock_llm_client)
                 
                 # Run and analyze tests
                 suggestions = service.run_and_analyze(str(sample_assertion_file))

@@ -53,7 +53,7 @@ def analyzer_service():
 
 
 @patch('src.pytest_analyzer.core.analyzer_service.get_extractor')
-@patch('src.pytest_analyzer.core.analysis.fix_suggester.FixSuggester.suggest_fixes')
+@patch('src.pytest_analyzer.core.analyzer_service.LLMSuggester.suggest_fixes')
 def test_analyze_pytest_output(mock_suggest_fixes, mock_get_extractor, mock_extractor, analyzer_service):
     """Test analyzing pytest output from a file."""
     # Setup
@@ -85,7 +85,7 @@ def test_analyze_pytest_output_nonexistent_file(mock_get_extractor, analyzer_ser
 
 
 @patch('src.pytest_analyzer.core.analyzer_service.collect_failures_with_plugin')
-@patch('src.pytest_analyzer.core.analysis.fix_suggester.FixSuggester.suggest_fixes')
+@patch('src.pytest_analyzer.core.analyzer_service.LLMSuggester.suggest_fixes')
 def test_run_and_analyze_plugin(mock_suggest_fixes, mock_collect, analyzer_service):
     """Test running and analyzing tests with plugin integration."""
     # Setup
@@ -114,7 +114,7 @@ def test_run_and_analyze_plugin(mock_suggest_fixes, mock_collect, analyzer_servi
 
 @patch('subprocess.run')
 @patch('src.pytest_analyzer.core.analyzer_service.get_extractor')
-@patch('src.pytest_analyzer.core.analysis.fix_suggester.FixSuggester.suggest_fixes')
+@patch('src.pytest_analyzer.core.analyzer_service.LLMSuggester.suggest_fixes')
 def test_run_and_analyze_json(mock_suggest_fixes, mock_get_extractor, mock_run, mock_extractor, analyzer_service):
     """Test running and analyzing tests with JSON output."""
     # Setup
@@ -137,7 +137,7 @@ def test_run_and_analyze_json(mock_suggest_fixes, mock_get_extractor, mock_run, 
 
 @patch('subprocess.run')
 @patch('src.pytest_analyzer.core.analyzer_service.get_extractor')
-@patch('src.pytest_analyzer.core.analysis.fix_suggester.FixSuggester.suggest_fixes')
+@patch('src.pytest_analyzer.core.analyzer_service.LLMSuggester.suggest_fixes')
 def test_run_and_analyze_xml(mock_suggest_fixes, mock_get_extractor, mock_run, mock_extractor, analyzer_service):
     """Test running and analyzing tests with XML output."""
     # Setup

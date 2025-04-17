@@ -4,6 +4,9 @@ LLM-based fix suggestion module for pytest failures.
 This module provides integration with language models to generate
 more sophisticated fix suggestions for complex test failures.
 It complements the rule-based approach with AI-powered analysis.
+
+The module now includes asynchronous processing capabilities for improved performance
+when handling multiple test failures in parallel.
 """
 
 import logging
@@ -11,10 +14,11 @@ import re
 import json
 import os
 import hashlib
-from typing import List, Dict, Any, Optional, Union, Callable
+import asyncio
+from typing import List, Dict, Any, Optional, Union, Callable, Awaitable
 
 from ..models.pytest_failure import PytestFailure, FixSuggestion
-from ...utils.resource_manager import with_timeout
+from ...utils.resource_manager import with_timeout, async_with_timeout, performance_tracker, batch_process
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +30,9 @@ class LLMSuggester:
     This class integrates with language models (LLMs) to provide more
     sophisticated and context-aware fix suggestions for test failures,
     especially for complex issues that rule-based systems struggle with.
+    
+    It now supports both synchronous and asynchronous operations for better
+    performance when processing multiple failures.
     """
     
     def __init__(
@@ -36,6 +43,8 @@ class LLMSuggester:
         max_context_lines: int = 20,
         timeout_seconds: int = 60,
         custom_prompt_template: Optional[str] = None,
+        batch_size: int = 5,
+        max_concurrency: int = 10,
     ):
         """
         Initialize the LLM suggester.
@@ -46,6 +55,8 @@ class LLMSuggester:
         :param max_context_lines: Maximum code context lines to include
         :param timeout_seconds: Timeout for LLM requests
         :param custom_prompt_template: Optional custom prompt template
+        :param batch_size: Number of failures to process in each batch
+        :param max_concurrency: Maximum number of concurrent LLM requests
         """
         self.llm_client = llm_client
         self.min_confidence = min_confidence
@@ -53,9 +64,12 @@ class LLMSuggester:
         self.max_context_lines = max_context_lines
         self.timeout_seconds = timeout_seconds
         self.prompt_template = custom_prompt_template or self._default_prompt_template()
+        self.batch_size = batch_size
+        self.max_concurrency = max_concurrency
         
-        # Function to use for making LLM requests
+        # Functions to use for making LLM requests
         self._llm_request_func = self._get_llm_request_function()
+        self._async_llm_request_func = self._get_async_llm_request_function()
     
     @with_timeout(60)
     def suggest_fixes(self, failure: PytestFailure) -> List[FixSuggestion]:
@@ -66,26 +80,89 @@ class LLMSuggester:
         :return: List of suggested fixes
         """
         try:
-            # Check if we have an LLM client or request function
-            if not self._llm_request_func:
-                logger.warning("No LLM client available for generating suggestions")
-                return []
-            
-            # Build the prompt
-            prompt = self._build_prompt(failure)
-            
-            # Get LLM response
-            llm_response = self._llm_request_func(prompt)
-            
-            # Parse the response
-            suggestions = self._parse_llm_response(llm_response, failure)
-            
-            # Filter suggestions by confidence
-            return [s for s in suggestions if s.confidence >= self.min_confidence]
+            with performance_tracker.track("llm_suggest_fixes"):
+                # Check if we have an LLM client or request function
+                if not self._llm_request_func:
+                    logger.warning("No LLM client available for generating suggestions")
+                    return []
+                
+                # Build the prompt
+                prompt = self._build_prompt(failure)
+                
+                # Get LLM response
+                with performance_tracker.track("llm_api_request"):
+                    llm_response = self._llm_request_func(prompt)
+                
+                # Parse the response
+                with performance_tracker.track("parse_llm_response"):
+                    suggestions = self._parse_llm_response(llm_response, failure)
+                
+                # Filter suggestions by confidence
+                return [s for s in suggestions if s.confidence >= self.min_confidence]
             
         except Exception as e:
             logger.error(f"Error generating LLM suggestions: {e}")
             return []
+    
+    @async_with_timeout(60)
+    async def async_suggest_fixes(self, failure: PytestFailure) -> List[FixSuggestion]:
+        """
+        Asynchronously suggest fixes for a test failure using language models.
+        
+        :param failure: PytestFailure object to analyze
+        :return: List of suggested fixes
+        """
+        try:
+            async with performance_tracker.async_track("async_llm_suggest_fixes"):
+                # Check if we have an async LLM client or request function
+                if not self._async_llm_request_func:
+                    logger.warning("No async LLM client available for generating suggestions")
+                    return []
+                
+                # Build the prompt
+                prompt = self._build_prompt(failure)
+                
+                # Get LLM response asynchronously
+                async with performance_tracker.async_track("async_llm_api_request"):
+                    llm_response = await self._async_llm_request_func(prompt)
+                
+                # Parse the response
+                with performance_tracker.track("parse_llm_response"):
+                    suggestions = self._parse_llm_response(llm_response, failure)
+                
+                # Filter suggestions by confidence
+                return [s for s in suggestions if s.confidence >= self.min_confidence]
+        
+        except Exception as e:
+            logger.error(f"Error generating async LLM suggestions: {e}")
+            return []
+    
+    async def batch_suggest_fixes(self, failures: List[PytestFailure]) -> Dict[str, List[FixSuggestion]]:
+        """
+        Process multiple failures in batches with controlled concurrency.
+        
+        :param failures: List of test failures to analyze
+        :return: Dictionary mapping test names to lists of suggestions
+        """
+        async with performance_tracker.async_track("batch_suggest_fixes"):
+            logger.info(f"Processing {len(failures)} failures in batches (size={self.batch_size}, concurrency={self.max_concurrency})")
+            
+            # Process failures in batches
+            results = await batch_process(
+                items=failures,
+                process_func=self.async_suggest_fixes,
+                batch_size=self.batch_size,
+                max_concurrency=self.max_concurrency
+            )
+            
+            # Organize results by test name
+            suggestions_by_test = {}
+            for i, suggestions in enumerate(results):
+                if suggestions is not None:  # Skip failures that resulted in None
+                    test_name = failures[i].test_name
+                    suggestions_by_test[test_name] = suggestions
+            
+            return suggestions_by_test
     
     def _build_prompt(self, failure: PytestFailure) -> str:
         """
@@ -447,6 +524,47 @@ Provide your analysis:
         # No suitable client found
         logger.warning("No language model clients found. Install 'anthropic' or 'openai' packages to enable LLM suggestions.")
         return None
+        
+    def _get_async_llm_request_function(self) -> Optional[Callable[[str], Awaitable[str]]]:
+        """
+        Get the appropriate function for making asynchronous LLM requests.
+        
+        This method detects available async LLM clients and returns the
+        appropriate function for making async requests.
+        
+        :return: Async function for making LLM requests or None if not available
+        """
+        # If explicit client is provided, use it
+        if self.llm_client:
+            return lambda prompt: self._async_make_request_with_client(prompt)
+        
+        # Try to detect available clients
+        try:
+            # Check for Claude API access
+            from anthropic import AsyncAnthropic
+            try:
+                client = AsyncAnthropic()
+                return lambda prompt: self._async_request_with_anthropic(prompt, client)
+            except Exception:
+                pass
+                
+            # Check for OpenAI API access
+            import openai
+            try:
+                client = openai.AsyncOpenAI()
+                return lambda prompt: self._async_request_with_openai(prompt, client)
+            except Exception:
+                pass
+                
+            # Could add more client checks here
+            
+        except ImportError:
+            # No API clients available
+            pass
+            
+        # No suitable client found
+        logger.warning("No async language model clients found. Install 'anthropic' or 'openai' packages to enable async LLM suggestions.")
+        return None
     
     def _make_request_with_client(self, prompt: str) -> str:
         """
@@ -471,6 +589,55 @@ Provide your analysis:
                 logger.error(f"Error making request with client: {e}")
                 return ""
     
+    async def _async_make_request_with_client(self, prompt: str) -> str:
+        """
+        Make an asynchronous request with the provided client.
+        
+        :param prompt: Prompt to send
+        :return: Model response
+        """
+        # Determine the type of client and use appropriate method
+        client_module = self.llm_client.__class__.__module__
+        
+        if "anthropic" in client_module:
+            # Check if it's already an async client
+            if hasattr(self.llm_client, "messages") and hasattr(self.llm_client.messages, "create"):
+                if asyncio.iscoroutinefunction(self.llm_client.messages.create):
+                    return await self._async_request_with_anthropic(prompt, self.llm_client)
+                else:
+                    # Create an async client if possible
+                    try:
+                        from anthropic import AsyncAnthropic
+                        async_client = AsyncAnthropic(api_key=self.llm_client.api_key)
+                        return await self._async_request_with_anthropic(prompt, async_client)
+                    except (ImportError, AttributeError):
+                        # Fall back to sync client in async wrapper
+                        return await asyncio.to_thread(self._request_with_anthropic, prompt, self.llm_client)
+            else:
+                # Fall back to sync client in async wrapper
+                return await asyncio.to_thread(self._request_with_anthropic, prompt, self.llm_client)
+        elif "openai" in client_module:
+            # Check if it's already an async client
+            if hasattr(self.llm_client, "chat") and hasattr(self.llm_client.chat, "completions"):
+                if asyncio.iscoroutinefunction(self.llm_client.chat.completions.create):
+                    return await self._async_request_with_openai(prompt, self.llm_client)
+                else:
+                    # Create an async client if possible
+                    try:
+                        import openai
+                        async_client = openai.AsyncOpenAI(api_key=self.llm_client.api_key)
+                        return await self._async_request_with_openai(prompt, async_client)
+                    except (ImportError, AttributeError):
+                        # Fall back to sync client in async wrapper
+                        return await asyncio.to_thread(self._request_with_openai, prompt, self.llm_client)
+            else:
+                # Fall back to sync client in async wrapper
+                return await asyncio.to_thread(self._request_with_openai, prompt, self.llm_client)
+        else:
+            # Generic approach - assume client has a completion method
+            # Wrap synchronous method in asyncio.to_thread
+            return await asyncio.to_thread(self._make_request_with_client, prompt)
+    
     def _request_with_anthropic(self, prompt: str, client) -> str:
         """
         Make a request with the Anthropic Claude API.
@@ -490,6 +657,27 @@ Provide your analysis:
             return message.content[0].text
         except Exception as e:
             logger.error(f"Error making request with Anthropic API: {e}")
+            return ""
+    
+    async def _async_request_with_anthropic(self, prompt: str, client) -> str:
+        """
+        Make an asynchronous request with the Anthropic Claude API.
+        
+        :param prompt: Prompt to send
+        :param client: Async Anthropic client
+        :return: Model response
+        """
+        try:
+            message = await client.messages.create(
+                model="claude-3-haiku-20240307",
+                max_tokens=1000,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            return message.content[0].text
+        except Exception as e:
+            logger.error(f"Error making async request with Anthropic API: {e}")
             return ""
     
     def _request_with_openai(self, prompt: str, client) -> str:
@@ -512,6 +700,28 @@ Provide your analysis:
             return completion.choices[0].message.content
         except Exception as e:
             logger.error(f"Error making request with OpenAI API: {e}")
+            return ""
+    
+    async def _async_request_with_openai(self, prompt: str, client) -> str:
+        """
+        Make an asynchronous request with the OpenAI API.
+        
+        :param prompt: Prompt to send
+        :param client: Async OpenAI client
+        :return: Model response
+        """
+        try:
+            completion = await client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are an expert Python developer helping to fix pytest failures."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=1000
+            )
+            return completion.choices[0].message.content
+        except Exception as e:
+            logger.error(f"Error making async request with OpenAI API: {e}")
             return ""
             
     def _generate_suggestion_fingerprint(self, suggestion_text: str, explanation: str, code_changes: Dict) -> str:
