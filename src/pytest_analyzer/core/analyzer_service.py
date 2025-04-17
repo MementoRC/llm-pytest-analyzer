@@ -1183,7 +1183,7 @@ class PytestAnalyzerService:
 
                     # Limit each group and rebuild the list
                     limited_suggestions = []
-                    for failure_id, suggestions in suggestions_by_failure.items():
+                    for suggestions in suggestions_by_failure.values():
                         limited_suggestions.extend(
                             suggestions[:self.settings.max_suggestions_per_failure]
                         )
