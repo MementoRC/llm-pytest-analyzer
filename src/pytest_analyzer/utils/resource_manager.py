@@ -64,8 +64,10 @@ async def async_timeout(seconds: float) -> AsyncIterator[None]:
     """Asynchronous timeout context manager using asyncio.timeout()"""
     try:
         yield
-    except asyncio.TimeoutError:
-        raise TimeoutError(f"Async operation exceeded time limit of {seconds} seconds")
+    except asyncio.TimeoutError as e:
+        raise TimeoutError(
+            f"Async operation exceeded time limit of {seconds} seconds"
+        ) from e
 
 
 def async_with_timeout(seconds: float) -> Callable[[Callable[..., Awaitable[T]]], Callable[..., Awaitable[T]]]:
