@@ -1247,8 +1247,7 @@ class PytestAnalyzerService:
             except asyncio.TimeoutError:
                 # Handle timeout from the async_with_timeout decorator
                 logger.warning(
-                    f"Async suggestion generation timed out after 300 seconds. "
-                    f"Returning partial results. Consider adjusting parameters."
+                    'Async suggestion generation timed out after 300 seconds. Returning partial results. Consider adjusting parameters.'
                 )
                 # Ensure progress tasks are cleaned up
                 context.cleanup_progress_tasks()
