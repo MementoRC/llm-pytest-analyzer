@@ -82,6 +82,35 @@ def setup_parser() -> argparse.ArgumentParser:
         help="Path to configuration file"
     )
     
+    # Git integration options
+    git_group = parser.add_argument_group("Git Integration")
+    git_group.add_argument(
+        "--use-git",
+        action="store_true",
+        help="Use Git for version control when applying fixes (default)",
+        dest="check_git",
+        default=True
+    )
+    git_group.add_argument(
+        "--no-git",
+        action="store_false",
+        help="Do not use Git for version control when applying fixes",
+        dest="check_git"
+    )
+    git_group.add_argument(
+        "--auto-init-git",
+        action="store_true",
+        help="Automatically initialize Git repository without prompting if not in a Git repository",
+        default=False
+    )
+    git_group.add_argument(
+        "--no-git-branches",
+        action="store_false",
+        help="Do not create branches for fix suggestions",
+        dest="use_git_branches",
+        default=True
+    )
+    
     # Resource control
     parser.add_argument(
         "--timeout", 
@@ -236,6 +265,11 @@ def configure_settings(args) -> Settings:
     # Resource limits
     settings.pytest_timeout = args.timeout
     settings.max_memory_mb = args.max_memory
+    
+    # Git integration settings
+    settings.check_git = args.check_git
+    settings.auto_init_git = args.auto_init_git
+    settings.use_git_branches = args.use_git_branches
     
     # Analysis settings
     settings.max_failures = args.max_failures
@@ -621,7 +655,16 @@ def apply_suggestions_interactively(
     """
     console.print("\n[bold]===== Interactive Fix Application =====[/bold]")
     console.print("[italic yellow]Warning: Applying fixes will modify files in your project.[/italic yellow]")
-    console.print("[italic yellow]Backups will be created with the .pytest-analyzer.bak suffix.[/italic yellow]")
+    
+    # Show different warnings based on Git availability
+    if hasattr(analyzer_service, 'git_available') and analyzer_service.git_available:
+        branch_info = ""
+        if hasattr(analyzer_service.fix_applier, 'current_branch') and analyzer_service.fix_applier.current_branch:
+            branch_info = f" on branch '{analyzer_service.fix_applier.current_branch}'"
+        console.print(f"[italic green]Changes will be tracked using Git{branch_info}.[/italic green]")
+    else:
+        console.print("[italic yellow]Backups will be created with the .pytest-analyzer.bak suffix.[/italic yellow]")
+        console.print("[italic yellow]Note: Git integration is not enabled. Consider using --use-git for better version control.[/italic yellow]")
     
     # Auto-apply mode warning
     if args.auto_apply:
