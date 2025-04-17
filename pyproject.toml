@@ -42,6 +42,9 @@ dev = [
     "pytest-cov",
     "ruff",
     "mypy",
+    "pre-commit",
+    "black",
+    "isort",
 ]
 
 test = [
