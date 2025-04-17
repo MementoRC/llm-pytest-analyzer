@@ -241,13 +241,11 @@ class PerformanceTracker:
         """Get performance metrics for specific operation or all operations"""
         if operation:
             return self._calculate_metrics_for_operation(operation)
-        
-        # Calculate metrics for all operations
-        metrics = {}
-        for op in self.timings.keys():
-            metrics[op] = self._calculate_metrics_for_operation(op)
-        
-        return metrics
+
+        return {
+            op: self._calculate_metrics_for_operation(op)
+            for op in self.timings.keys()
+        }
     
     def _calculate_metrics_for_operation(self, operation: str) -> Dict[str, Any]:
         """Calculate metrics for a specific operation"""
