@@ -45,6 +45,7 @@ dev = [
     "pre-commit",
     "black",
     "isort",
+    "mkdocs",
 ]
 
 test = [
