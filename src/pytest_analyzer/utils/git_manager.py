@@ -170,7 +170,12 @@ def confirm_git_setup(project_path: str) -> bool:
     
     # Ask user confirmation to initialize Git
     print(f"The project at {project_path} is not under Git version control.")
-    response = input("Would you like to initialize a Git repository to track changes? (y/n): ")
+    try:
+        response = input("Would you like to initialize a Git repository to track changes? (y/n): ")
+    except (EOFError, OSError):
+        # Non-interactive environment, do not initialize Git
+        logger.info("Non-interactive environment detected; skipping Git initialization prompt.")
+        return False
     
     if response.lower() == 'y':
         if init_git_repository(project_path):

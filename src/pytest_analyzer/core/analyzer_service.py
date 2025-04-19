@@ -910,9 +910,12 @@ class PytestAnalyzerService:
             logger.error(f"Pytest execution timed out after {self.settings.pytest_timeout} seconds")
             return []
         finally:
-            # Ensure temporary file is deleted
-            if os.path.exists(json_report_path):
-                os.remove(json_report_path)
+            # Ensure temporary file is deleted (ignore errors)
+            try:
+                if os.path.exists(json_report_path):
+                    os.remove(json_report_path)
+            except Exception:
+                pass
 
 
     def _run_and_extract_xml(self, test_path: str, pytest_args: Optional[List[str]] = None) -> List[PytestFailure]:
@@ -980,9 +983,12 @@ class PytestAnalyzerService:
             logger.error(f"Pytest execution timed out after {self.settings.pytest_timeout} seconds")
             return []
         finally:
-            # Ensure temporary file is deleted
-            if os.path.exists(xml_report_path):
-                os.remove(xml_report_path)
+            # Ensure temporary file is deleted (ignore errors)
+            try:
+                if os.path.exists(xml_report_path):
+                    os.remove(xml_report_path)
+            except Exception:
+                pass
 
     def _generate_suggestions(
         self,

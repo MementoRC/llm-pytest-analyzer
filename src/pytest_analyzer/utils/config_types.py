@@ -43,6 +43,9 @@ class Settings:
     # Path settings
     project_root: Optional[Path] = None  # Root directory of the project
     mock_directories: Dict[str, str] = field(default_factory=dict)  # Absolute path mappings
+    # Async processing settings
+    batch_size: int = 5  # Number of failures to process in each batch in async mode
+    max_concurrency: int = 10  # Maximum concurrent LLM requests in async mode
 
     def __post_init__(self):
         # Convert project_root to Path if it's a string

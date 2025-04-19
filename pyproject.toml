@@ -7,10 +7,10 @@ name = "pytest-analyzer"
 dynamic = ["version"]
 description = "Analyzes pytest test results to identify patterns and suggest fixes."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [
-    { name = "Your Name", email = "your.email@example.com" },
+    { name = "Memento", email = "claude.rc@gmail.com" },
 ]
 keywords = ["pytest", "testing", "analysis", "reporting", "debugging"]
 classifiers = [
@@ -20,7 +20,6 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -31,25 +30,25 @@ classifiers = [
 ]
 
 dependencies = [
-    "pytest>=7.0.0",
-    "pytest-cov>=6.0.0",
-    "pytest-json-report>=1.5.0",
+    "PyYaml",
     "rich>=12.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest-cov",
-    "ruff",
-    "mypy",
-    "pre-commit",
     "black",
     "isort",
     "mkdocs",
+    "mypy",
+    "pre-commit",
+    "ruff",
 ]
 
 test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio",
     "pytest-cov",
+    "pytest-json-report>=1.5.0",
 ]
 
 [project.scripts]

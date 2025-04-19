@@ -1,6 +1,9 @@
-site_name: pytest-analyzer
-repo_name: MementoRC/llm-pytest-analyzer
+site_name: llm-pytest-analyzer
+repo_name: https://github.com/MementoRC/llm-pytest-analyzer
 edit_uri: edit/main/docs/
 docs_dir: docs
 theme:
   name: readthedocs
+nav:
+  - Home: index.md
+  - README: README.md

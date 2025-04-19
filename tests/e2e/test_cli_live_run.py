@@ -1,6 +1,7 @@
 """End-to-end tests for the pytest-analyzer CLI on real projects."""
 import sys
 import os
+import subprocess
 from pathlib import Path
 import pytest
 from unittest.mock import patch, mock_open, MagicMock
@@ -90,47 +91,21 @@ def test_cli_with_assertion_file(sample_assertion_file, sample_json_report, patc
 
 @pytest.mark.e2e
 def test_cli_with_report_file(sample_json_report):
-    """Test the CLI with an existing report file."""
-    # Run the CLI
-    original_argv = sys.argv.copy()
-    sys.argv = ["pytest-analyzer", "--output-file", str(sample_json_report)]
-    
-    # Capture output
-    import io
-    from contextlib import redirect_stdout, redirect_stderr
-    
-    f_out = io.StringIO()
-    f_err = io.StringIO()
-    
-    with redirect_stdout(f_out), redirect_stderr(f_err):
-        try:
-            cli_main()
-        except SystemExit:
-            pass
-    
-    # Get captured output
-    output = f_out.getvalue()
-    error_output = f_err.getvalue()
-    
-    # Check if we already have the expected output
-    if not ("Suggested fix" in output and ("test_assertion" in output or "AssertionError" in output)):
-        # We need to provide a dummy test path for reliable test runs
-        tmp_test_path = str(sample_json_report.parent / "dummy_test.py")
-        sys.argv = ["pytest-analyzer", tmp_test_path, "--output-file", str(sample_json_report)]
-        
-        f_out = io.StringIO()
-        with redirect_stdout(f_out):
-            try:
-                cli_main()
-            except SystemExit:
-                pass
-                
-        output = f_out.getvalue()
-    
-    # Restore original argv
-    sys.argv = original_argv
-    
-    # Check output
+    """Test the CLI with an existing report file via subprocess."""
+    # Execute the CLI as a module in a subprocess, ensuring src/ is on PYTHONPATH
+    src_dir = Path(__file__).parents[2] / "src"
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(src_dir)
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest_analyzer.cli.analyzer_cli", "--output-file", str(sample_json_report)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env=env,
+    )
+    output = result.stdout
+
+    # Verify header, test details, and suggestion are present
     assert "Analyzing output file:" in output
     assert "test_assertion.py::test_assertion_error" in output or "AssertionError" in output
     assert "Suggested fix" in output
