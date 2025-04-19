@@ -2,10 +2,10 @@
 Module for grouping similar test failures together for more efficient analysis.
 """
 
+import os
 import re
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple, Any
-from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 from ..models.pytest_failure import PytestFailure
 
@@ -88,7 +88,6 @@ def extract_failure_fingerprint(failure: PytestFailure, project_root: Optional[s
     Returns:
         A string fingerprint.
     """
-    import hashlib
     
     error_type = failure.error_type
     error_message = failure.error_message.split('\n')[0]  # Use first line of message

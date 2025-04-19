@@ -1,8 +1,6 @@
 """Tests for the path resolver utilities."""
 import pytest
-import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 from src.pytest_analyzer.utils.path_resolver import PathResolver
 

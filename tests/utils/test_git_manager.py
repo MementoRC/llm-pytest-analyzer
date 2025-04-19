@@ -1,8 +1,6 @@
 """Tests for the git_manager module."""
-import os
 import pytest
 import subprocess
-from pathlib import Path
 from unittest.mock import patch, MagicMock, mock_open, call
 
 from src.pytest_analyzer.utils.git_manager import (

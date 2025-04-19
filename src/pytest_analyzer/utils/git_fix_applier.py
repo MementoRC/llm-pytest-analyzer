@@ -6,7 +6,6 @@ Git operations for managing changes instead of custom backup files.
 """
 
 import os
-import subprocess
 import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional

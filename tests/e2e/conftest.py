@@ -1,6 +1,5 @@
 """Pytest configuration for end-to-end tests."""
 import pytest
-import os
 import sys
 import subprocess
 from pathlib import Path
@@ -10,8 +9,6 @@ from unittest.mock import MagicMock
 sys.path.insert(0, str(Path(__file__).parents[2] / "src"))
 
 # Import from the package
-from pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
-from pytest_analyzer.core.analysis.llm_suggester import LLMSuggester
 
 
 @pytest.fixture

@@ -4,7 +4,7 @@ import os
 import subprocess
 from pathlib import Path
 import pytest
-from unittest.mock import patch, mock_open, MagicMock
+from unittest.mock import patch, mock_open
 
 # Make sure the pytest_analyzer package is importable
 sys.path.insert(0, str(Path(__file__).parents[2] / "src"))
@@ -76,7 +76,7 @@ def test_cli_with_assertion_file(sample_assertion_file, sample_json_report, patc
                     pass
             
             # Get captured output
-            output = f.getvalue()
+            f.getvalue()
             
             # Restore original argv
             sys.argv = original_argv
@@ -162,7 +162,7 @@ def test_cli_with_llm_integration(sample_json_report):
             
             # Get captured output
             output = f_out.getvalue()
-            error_output = f_err.getvalue()
+            f_err.getvalue()
         
             # Restore original argv
             sys.argv = original_argv
@@ -171,8 +171,6 @@ def test_cli_with_llm_integration(sample_json_report):
     del os.environ["PYTEST_ANALYZER_LLM_API_KEY"]
     
     # Check if output is in stdout logs instead
-    import re
-    from io import StringIO
 
     # The output might be in the stdout capture instead of our f_out buffer
     # Let's check if the test ran correctly by looking at some expected output

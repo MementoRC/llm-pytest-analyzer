@@ -1,8 +1,6 @@
 """Pytest configuration for the pytest_analyzer tests."""
 import pytest
 import sys
-import os
-import shutil
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -306,7 +304,6 @@ def cli_invoke():
     """Helper fixture to invoke the CLI main function."""
     def _invoke(*args, **kwargs):
         from pytest_analyzer.cli.analyzer_cli import main
-        import sys
         
         # Save original argv
         original_argv = sys.argv.copy()

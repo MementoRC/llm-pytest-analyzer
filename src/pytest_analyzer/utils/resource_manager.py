@@ -3,11 +3,10 @@ import resource
 import time
 import logging
 import asyncio
-import functools
 from collections import defaultdict
 from contextlib import contextmanager, asynccontextmanager
 from functools import wraps
-from typing import Optional, Callable, TypeVar, Any, Dict, List, Union, Coroutine, AsyncIterator, Iterator, Awaitable
+from typing import Optional, Callable, TypeVar, Any, Dict, List, AsyncIterator, Iterator, Awaitable
 
 T = TypeVar('T')
 R = TypeVar('R')

@@ -15,7 +15,7 @@ import json
 import os
 import hashlib
 import asyncio
-from typing import List, Dict, Any, Optional, Union, Callable, Awaitable
+from typing import List, Dict, Any, Optional, Callable, Awaitable
 
 from ..models.pytest_failure import PytestFailure, FixSuggestion
 from ...utils.resource_manager import with_timeout, async_with_timeout, performance_tracker, batch_process
@@ -760,7 +760,7 @@ Provide your analysis:
                     # Extract just the filename without directory
                     try:
                         components.append(os.path.basename(str(value)))
-                    except:
+                    except ValueError:
                         components.append(str(value))
                         
                 # For code snippets, normalize and hash them

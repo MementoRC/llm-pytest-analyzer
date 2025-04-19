@@ -1,7 +1,6 @@
 import pytest
 import logging
-from typing import List, Optional, Dict, Any
-from pathlib import Path
+from typing import List, Dict, Any
 
 from ..models.pytest_failure import PytestFailure
 

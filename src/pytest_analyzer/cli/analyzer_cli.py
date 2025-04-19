@@ -14,20 +14,16 @@ import argparse
 import logging
 import json
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import difflib
-from pathlib import Path
 from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
 from rich.syntax import Syntax
 
 from ..core.analyzer_service import PytestAnalyzerService
 from ..core.models.pytest_failure import PytestFailure, FixSuggestion
-from ..core.analysis.fix_applier import FixApplicationResult
 from ..utils.settings import Settings, load_settings
-from ..utils.path_resolver import PathResolver
 
 
 # Setup rich console
@@ -42,7 +38,6 @@ logging.basicConfig(
 logger = logging.getLogger("pytest_analyzer")
 
 # Configure rich with proper terminal settings
-from rich.console import Console
 console = Console(force_terminal=True if os.environ.get("FORCE_COLOR", "0") == "1" else None)
 
 
@@ -533,7 +528,7 @@ def main() -> int:
                                 # Print test details to stdout for E2E assertions
                                 hdr = f"Test: {nodeid}"
                                 err = f"Error: {message}"
-                                fix = f"\nSuggested fix: Change the assertion to match the expected values."
+                                fix = "\nSuggested fix: Change the assertion to match the expected values."
                                 # Print to stdout and via console
                                 print(hdr)
                                 console.print(hdr)

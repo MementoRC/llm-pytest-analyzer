@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import List, Dict, Any, Optional
+from typing import List
 
 from ..models.pytest_failure import PytestFailure, FixSuggestion
 from ...utils.resource_manager import with_timeout

@@ -1,9 +1,8 @@
 """Tests for the git_fix_applier module."""
-import os
 import pytest
 import logging
 from pathlib import Path
-from unittest.mock import patch, MagicMock, mock_open, call
+from unittest.mock import patch, mock_open, call
 
 # Module under test
 from src.pytest_analyzer.utils.git_fix_applier import GitFixApplier

@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Tuple
 
 from ..models.pytest_failure import PytestFailure, FixSuggestion
 from ...utils.resource_manager import with_timeout
@@ -447,7 +447,7 @@ class FailureAnalyzer:
             
             suggestions.append(FixSuggestion(
                 failure=failure,
-                suggestion=f"Add validation or error handling for non-integer inputs.",
+                suggestion="Add validation or error handling for non-integer inputs.",
                 confidence=0.6
             ))
             

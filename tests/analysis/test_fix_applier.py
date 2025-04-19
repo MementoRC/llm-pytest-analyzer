@@ -9,14 +9,12 @@ These tests verify that the FixApplier:
 4. Rolls back changes when validation fails
 """
 
-import os
 import sys
 import pytest
-import subprocess
 from unittest.mock import patch, MagicMock
 from pathlib import Path
 
-from pytest_analyzer.core.analysis.fix_applier import FixApplier, FixApplicationResult
+from pytest_analyzer.core.analysis.fix_applier import FixApplier
 
 
 class TestFixApplier:

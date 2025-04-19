@@ -1,6 +1,5 @@
 """End-to-end tests for using the pytest-analyzer as an API."""
 import sys
-import os
 from pathlib import Path
 import pytest
 from unittest.mock import patch, MagicMock, mock_open
@@ -11,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parents[2] / "src"))
 # Import the API classes
 from pytest_analyzer.core.analyzer_service import PytestAnalyzerService
 from pytest_analyzer.utils.settings import Settings
-from pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
+from pytest_analyzer.core.models.pytest_failure import FixSuggestion
 
 
 @pytest.mark.e2e

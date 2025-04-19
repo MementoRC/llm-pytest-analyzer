@@ -1,11 +1,9 @@
 """Tests for the fix suggester module."""
 import pytest
-import re
 from unittest.mock import patch, MagicMock
 
 from src.pytest_analyzer.core.analysis.fix_suggester import FixSuggester
 from src.pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
-from src.pytest_analyzer.utils.resource_manager import TimeoutError
 
 
 @pytest.fixture

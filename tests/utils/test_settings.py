@@ -1,7 +1,7 @@
 """Tests for the settings module."""
 import pytest
 from pathlib import Path
-from unittest.mock import patch, mock_open
+from unittest.mock import patch
 
 from src.pytest_analyzer.utils.settings import Settings, load_settings
 

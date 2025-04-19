@@ -1,7 +1,6 @@
 """Tests for the extractor factory module."""
 import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 from src.pytest_analyzer.core.extraction.extractor_factory import get_extractor, ExtractorFactory
 from src.pytest_analyzer.core.extraction.json_extractor import JsonResultExtractor

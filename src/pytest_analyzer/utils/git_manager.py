@@ -5,11 +5,9 @@ This module provides utilities to check Git compatibility, initialize Git reposi
 and manage code changes through Git operations rather than custom backup methods.
 """
 
-import os
 import subprocess
-import sys
 from pathlib import Path
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple
 import logging
 
 logger = logging.getLogger(__name__)

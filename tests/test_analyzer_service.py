@@ -2,12 +2,11 @@
 import subprocess
 
 import pytest
-from unittest.mock import patch, MagicMock, mock_open
-from pathlib import Path
+from unittest.mock import patch, MagicMock
 import tempfile
 
 from src.pytest_analyzer.core.analyzer_service import PytestAnalyzerService
-from src.pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
+from src.pytest_analyzer.core.models.pytest_failure import PytestFailure
 from src.pytest_analyzer.utils.settings import Settings
 
 

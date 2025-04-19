@@ -9,8 +9,7 @@ These tests verify that:
 """
 
 import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from pytest_analyzer.core.analyzer_service import PytestAnalyzerService
 from pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion

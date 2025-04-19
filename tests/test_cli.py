@@ -1,19 +1,13 @@
 """Tests for the CLI module."""
 
 import pytest
-from unittest.mock import patch, MagicMock, mock_open, ANY
-from pathlib import Path
+from unittest.mock import patch, MagicMock, ANY
 import sys
 import argparse
 import logging
-import io
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
 
-from src.pytest_analyzer.cli.analyzer_cli import main, setup_parser, configure_settings, display_suggestions, console
+from src.pytest_analyzer.cli.analyzer_cli import main, setup_parser, configure_settings, display_suggestions
 from src.pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
-from src.pytest_analyzer.utils.settings import Settings
 
 
 @pytest.fixture
@@ -278,7 +272,7 @@ def test_display_suggestions_with_rule_based(mock_console, test_suggestion, mock
     
     # Verify key calls
     mock_console.print.assert_any_call("\n[bold green]Found 1 fix suggestions:[/bold green]")
-    mock_console.print.assert_any_call(f"\n[bold green]Suggested fix (Rule-based):[/bold green]")
+    mock_console.print.assert_any_call("\n[bold green]Suggested fix (Rule-based):[/bold green]")
     mock_console.print.assert_any_call(test_suggestion.suggestion)
 
 
@@ -289,7 +283,7 @@ def test_display_suggestions_with_llm(mock_console, llm_suggestion, mock_args):
     
     # Verify key calls
     mock_console.print.assert_any_call("\n[bold green]Found 1 fix suggestions:[/bold green]")
-    mock_console.print.assert_any_call(f"\n[bold yellow]Suggested fix (LLM):[/bold yellow]")
+    mock_console.print.assert_any_call("\n[bold yellow]Suggested fix (LLM):[/bold yellow]")
     mock_console.print.assert_any_call(llm_suggestion.suggestion)
 
 

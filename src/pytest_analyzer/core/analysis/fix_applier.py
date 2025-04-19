@@ -18,12 +18,11 @@ import sys
 import shutil
 import difflib
 import logging
-import time
 import tempfile
 import subprocess
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Union, Tuple, Set
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +177,6 @@ class FixApplier:
             FixApplicationResult indicating success or failure
         """
         applied_files: List[Path] = []
-        rolled_back_files: List[Path] = []
         backup_paths: Dict[Path, Path] = {}
         
         # Create a temporary environment for testing
@@ -327,7 +325,6 @@ class FixApplier:
             FixApplicationResult indicating success or failure
         """
         applied_files: List[Path] = []
-        rolled_back_files: List[Path] = []
         backup_paths: Dict[Path, Path] = {}
         
         # Create backup directory
@@ -475,7 +472,7 @@ class FixApplier:
                     '/tmp/' in path_str or
                     tempfile.gettempdir() in path_str):
                     return True
-            except:
+            except Exception:
                 # If path resolution fails, continue to the next path
                 continue
         return False

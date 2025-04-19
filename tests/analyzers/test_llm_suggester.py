@@ -1,14 +1,9 @@
 """Tests for the LLM suggester module."""
-import json
 import pytest
-import re
-from unittest.mock import patch, MagicMock, ANY
-import os
-from pathlib import Path
+from unittest.mock import patch, MagicMock
 
 from src.pytest_analyzer.core.analysis.llm_suggester import LLMSuggester
 from src.pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
-from src.pytest_analyzer.utils.resource_manager import TimeoutError
 
 
 @pytest.fixture
@@ -202,7 +197,7 @@ class TestLLMSuggester:
             # Set a small max_prompt_length
             llm_suggester.max_prompt_length = 500
             
-            prompt = llm_suggester._build_prompt(test_failure)
+            llm_suggester._build_prompt(test_failure)
             
             # Verify truncate_text was called
             assert mock_truncate.called

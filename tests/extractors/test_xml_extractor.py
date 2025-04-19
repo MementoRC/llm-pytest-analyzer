@@ -3,10 +3,9 @@ import pytest
 import xml.etree.ElementTree as ET
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from src.pytest_analyzer.core.extraction.xml_extractor import XmlResultExtractor
-from src.pytest_analyzer.core.models.pytest_failure import PytestFailure
 from src.pytest_analyzer.utils.path_resolver import PathResolver
 from src.pytest_analyzer.utils.resource_manager import TimeoutError
 

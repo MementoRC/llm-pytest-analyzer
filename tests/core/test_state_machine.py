@@ -1,16 +1,14 @@
 import asyncio
 import logging
-from unittest.mock import MagicMock, AsyncMock, patch, call
+from unittest.mock import MagicMock, AsyncMock, patch
 
 import pytest
-pytest_plugins = ['pytest_asyncio']
 from rich.progress import Progress, TaskID
 
 # Import state machine components
 from pytest_analyzer.core.analyzer_service import (
-    Context, State, Initialize, GroupFailures, PrepareRepresentatives,
-    BatchProcess, PostProcess, ErrorState, PytestAnalyzerError,
-    InitializationError, FailureGroupingError, RepresentativeSelectionError,
+    Context, Initialize, GroupFailures, PrepareRepresentatives,
+    BatchProcess, PostProcess, ErrorState, InitializationError, FailureGroupingError, RepresentativeSelectionError,
     BatchProcessingError, PostProcessingError
 )
 from pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion

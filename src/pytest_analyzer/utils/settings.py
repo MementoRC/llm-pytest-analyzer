@@ -1,7 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Optional, Union, List, Dict # Added List and Dict
-from dataclasses import field # No longer need dataclass here
+from typing import Optional, Union # Added List and Dict
 
 # Import the manager and error classes from the configuration module
 from .configuration import ConfigurationManager, ConfigurationError

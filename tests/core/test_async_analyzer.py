@@ -9,7 +9,6 @@ from rich.progress import Progress
 from pytest_analyzer.core.analyzer_service import PytestAnalyzerService
 from pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
 from pytest_analyzer.utils.resource_manager import performance_tracker
-from pytest_analyzer.utils.settings import Settings
 
 
 class MockLLMClient:

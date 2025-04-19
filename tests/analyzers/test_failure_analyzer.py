@@ -1,11 +1,9 @@
 """Tests for the failure analyzer module."""
 import pytest
-import re
 from unittest.mock import patch, MagicMock
 
 from src.pytest_analyzer.core.analysis.failure_analyzer import FailureAnalyzer
 from src.pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
-from src.pytest_analyzer.utils.resource_manager import TimeoutError
 
 
 @pytest.fixture

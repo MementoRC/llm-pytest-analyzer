@@ -1,11 +1,8 @@
 """Integration tests for the PytestAnalyzerService with extractors and analyzers."""
 import pytest
-import os
 from unittest.mock import patch, MagicMock
 
 from src.pytest_analyzer.core.analyzer_service import PytestAnalyzerService
-from src.pytest_analyzer.core.analysis.failure_analyzer import FailureAnalyzer
-from src.pytest_analyzer.core.analysis.llm_suggester import LLMSuggester
 from src.pytest_analyzer.utils.settings import Settings
 from src.pytest_analyzer.core.models.pytest_failure import PytestFailure
 
