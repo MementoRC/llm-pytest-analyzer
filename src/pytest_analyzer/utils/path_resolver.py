@@ -12,7 +12,7 @@ class PathResolver:
     """Handles path resolution across different environments."""
     
     # Track all temporary directories created for cleanup
-    _temp_dirs = []
+    _temp_dirs: list[Path] = []
     
     @classmethod
     def _cleanup_temp_dirs(cls):

@@ -37,7 +37,7 @@ class LLMSuggester:
     
     def __init__(
         self,
-        llm_client: Optional[Any] = None,
+        llm_client: Any = None,
         min_confidence: float = 0.7,
         max_prompt_length: int = 4000,
         max_context_lines: int = 20,
@@ -498,6 +498,7 @@ Provide your analysis:
             return lambda prompt: self._make_request_with_client(prompt)
         
         # Try to detect available clients
+        client: Any
         try:
             # Check for Claude API access
             from anthropic import Anthropic
@@ -539,6 +540,7 @@ Provide your analysis:
             return lambda prompt: self._async_make_request_with_client(prompt)
         
         # Try to detect available clients
+        client: Any
         try:
             # Check for Claude API access
             from anthropic import AsyncAnthropic
@@ -598,6 +600,7 @@ Provide your analysis:
         """
         # Determine the type of client and use appropriate method
         client_module = self.llm_client.__class__.__module__
+        async_client: Any
         
         if "anthropic" in client_module:
             # Check if it's already an async client

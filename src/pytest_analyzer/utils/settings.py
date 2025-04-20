@@ -78,6 +78,7 @@ def get_config_manager(
          )
 
     # Always return the current instance
+    assert _config_manager_instance is not None
     return _config_manager_instance
 
 

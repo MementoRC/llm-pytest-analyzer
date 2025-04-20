@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import Optional, List, Dict, Any
+from dataclasses import dataclass, field
+from typing import List, Dict, Any, Optional
 
 
 @dataclass
@@ -10,17 +10,15 @@ class PytestFailure:
     error_type: str
     error_message: str
     traceback: str
-    line_number: Optional[int] = None
-    relevant_code: Optional[str] = None
-    raw_output_section: Optional[str] = None
-    related_project_files: List[str] = None
+    line_number: int | None = None
+    relevant_code: str | None = None
+    raw_output_section: str | None = None
+    related_project_files: List[str] = field(default_factory=list)
     # Added for grouping similar failures
-    group_fingerprint: Optional[str] = None
-    suggestion: Optional[Dict[str, Any]] = None
+    group_fingerprint: str | None = None
+    suggestion: Dict[str, Any] | None = None
 
-    def __post_init__(self):
-        if self.related_project_files is None:
-            self.related_project_files = []
+    # __post_init__ no longer needed as default factory ensures list
 
 
 @dataclass

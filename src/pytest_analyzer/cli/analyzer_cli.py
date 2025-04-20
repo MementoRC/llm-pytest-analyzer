@@ -14,7 +14,7 @@ import argparse
 import logging
 import json
 from pathlib import Path
-from typing import List
+from typing import List, Dict, Tuple
 
 import difflib
 from rich.console import Console
@@ -337,7 +337,8 @@ def display_suggestions(suggestions: List[FixSuggestion], args):
         console.print(f"\n[bold green]Found {suggestion_count} fix suggestions:[/bold green]")
     
     # Group suggestions by fingerprint (when possible) for display organization
-    suggestions_by_fingerprint = {}
+    # Organize suggestions by fingerprint for grouped display
+    suggestions_by_fingerprint: Dict[str, List[Tuple[FixSuggestion, str]]] = {}
     for suggestion, source in filtered_suggestions:
         fingerprint = suggestion.failure.group_fingerprint if hasattr(suggestion.failure, 'group_fingerprint') else None
         key = fingerprint or f"unique_{id(suggestion)}"

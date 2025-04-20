@@ -189,7 +189,7 @@ class Context:
             return task_id
         return None
 
-    def update_progress(self, key: str, description: str = None, completed: bool = False, **kwargs) -> None:
+    def update_progress(self, key: str, description: Optional[str] = None, completed: bool = False, **kwargs) -> None:
         """
         Update a progress task by its key.
 
@@ -201,7 +201,8 @@ class Context:
         """
         if self.progress and key in self.progress_tasks:
             task_id = self.progress_tasks[key]
-            update_kwargs = {}
+            # Prepare kwargs for progress.update; allow mixed types
+            update_kwargs: Dict[str, Any] = {}
 
             if description:
                 update_kwargs['description'] = description
@@ -210,7 +211,8 @@ class Context:
 
             update_kwargs |= kwargs
 
-            self.progress.update(task_id, **update_kwargs)
+            # Update progress with dynamic kwargs (type ignored for strict type checks)
+            self.progress.update(task_id, **update_kwargs)  # type: ignore[arg-type]
 
     def cleanup_progress_tasks(self) -> None:
         """Mark all progress tasks as completed to ensure clean UI."""
@@ -218,7 +220,9 @@ class Context:
             for key, task_id in self.progress_tasks.items():
                 try:
                     # Check if task still exists before updating
-                    if self.progress.get_task(task_id):
+                    # Check for get_task dynamically to avoid static type errors
+                    task_fn = getattr(self.progress, 'get_task', None)
+                    if task_fn and task_fn(task_id):
                         self.progress.update(task_id, completed=True)
                 except Exception as e:
                     self.log_debug(f"Error cleaning up progress task {key}: {e}")
@@ -320,8 +324,10 @@ class PrepareRepresentatives(State):
             for fingerprint, group in self.context.failure_groups.items():
                 if not group:
                     continue
-
+                # Select a representative failure; skip if None
                 representative = select_representative_failure(group)
+                if representative is None:
+                    continue
                 self.context.representative_failures.append(representative)
                 self.context.group_mapping[representative.test_name] = group
 
@@ -450,7 +456,8 @@ class PostProcess(State):
     def _limit_suggestions_per_failure(self) -> None:
         """Limit the number of suggestions per failure."""
         # Group suggestions by failure
-        suggestions_by_failure = {}
+        # Group suggestions by failure identifier
+        suggestions_by_failure: Dict[str, List[FixSuggestion]] = {}
         for suggestion in self.context.all_suggestions:
             failure_id = suggestion.failure.test_name
             if failure_id not in suggestions_by_failure:
@@ -541,17 +548,19 @@ class PytestAnalyzerService:
             max_concurrency=max_concurrency
         )
 
+        # Prepare fix_applier attribute to accept different implementations
+        self.fix_applier: Any = None
         # Initialize fix applier for applying suggestions
         if self.git_available:
             from ..utils.git_fix_applier import GitFixApplier
             self.fix_applier = GitFixApplier(
-                project_root=self.settings.project_root,
+                project_root=cast(Path, self.settings.project_root),
                 verbose_test_output=False  # Default to quiet mode for validation
             )
         else:
             # Fallback to traditional file backup approach
             self.fix_applier = FixApplier(
-                project_root=self.settings.project_root,
+                project_root=cast(Path, self.settings.project_root),
                 backup_suffix=".pytest-analyzer.bak",
                 verbose_test_output=False  # Default to quiet mode for validation
             )
@@ -1060,7 +1069,7 @@ class PytestAnalyzerService:
         :return: List of suggested fixes
         """
         with performance_tracker.track("sync_generate_suggestions"):
-            all_suggestions = []
+            all_suggestions: List[FixSuggestion] = []
 
             # Return early if there are no failures to analyze
             if not failures:
@@ -1114,7 +1123,10 @@ class PytestAnalyzerService:
                             continue
 
                         # Select the most representative failure from the group
+                        # Select the most representative failure from the group
                         representative = select_representative_failure(group)
+                        if representative is None:
+                            continue
 
                         # Update progress before LLM call if active
                         if progress and llm_task_id is not None:
@@ -1180,7 +1192,7 @@ class PytestAnalyzerService:
                 # Limit to max_suggestions per failure if specified
                 if self.settings.max_suggestions_per_failure > 0:
                     # Group suggestions by failure
-                    suggestions_by_failure = {}
+                    suggestions_by_failure: Dict[str, List[FixSuggestion]] = {}
                     for suggestion in all_suggestions:
                         failure_id = suggestion.failure.test_name
                         if failure_id not in suggestions_by_failure:
@@ -1188,10 +1200,10 @@ class PytestAnalyzerService:
                         suggestions_by_failure[failure_id].append(suggestion)
 
                     # Limit each group and rebuild the list
-                    limited_suggestions = []
-                    for suggestions in suggestions_by_failure.values():
+                    limited_suggestions: List[FixSuggestion] = []
+                    for group_suggestions in suggestions_by_failure.values():
                         limited_suggestions.extend(
-                            suggestions[:self.settings.max_suggestions_per_failure]
+                            group_suggestions[:self.settings.max_suggestions_per_failure]
                         )
                     return limited_suggestions
 

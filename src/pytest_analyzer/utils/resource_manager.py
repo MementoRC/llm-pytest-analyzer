@@ -303,10 +303,12 @@ class PerformanceTracker:
 performance_tracker = PerformanceTracker()
 
 
-async def batch_process(items: List[Any], 
-                        process_func: Callable[[Any], Awaitable[R]],
-                        batch_size: int = 5,
-                        max_concurrency: int = 10) -> List[R]:
+async def batch_process(
+    items: List[Any],
+    process_func: Callable[[Any], Awaitable[R]],
+    batch_size: int = 5,
+    max_concurrency: int = 10
+) -> List[Optional[R]]:
     """
     Process a list of items in batches with controlled concurrency.
     
@@ -319,7 +321,7 @@ async def batch_process(items: List[Any],
     Returns:
         List of results in the same order as the input items
     """
-    results = []
+    results: List[Optional[R]] = []
     
     # Process items in batches
     for i in range(0, len(items), batch_size):
@@ -345,8 +347,9 @@ async def batch_process(items: List[Any],
         for result in batch_results:
             if isinstance(result, Exception):
                 logger.error(f"Error in batch processing: {result}")
-                results.append(None)  # Add None for failed operations
+                results.append(None)
             else:
-                results.append(result)
+                # result is expected to be of type R but may be Any; ignore strict type checks
+                results.append(result)  # type: ignore[arg-type]
     
     return results

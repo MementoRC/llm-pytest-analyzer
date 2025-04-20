@@ -2,7 +2,7 @@ import os
 import yaml
 import logging
 from pathlib import Path
-from typing import Optional, Type, TypeVar, Any, Dict, List, Union
+from typing import Optional, Type, Any, Dict, List, Union
 from dataclasses import fields, is_dataclass, MISSING
 
 # Import Settings from the config_types module to avoid circular dependency
@@ -10,7 +10,6 @@ from .config_types import Settings
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
 
 
 # --- Configuration Manager ---
@@ -35,7 +34,7 @@ class ConfigurationManager:
 
     def __init__(
         self,
-        settings_cls: Type[T] = Settings,
+        settings_cls: Type[Settings] = Settings,
         config_file_path: Optional[Union[str, Path]] = None,
         env_prefix: str = ENV_PREFIX
     ):
@@ -51,13 +50,13 @@ class ConfigurationManager:
         if not is_dataclass(settings_cls):
             raise TypeError(f"{settings_cls.__name__} must be a dataclass.")
 
-        self.settings_cls: Type[T] = settings_cls
+        self.settings_cls: Type[Settings] = settings_cls
         self.env_prefix: str = env_prefix
         self._config_file_path: Optional[Path] = self._resolve_config_file_path(config_file_path)
         self._config: Dict[str, Any] = {}
         self._loaded: bool = False
-        # Use Type[T] for the cache instance type hint, matching settings_cls
-        self._settings_instance: Optional[T] = None # Cache the created instance
+        # Cache the created Settings instance
+        self._settings_instance: Optional[Settings] = None
 
     def _resolve_config_file_path(self, specific_path: Optional[Union[str, Path]]) -> Optional[Path]:
         """
@@ -219,7 +218,7 @@ class ConfigurationManager:
 
         return env_config
 
-    def _convert_type(self, value: str, target_type: Type) -> Any:
+    def _convert_type(self, value: str, target_type: Any) -> Any:
         """Convert string value to the target type."""
         origin_type = getattr(target_type, '__origin__', None)
         args = getattr(target_type, '__args__', [])
@@ -264,7 +263,7 @@ class ConfigurationManager:
              raise TypeError(f"Unsupported type conversion for {target_type} from environment variable string.")
 
 
-    def get_settings(self) -> T:
+    def get_settings(self) -> Settings:
         """
         Return the final configuration merged from all sources as a Settings object.
 
@@ -309,5 +308,5 @@ class ConfigurationManager:
                  logger.error(f"Unexpected error creating Settings object: {e}")
                  raise ConfigurationError(f"Failed to create settings instance: {e}") from e
 
-        # Ensure the return type hint matches the cached instance type
-        return self._settings_instance # type: ignore[return-value]
+        # Return the cached Settings instance
+        return self._settings_instance  # type: ignore[return-value]

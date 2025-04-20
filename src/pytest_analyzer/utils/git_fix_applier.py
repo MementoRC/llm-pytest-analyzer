@@ -34,8 +34,8 @@ class GitFixApplier:
         self.project_root = project_root
         self.verbose_test_output = verbose_test_output
         self.git_root = get_git_root(str(project_root))
-        self.current_branch = None
-        self.original_branch = None
+        self.current_branch: Optional[str] = None
+        self.original_branch: Optional[str] = None
     
     def apply_fix(self, code_changes: Dict[str, str], tests_to_validate: List[str], verbose_test_output: Optional[bool] = None) -> Any:
         """
