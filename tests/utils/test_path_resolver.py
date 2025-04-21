@@ -2,7 +2,7 @@
 import pytest
 from pathlib import Path
 
-from src.pytest_analyzer.utils.path_resolver import PathResolver
+from pytest_analyzer.utils.path_resolver import PathResolver
 
 
 @pytest.fixture

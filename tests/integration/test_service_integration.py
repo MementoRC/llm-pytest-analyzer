@@ -2,9 +2,9 @@
 import pytest
 from unittest.mock import patch, MagicMock
 
-from src.pytest_analyzer.core.analyzer_service import PytestAnalyzerService
-from src.pytest_analyzer.utils.settings import Settings
-from src.pytest_analyzer.core.models.pytest_failure import PytestFailure
+from pytest_analyzer.core.analyzer_service import PytestAnalyzerService
+from pytest_analyzer.utils.settings import Settings
+from pytest_analyzer.core.models.pytest_failure import PytestFailure
 
 
 @pytest.fixture
@@ -67,7 +67,7 @@ def test_service_integration_xml_format(analyzer_service, report_assertion_xml):
     assert suggestion.confidence > 0
 
 
-@patch('src.pytest_analyzer.core.analyzer_service.collect_failures_with_plugin')
+@patch('pytest_analyzer.core.analyzer_service.collect_failures_with_plugin')
 def test_service_integration_with_plugin(mock_collect, analyzer_service):
     """Test PytestAnalyzerService with direct pytest plugin integration."""
     # Set preferred format to plugin

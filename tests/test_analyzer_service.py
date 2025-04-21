@@ -5,9 +5,9 @@ import pytest
 from unittest.mock import patch, MagicMock
 import tempfile
 
-from src.pytest_analyzer.core.analyzer_service import PytestAnalyzerService
-from src.pytest_analyzer.core.models.pytest_failure import PytestFailure
-from src.pytest_analyzer.utils.settings import Settings
+from pytest_analyzer.core.analyzer_service import PytestAnalyzerService
+from pytest_analyzer.core.models.pytest_failure import PytestFailure
+from pytest_analyzer.utils.settings import Settings
 
 
 @pytest.fixture
@@ -51,8 +51,8 @@ def analyzer_service():
     return PytestAnalyzerService(settings=settings)
 
 
-@patch('src.pytest_analyzer.core.analyzer_service.get_extractor')
-@patch('src.pytest_analyzer.core.analyzer_service.LLMSuggester.suggest_fixes')
+@patch('pytest_analyzer.core.analyzer_service.get_extractor')
+@patch('pytest_analyzer.core.analyzer_service.LLMSuggester.suggest_fixes')
 def test_analyze_pytest_output(mock_suggest_fixes, mock_get_extractor, mock_extractor, analyzer_service):
     """Test analyzing pytest output from a file."""
     # Setup
@@ -71,7 +71,7 @@ def test_analyze_pytest_output(mock_suggest_fixes, mock_get_extractor, mock_extr
         assert len(suggestions) == 0  # No suggestions since we mocked the suggester
 
 
-@patch('src.pytest_analyzer.core.extraction.extractor_factory.get_extractor')
+@patch('pytest_analyzer.core.extraction.extractor_factory.get_extractor')
 def test_analyze_pytest_output_nonexistent_file(mock_get_extractor, analyzer_service):
     """Test analyzing a nonexistent pytest output file."""
     # Execute
@@ -83,8 +83,8 @@ def test_analyze_pytest_output_nonexistent_file(mock_get_extractor, analyzer_ser
     assert len(suggestions) == 0
 
 
-@patch('src.pytest_analyzer.core.analyzer_service.collect_failures_with_plugin')
-@patch('src.pytest_analyzer.core.analyzer_service.LLMSuggester.suggest_fixes')
+@patch('pytest_analyzer.core.analyzer_service.collect_failures_with_plugin')
+@patch('pytest_analyzer.core.analyzer_service.LLMSuggester.suggest_fixes')
 def test_run_and_analyze_plugin(mock_suggest_fixes, mock_collect, analyzer_service):
     """Test running and analyzing tests with plugin integration."""
     # Setup
@@ -112,8 +112,8 @@ def test_run_and_analyze_plugin(mock_suggest_fixes, mock_collect, analyzer_servi
 
 
 @patch('subprocess.run')
-@patch('src.pytest_analyzer.core.analyzer_service.get_extractor')
-@patch('src.pytest_analyzer.core.analyzer_service.LLMSuggester.suggest_fixes')
+@patch('pytest_analyzer.core.analyzer_service.get_extractor')
+@patch('pytest_analyzer.core.analyzer_service.LLMSuggester.suggest_fixes')
 def test_run_and_analyze_json(mock_suggest_fixes, mock_get_extractor, mock_run, mock_extractor, analyzer_service):
     """Test running and analyzing tests with JSON output."""
     # Setup
@@ -135,8 +135,8 @@ def test_run_and_analyze_json(mock_suggest_fixes, mock_get_extractor, mock_run, 
 
 
 @patch('subprocess.run')
-@patch('src.pytest_analyzer.core.analyzer_service.get_extractor')
-@patch('src.pytest_analyzer.core.analyzer_service.LLMSuggester.suggest_fixes')
+@patch('pytest_analyzer.core.analyzer_service.get_extractor')
+@patch('pytest_analyzer.core.analyzer_service.LLMSuggester.suggest_fixes')
 def test_run_and_analyze_xml(mock_suggest_fixes, mock_get_extractor, mock_run, mock_extractor, analyzer_service):
     """Test running and analyzing tests with XML output."""
     # Setup

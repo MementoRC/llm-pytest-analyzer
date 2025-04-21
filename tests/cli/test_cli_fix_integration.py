@@ -12,9 +12,9 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from src.pytest_analyzer.cli.analyzer_cli import main, apply_suggestions_interactively
-from src.pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
-from src.pytest_analyzer.core.analysis.fix_applier import FixApplicationResult
+from pytest_analyzer.cli.analyzer_cli import main, apply_suggestions_interactively
+from pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
+from pytest_analyzer.core.analysis.fix_applier import FixApplicationResult
 
 
 class TestCLIFixIntegration:
@@ -62,8 +62,8 @@ class TestCLIFixIntegration:
             mock_parse_args.return_value = mock_args
             
             # Mock analyzer service and apply_suggestions_interactively
-            with patch('src.pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService') as mock_service_class, \
-                 patch('src.pytest_analyzer.cli.analyzer_cli.apply_suggestions_interactively') as mock_apply:
+            with patch('pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService') as mock_service_class, \
+                 patch('pytest_analyzer.cli.analyzer_cli.apply_suggestions_interactively') as mock_apply:
                 
                 # Mock service to return suggestions
                 mock_service = mock_service_class.return_value
@@ -115,8 +115,8 @@ class TestCLIFixIntegration:
             mock_parse_args.return_value = mock_args
             
             # Mock analyzer service and apply_suggestions_interactively
-            with patch('src.pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService') as mock_service_class, \
-                 patch('src.pytest_analyzer.cli.analyzer_cli.apply_suggestions_interactively') as mock_apply:
+            with patch('pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService') as mock_service_class, \
+                 patch('pytest_analyzer.cli.analyzer_cli.apply_suggestions_interactively') as mock_apply:
                 
                 # Mock service to return suggestions
                 mock_service = mock_service_class.return_value
@@ -170,8 +170,8 @@ class TestCLIFixIntegration:
             mock_parse_args.return_value = mock_args
             
             # Mock analyzer service and apply_suggestions_interactively
-            with patch('src.pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService') as mock_service_class, \
-                 patch('src.pytest_analyzer.cli.analyzer_cli.apply_suggestions_interactively') as mock_apply:
+            with patch('pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService') as mock_service_class, \
+                 patch('pytest_analyzer.cli.analyzer_cli.apply_suggestions_interactively') as mock_apply:
                 
                 # Mock service to return suggestions
                 mock_service = mock_service_class.return_value
@@ -259,7 +259,7 @@ class TestCLIFixIntegration:
         )
         
         # Mock show_file_diff to avoid file access
-        with patch('src.pytest_analyzer.cli.analyzer_cli.show_file_diff', return_value=True), \
+        with patch('pytest_analyzer.cli.analyzer_cli.show_file_diff', return_value=True), \
              patch('builtins.input', side_effect=['d', 'y']):
             # Run interactive apply
             apply_suggestions_interactively(mock_suggestions, mock_service, MagicMock(auto_apply=False))

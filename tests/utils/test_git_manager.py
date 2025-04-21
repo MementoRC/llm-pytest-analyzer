@@ -3,7 +3,7 @@ import pytest
 import subprocess
 from unittest.mock import patch, MagicMock, mock_open, call
 
-from src.pytest_analyzer.utils.git_manager import (
+from pytest_analyzer.utils.git_manager import (
     check_git_installed,
     is_git_repository,
     create_gitignore,
@@ -202,9 +202,9 @@ def test_init_git_repository_error(mock_subprocess, mock_project_dir):
     mock_subprocess.assert_called_once()
 
 
-@patch('src.pytest_analyzer.utils.git_manager.check_git_installed')
-@patch('src.pytest_analyzer.utils.git_manager.is_git_repository')
-@patch('src.pytest_analyzer.utils.git_manager.init_git_repository')
+@patch('pytest_analyzer.utils.git_manager.check_git_installed')
+@patch('pytest_analyzer.utils.git_manager.is_git_repository')
+@patch('pytest_analyzer.utils.git_manager.init_git_repository')
 def test_confirm_git_setup_git_not_installed(mock_init, mock_is_repo, mock_check):
     """Test confirm_git_setup when git is not installed."""
     mock_check.return_value = False
@@ -220,9 +220,9 @@ def test_confirm_git_setup_git_not_installed(mock_init, mock_is_repo, mock_check
         mock_init.assert_not_called()
 
 
-@patch('src.pytest_analyzer.utils.git_manager.check_git_installed')
-@patch('src.pytest_analyzer.utils.git_manager.is_git_repository')
-@patch('src.pytest_analyzer.utils.git_manager.init_git_repository')
+@patch('pytest_analyzer.utils.git_manager.check_git_installed')
+@patch('pytest_analyzer.utils.git_manager.is_git_repository')
+@patch('pytest_analyzer.utils.git_manager.init_git_repository')
 def test_confirm_git_setup_already_git_repo(mock_init, mock_is_repo, mock_check):
     """Test confirm_git_setup when project is already a git repo."""
     mock_check.return_value = True
@@ -236,9 +236,9 @@ def test_confirm_git_setup_already_git_repo(mock_init, mock_is_repo, mock_check)
     mock_init.assert_not_called()
 
 
-@patch('src.pytest_analyzer.utils.git_manager.check_git_installed')
-@patch('src.pytest_analyzer.utils.git_manager.is_git_repository')
-@patch('src.pytest_analyzer.utils.git_manager.init_git_repository')
+@patch('pytest_analyzer.utils.git_manager.check_git_installed')
+@patch('pytest_analyzer.utils.git_manager.is_git_repository')
+@patch('pytest_analyzer.utils.git_manager.init_git_repository')
 def test_confirm_git_setup_init_success(mock_init, mock_is_repo, mock_check):
     """Test confirm_git_setup with successful initialization."""
     mock_check.return_value = True
@@ -256,9 +256,9 @@ def test_confirm_git_setup_init_success(mock_init, mock_is_repo, mock_check):
             mock_print.assert_called_with("Git repository initialized with an initial commit.")
 
 
-@patch('src.pytest_analyzer.utils.git_manager.check_git_installed')
-@patch('src.pytest_analyzer.utils.git_manager.is_git_repository')
-@patch('src.pytest_analyzer.utils.git_manager.init_git_repository')
+@patch('pytest_analyzer.utils.git_manager.check_git_installed')
+@patch('pytest_analyzer.utils.git_manager.is_git_repository')
+@patch('pytest_analyzer.utils.git_manager.init_git_repository')
 def test_confirm_git_setup_init_failure(mock_init, mock_is_repo, mock_check):
     """Test confirm_git_setup when initialization fails."""
     mock_check.return_value = True
@@ -277,9 +277,9 @@ def test_confirm_git_setup_init_failure(mock_init, mock_is_repo, mock_check):
                 "Failed to initialize Git repository. Fix suggestions will be generated but cannot be applied automatically.")
 
 
-@patch('src.pytest_analyzer.utils.git_manager.check_git_installed')
-@patch('src.pytest_analyzer.utils.git_manager.is_git_repository')
-@patch('src.pytest_analyzer.utils.git_manager.init_git_repository')
+@patch('pytest_analyzer.utils.git_manager.check_git_installed')
+@patch('pytest_analyzer.utils.git_manager.is_git_repository')
+@patch('pytest_analyzer.utils.git_manager.init_git_repository')
 def test_confirm_git_setup_user_declines(mock_init, mock_is_repo, mock_check):
     """Test confirm_git_setup when user declines initialization."""
     mock_check.return_value = True

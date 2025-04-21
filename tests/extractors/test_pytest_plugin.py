@@ -2,8 +2,8 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-from src.pytest_analyzer.core.extraction.pytest_plugin import FailureCollectorPlugin, collect_failures_with_plugin
-from src.pytest_analyzer.core.models.pytest_failure import PytestFailure
+from pytest_analyzer.core.extraction.pytest_plugin import FailureCollectorPlugin, collect_failures_with_plugin
+from pytest_analyzer.core.models.pytest_failure import PytestFailure
 
 
 class MockPytestPlugin:
@@ -70,7 +70,7 @@ def test_plugin_collection_modifyitems(plugin):
     assert plugin.test_items[item2.nodeid]['path'] == "test_file.py"
 
 
-@patch('src.pytest_analyzer.core.extraction.pytest_plugin.logger.error')
+@patch('pytest_analyzer.core.extraction.pytest_plugin.logger.error')
 def test_plugin_collection_modifyitems_error(mock_logger_error, plugin):
     """Test error handling in the pytest_collection_modifyitems hook."""
     # Create a mock item that raises an exception when accessed
@@ -174,7 +174,7 @@ def test_plugin_runtest_makereport_passed(plugin):
     plugin._process_failure.assert_not_called()
 
 
-@patch('src.pytest_analyzer.core.extraction.pytest_plugin.logger.error')
+@patch('pytest_analyzer.core.extraction.pytest_plugin.logger.error')
 def test_plugin_runtest_makereport_error(mock_logger_error, plugin):
     """Test error handling in the pytest_runtest_makereport hook."""
     # Create mock pytest objects

@@ -5,11 +5,11 @@ from pathlib import Path
 from unittest.mock import patch, mock_open, call
 
 # Module under test
-from src.pytest_analyzer.utils.git_fix_applier import GitFixApplier
+from pytest_analyzer.utils.git_fix_applier import GitFixApplier
 
 # Dependencies
-from src.pytest_analyzer.utils.git_manager import GitError
-from src.pytest_analyzer.core.analysis.fix_applier import FixApplicationResult
+from pytest_analyzer.utils.git_manager import GitError
+from pytest_analyzer.core.analysis.fix_applier import FixApplicationResult
 
 # Constants
 MOCK_GIT_ROOT = "/mock/git/repo"
@@ -39,7 +39,7 @@ def mock_git_root_str():
 @pytest.fixture
 def mock_get_git_root():
     """Fixture for patching get_git_root."""
-    with patch('src.pytest_analyzer.utils.git_fix_applier.get_git_root') as mock_func:
+    with patch('pytest_analyzer.utils.git_fix_applier.get_git_root') as mock_func:
         yield mock_func
 
 
@@ -56,11 +56,11 @@ def fix_applier(mock_project_root, mock_get_git_root, mock_git_root_str):
 @pytest.fixture
 def mock_dependencies():
     """Mock all external dependencies used by GitFixApplier."""
-    with patch('src.pytest_analyzer.utils.git_fix_applier.get_git_root') as mock_get_root, \
-         patch('src.pytest_analyzer.utils.git_fix_applier.is_working_tree_clean') as mock_is_clean, \
-         patch('src.pytest_analyzer.utils.git_fix_applier.create_branch_for_fixes') as mock_create_branch, \
-         patch('src.pytest_analyzer.utils.git_fix_applier.commit_fix') as mock_commit, \
-         patch('src.pytest_analyzer.utils.git_fix_applier.reset_file') as mock_reset, \
+    with patch('pytest_analyzer.utils.git_fix_applier.get_git_root') as mock_get_root, \
+         patch('pytest_analyzer.utils.git_fix_applier.is_working_tree_clean') as mock_is_clean, \
+         patch('pytest_analyzer.utils.git_fix_applier.create_branch_for_fixes') as mock_create_branch, \
+         patch('pytest_analyzer.utils.git_fix_applier.commit_fix') as mock_commit, \
+         patch('pytest_analyzer.utils.git_fix_applier.reset_file') as mock_reset, \
          patch('builtins.open', mock_open()) as mock_open_file, \
          patch('pytest.main') as mock_pytest_main, \
          patch('os.path.abspath', side_effect=lambda p: p if p.startswith('/') else str(MOCK_PROJECT_ROOT / p)):
@@ -148,7 +148,7 @@ def test_apply_fix_branch_creation_error(fix_applier, mock_dependencies):
     mock_dependencies["create_branch"].side_effect = GitError("Branch creation failed")
     
     # Create a fake FixApplicationResult
-    from src.pytest_analyzer.core.analysis.fix_applier import FixApplicationResult
+    from pytest_analyzer.core.analysis.fix_applier import FixApplicationResult
     expected_result = FixApplicationResult(
         success=False,
         message="Git error: Branch creation failed",
@@ -373,10 +373,10 @@ def test_apply_fix_uses_existing_branch(fix_applier, mock_dependencies):
 def test_apply_fix_rollback_error_logging(fix_applier, mock_dependencies, caplog):
     """Test apply_fix logs errors during rollback but still returns failure."""
     # First, log the error message we want to test for
-    logger = logging.getLogger("src.pytest_analyzer.utils.git_fix_applier")
+    logger = logging.getLogger("pytest_analyzer.utils.git_fix_applier")
     
     # Create a fake FixApplicationResult
-    from src.pytest_analyzer.core.analysis.fix_applier import FixApplicationResult
+    from pytest_analyzer.core.analysis.fix_applier import FixApplicationResult
     expected_result = FixApplicationResult(
         success=False,
         message="Tests failed after applying fixes. Changes were rolled back.",

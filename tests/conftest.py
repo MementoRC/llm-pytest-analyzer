@@ -3,6 +3,7 @@ import pytest
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from typing import Optional
 
 from pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
 
@@ -17,7 +18,8 @@ def create_test_project(tmp_path):
     """Factory fixture to create test projects in a temp directory."""
     created_projects = []
 
-    def _create_project(name: str, test_content: str, setup_content: str = None):
+    from typing import Optional
+    def _create_project(name: str, test_content: str, setup_content: Optional[str] = None):
         project_dir = tmp_path / name
         project_dir.mkdir()
         test_file = project_dir / f"test_{name}.py"
@@ -252,7 +254,7 @@ def mock_llm_client():
 @pytest.fixture
 def mock_llm_suggester():
     """Provides a patched LLMSuggester that uses a mock client."""
-    with patch('src.pytest_analyzer.core.analysis.llm_suggester.LLMSuggester._get_llm_request_function') as mock_func:
+    with patch('pytest_analyzer.core.analysis.llm_suggester.LLMSuggester._get_llm_request_function') as mock_func:
         mock_func.return_value = lambda prompt: "LLM Suggestion: This is a mock LLM response for: " + prompt[:20] + "..."
         yield
 

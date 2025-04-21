@@ -5,9 +5,9 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from src.pytest_analyzer.core.extraction.xml_extractor import XmlResultExtractor
-from src.pytest_analyzer.utils.path_resolver import PathResolver
-from src.pytest_analyzer.utils.resource_manager import TimeoutError
+from pytest_analyzer.core.extraction.xml_extractor import XmlResultExtractor
+from pytest_analyzer.utils.path_resolver import PathResolver
+from pytest_analyzer.utils.resource_manager import TimeoutError
 
 
 @pytest.fixture
@@ -89,7 +89,7 @@ def test_extract_failures_empty_xml(tmp_path, xml_extractor):
     assert failures == []
 
 
-@patch('src.pytest_analyzer.core.extraction.xml_extractor.XmlResultExtractor._parse_xml_report')
+@patch('pytest_analyzer.core.extraction.xml_extractor.XmlResultExtractor._parse_xml_report')
 def test_extract_failures_timeout(mock_parse_xml, tmp_path, xml_extractor, sample_xml_content):
     """Test handling of timeout during extraction (simulating parsing timeout)."""
     # Configure the mock _parse_xml_report to raise TimeoutError

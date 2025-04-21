@@ -3,7 +3,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.pytest_analyzer.utils.settings import Settings, load_settings
+from pytest_analyzer.utils.settings import Settings, load_settings
 
 
 @pytest.fixture

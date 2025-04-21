@@ -2,8 +2,8 @@
 import pytest
 from unittest.mock import patch, MagicMock
 
-from src.pytest_analyzer.core.analysis.llm_suggester import LLMSuggester
-from src.pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
+from pytest_analyzer.core.analysis.llm_suggester import LLMSuggester
+from pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
 
 
 @pytest.fixture

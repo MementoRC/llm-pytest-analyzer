@@ -5,7 +5,7 @@ import signal
 import resource
 from unittest.mock import patch, MagicMock
 
-from src.pytest_analyzer.utils.resource_manager import (
+from pytest_analyzer.utils.resource_manager import (
     timeout_context, with_timeout, limit_memory,
     ResourceMonitor, TimeoutError, MemoryLimitError
 )

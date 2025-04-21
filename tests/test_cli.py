@@ -6,14 +6,14 @@ import sys
 import argparse
 import logging
 
-from src.pytest_analyzer.cli.analyzer_cli import main, setup_parser, configure_settings, display_suggestions
-from src.pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
+from pytest_analyzer.cli.analyzer_cli import main, setup_parser, configure_settings, display_suggestions
+from pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
 
 
 @pytest.fixture
 def mock_console():
     """Mock console for capturing output."""
-    with patch('src.pytest_analyzer.cli.analyzer_cli.console') as mock_console:
+    with patch('pytest_analyzer.cli.analyzer_cli.console') as mock_console:
         yield mock_console
 
 
@@ -63,8 +63,8 @@ def mock_args():
     return argparse.Namespace(verbosity=1)
 
 
-@patch('src.pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService')
-@patch('src.pytest_analyzer.cli.analyzer_cli.display_suggestions')
+@patch('pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService')
+@patch('pytest_analyzer.cli.analyzer_cli.display_suggestions')
 def test_cli_main_success(mock_display, mock_service):
     """Test the main function with successful operation."""
     # Setup
@@ -82,8 +82,8 @@ def test_cli_main_success(mock_display, mock_service):
     assert result == 0  # Success
 
 
-@patch('src.pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService')
-@patch('src.pytest_analyzer.cli.analyzer_cli.display_suggestions')
+@patch('pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService')
+@patch('pytest_analyzer.cli.analyzer_cli.display_suggestions')
 def test_cli_main_with_output_file(mock_display, mock_service):
     """Test the main function with an output file."""
     # Setup
@@ -101,8 +101,8 @@ def test_cli_main_with_output_file(mock_display, mock_service):
     assert result == 0  # Success
 
 
-@patch('src.pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService')
-@patch('src.pytest_analyzer.cli.analyzer_cli.display_suggestions')
+@patch('pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService')
+@patch('pytest_analyzer.cli.analyzer_cli.display_suggestions')
 def test_cli_main_no_suggestions(mock_display, mock_service):
     """Test the main function when no suggestions are found."""
     # Setup
@@ -120,7 +120,7 @@ def test_cli_main_no_suggestions(mock_display, mock_service):
     assert result == 1  # No suggestions
 
 
-@patch('src.pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService')
+@patch('pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService')
 def test_cli_main_exception(mock_service):
     """Test the main function when an exception occurs."""
     # Setup
@@ -137,9 +137,9 @@ def test_cli_main_exception(mock_service):
     assert result == 2  # Error
 
 
-@patch('src.pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService')
+@patch('pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService')
 @patch('logging.getLogger')
-@patch('src.pytest_analyzer.cli.analyzer_cli.display_suggestions')
+@patch('pytest_analyzer.cli.analyzer_cli.display_suggestions')
 def test_cli_main_with_debug(mock_display, mock_logging, mock_service):
     """Test the main function with debug logging enabled."""
     # Setup
@@ -287,7 +287,7 @@ def test_display_suggestions_with_llm(mock_console, llm_suggestion, mock_args):
     mock_console.print.assert_any_call(llm_suggestion.suggestion)
 
 
-@patch('src.pytest_analyzer.cli.analyzer_cli.Syntax')
+@patch('pytest_analyzer.cli.analyzer_cli.Syntax')
 def test_display_suggestions_with_code_changes(mock_syntax, mock_console, test_suggestion, mock_args):
     """Test displaying suggestions with code changes."""
     # Add code changes to the suggestion

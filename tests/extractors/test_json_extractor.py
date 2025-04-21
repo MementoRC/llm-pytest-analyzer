@@ -5,9 +5,9 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from src.pytest_analyzer.core.extraction.json_extractor import JsonResultExtractor
-from src.pytest_analyzer.utils.path_resolver import PathResolver
-from src.pytest_analyzer.utils.resource_manager import TimeoutError
+from pytest_analyzer.core.extraction.json_extractor import JsonResultExtractor
+from pytest_analyzer.utils.path_resolver import PathResolver
+from pytest_analyzer.utils.resource_manager import TimeoutError
 
 
 @pytest.fixture
@@ -111,7 +111,7 @@ def test_extract_failures_no_tests(tmp_path, json_extractor):
     assert failures == []
 
 
-@patch('src.pytest_analyzer.core.extraction.json_extractor.JsonResultExtractor._parse_json_report')
+@patch('pytest_analyzer.core.extraction.json_extractor.JsonResultExtractor._parse_json_report')
 def test_extract_failures_timeout(mock_parse_json, tmp_path, json_extractor, sample_json_data):
     """Test handling of timeout during extraction (simulating @with_timeout triggering)."""
     # Configure the mock _parse_json_report to raise TimeoutError
@@ -132,7 +132,7 @@ def test_extract_failures_timeout(mock_parse_json, tmp_path, json_extractor, sam
     mock_parse_json.assert_called_once_with(json_path)
 
 
-@patch('src.pytest_analyzer.utils.path_resolver.PathResolver.resolve_path')
+@patch('pytest_analyzer.utils.path_resolver.PathResolver.resolve_path')
 def test_create_failure_from_test(mock_resolve_path):
     """Test creating a PytestFailure object from a test entry."""
     # Configure the mock to return the input path
