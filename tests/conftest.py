@@ -1,4 +1,5 @@
 """Pytest configuration for the pytest_analyzer tests."""
+
 import pytest
 import sys
 from pathlib import Path
@@ -6,6 +7,7 @@ from unittest.mock import MagicMock, patch
 from typing import Optional
 
 from pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
+
 
 # Register custom markers
 def pytest_configure(config):
@@ -18,8 +20,10 @@ def create_test_project(tmp_path):
     """Factory fixture to create test projects in a temp directory."""
     created_projects = []
 
-    from typing import Optional
-    def _create_project(name: str, test_content: str, setup_content: Optional[str] = None):
+
+    def _create_project(
+        name: str, test_content: str, setup_content: Optional[str] = None
+    ):
         project_dir = tmp_path / name
         project_dir.mkdir()
         test_file = project_dir / f"test_{name}.py"
@@ -41,6 +45,7 @@ def create_test_project(tmp_path):
 
 
 # --- Specific Project Fixtures (using the factory) ---
+
 
 @pytest.fixture
 def project_assertion_failure(create_test_project):
@@ -242,20 +247,28 @@ def report_passing_json():
 def mock_llm_client():
     """Mocks the LLM client for testing."""
     mock_client = MagicMock()
-    
+
     # Configure the mock to return predefined responses
     mock_response = MagicMock()
-    mock_response.content = [MagicMock(text="LLM Suggestion: This is a mock LLM suggestion.")]
+    mock_response.content = [
+        MagicMock(text="LLM Suggestion: This is a mock LLM suggestion.")
+    ]
     mock_client.messages.create.return_value = mock_response
-    
+
     return mock_client
 
 
 @pytest.fixture
 def mock_llm_suggester():
     """Provides a patched LLMSuggester that uses a mock client."""
-    with patch('pytest_analyzer.core.analysis.llm_suggester.LLMSuggester._get_llm_request_function') as mock_func:
-        mock_func.return_value = lambda prompt: "LLM Suggestion: This is a mock LLM response for: " + prompt[:20] + "..."
+    with patch(
+        "pytest_analyzer.core.analysis.llm_suggester.LLMSuggester._get_llm_request_function"
+    ) as mock_func:
+        mock_func.return_value = (
+            lambda prompt: "LLM Suggestion: This is a mock LLM response for: "
+            + prompt[:20]
+            + "..."
+        )
         yield
 
 
@@ -270,7 +283,7 @@ def test_failure():
         error_message="assert 1 == 2",
         traceback="E       assert 1 == 2\nE       +  where 1 = func()",
         line_number=42,
-        relevant_code="def test_function():\n    assert 1 == 2"
+        relevant_code="def test_function():\n    assert 1 == 2",
     )
 
 
@@ -281,7 +294,7 @@ def test_suggestion(test_failure):
         failure=test_failure,
         suggestion="Fix the assertion to expect 1 instead of 2",
         confidence=0.8,
-        explanation="The test expected 2 but got 1"
+        explanation="The test expected 2 but got 1",
     )
 
 
@@ -295,8 +308,8 @@ def llm_suggestion(test_failure):
         explanation="Using assertEqual provides more detailed failure output",
         code_changes={
             "source": "llm",
-            "fixed_code": "def test_function():\n    assertEqual(1, 2)"
-        }
+            "fixed_code": "def test_function():\n    assertEqual(1, 2)",
+        },
     )
 
 
@@ -304,25 +317,26 @@ def llm_suggestion(test_failure):
 @pytest.fixture
 def cli_invoke():
     """Helper fixture to invoke the CLI main function."""
+
     def _invoke(*args, **kwargs):
         from pytest_analyzer.cli.analyzer_cli import main
-        
+
         # Save original argv
         original_argv = sys.argv.copy()
-        
+
         try:
             # Set up argv for the CLI
             sys.argv = ["pytest-analyzer"] + list(args)
-            
+
             # Capture output (optional)
             # TODO: Implement output capture if needed
-            
+
             # Run the CLI
             result = main()
-            
+
             return result
         finally:
             # Restore original argv
             sys.argv = original_argv
-    
+
     return _invoke

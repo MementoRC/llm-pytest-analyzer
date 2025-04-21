@@ -17,8 +17,12 @@ from .analysis.llm_suggester import LLMSuggester
 from .analysis.failure_grouper import group_failures, select_representative_failure
 from .analysis.fix_applier import FixApplier, FixApplicationResult
 from ..utils.resource_manager import (
-    with_timeout, async_with_timeout, limit_memory,
-    ResourceMonitor, AsyncResourceMonitor, performance_tracker
+    with_timeout,
+    async_with_timeout,
+    limit_memory,
+    ResourceMonitor,
+    AsyncResourceMonitor,
+    performance_tracker,
 )
 from ..utils.settings import Settings
 from ..utils.path_resolver import PathResolver
@@ -29,31 +33,38 @@ logger = logging.getLogger(__name__)
 # --- State Machine Implementation ---
 
 # Type variable for the state class
-S = TypeVar('S', bound='State')
+S = TypeVar("S", bound="State")
+
 
 # Custom exception hierarchy
 class PytestAnalyzerError(Exception):
     """Base exception class for pytest-analyzer states."""
 
+
 class InitializationError(PytestAnalyzerError):
     """Raised during initialization errors."""
+
 
 class FailureGroupingError(PytestAnalyzerError):
     """Raised when failing to group failures."""
 
+
 class RepresentativeSelectionError(PytestAnalyzerError):
     """Raised when failing to select representative failures."""
+
 
 class BatchProcessingError(PytestAnalyzerError):
     """Raised during batch processing issues."""
 
+
 class PostProcessingError(PytestAnalyzerError):
     """Raised during post-processing issues."""
+
 
 class State(ABC):
     """Base class for all states in the state machine."""
 
-    def __init__(self, context: 'Context'):
+    def __init__(self, context: "Context"):
         self.context = context
 
     @abstractmethod
@@ -72,9 +83,12 @@ class State(ABC):
         if isinstance(error, PytestAnalyzerError):
             self.context.log_error(f"{error.__class__.__name__}: {error}")
         else:
-            self.context.log_error(f"Unexpected error in {self.__class__.__name__}: {error}")
+            self.context.log_error(
+                f"Unexpected error in {self.__class__.__name__}: {error}"
+            )
 
         await self.context.transition_to(ErrorState)
+
 
 class Context:
     """
@@ -82,16 +96,18 @@ class Context:
     Manages state transitions and provides helper methods for common operations.
     """
 
-    def __init__(self,
-                 failures: List[PytestFailure],
-                 quiet: bool,
-                 progress: Optional[Progress],
-                 parent_task_id: Optional[TaskID],
-                 path_resolver,
-                 settings,
-                 llm_suggester,
-                 logger,
-                 performance_tracker):
+    def __init__(
+        self,
+        failures: List[PytestFailure],
+        quiet: bool,
+        progress: Optional[Progress],
+        parent_task_id: Optional[TaskID],
+        path_resolver,
+        settings,
+        llm_suggester,
+        logger,
+        performance_tracker,
+    ):
         # Validate essential dependencies
         if logger is None:
             raise ValueError("Logger must not be None")
@@ -167,7 +183,9 @@ class Context:
         """Log a warning message."""
         self.logger.warning(message)
 
-    def create_progress_task(self, key: str, description: str, **kwargs) -> Optional[TaskID]:
+    def create_progress_task(
+        self, key: str, description: str, **kwargs
+    ) -> Optional[TaskID]:
         """
         Create a progress task and store its ID for later reference.
 
@@ -181,15 +199,21 @@ class Context:
         """
         if self.progress and self.parent_task_id is not None:
             # Set default parent task ID if not provided in kwargs
-            if 'parent' not in kwargs:
-                kwargs['parent'] = self.parent_task_id
+            if "parent" not in kwargs:
+                kwargs["parent"] = self.parent_task_id
 
             task_id = self.progress.add_task(description, **kwargs)
             self.progress_tasks[key] = task_id
             return task_id
         return None
 
-    def update_progress(self, key: str, description: Optional[str] = None, completed: bool = False, **kwargs) -> None:
+    def update_progress(
+        self,
+        key: str,
+        description: Optional[str] = None,
+        completed: bool = False,
+        **kwargs,
+    ) -> None:
         """
         Update a progress task by its key.
 
@@ -205,9 +229,9 @@ class Context:
             update_kwargs: Dict[str, Any] = {}
 
             if description:
-                update_kwargs['description'] = description
+                update_kwargs["description"] = description
             if completed:
-                update_kwargs['completed'] = True
+                update_kwargs["completed"] = True
 
             update_kwargs |= kwargs
 
@@ -221,7 +245,7 @@ class Context:
                 try:
                     # Check if task still exists before updating
                     # Check for get_task dynamically to avoid static type errors
-                    task_fn = getattr(self.progress, 'get_task', None)
+                    task_fn = getattr(self.progress, "get_task", None)
                     if task_fn and task_fn(task_id):
                         self.progress.update(task_id, completed=True)
                 except Exception as e:
@@ -239,7 +263,7 @@ class Context:
         """
         if not suggestion.code_changes:
             suggestion.code_changes = {}
-        suggestion.code_changes['source'] = 'llm_async'
+        suggestion.code_changes["source"] = "llm_async"
         return suggestion
 
     @asynccontextmanager
@@ -262,16 +286,18 @@ class Initialize(State):
         try:
             # Add task for LLM-based suggestions
             self.context.create_progress_task(
-                'llm',
+                "llm",
                 "[cyan]Generating async LLM-based suggestions...",
-                total=len(self.context.failures)
+                total=len(self.context.failures),
             )
 
             # Transition to the grouping state
             await self.context.transition_to(GroupFailures)
 
         except Exception as e:
-            raise InitializationError(f"Failed to initialize suggestion generation: {e}") from e
+            raise InitializationError(
+                f"Failed to initialize suggestion generation: {e}"
+            ) from e
 
 
 class GroupFailures(State):
@@ -280,22 +306,26 @@ class GroupFailures(State):
     async def run(self) -> None:
         # Add task for grouping
         self.context.create_progress_task(
-            'grouping',
-            "[cyan]Grouping similar failures...",
-            total=1
+            "grouping", "[cyan]Grouping similar failures...", total=1
         )
 
         try:
             # Group similar failures
             async with self.context.track_performance("async_failure_grouping"):
-                project_root = str(self.context.path_resolver.project_root) if self.context.path_resolver else None
-                self.context.failure_groups = group_failures(self.context.failures, project_root)
+                project_root = (
+                    str(self.context.path_resolver.project_root)
+                    if self.context.path_resolver
+                    else None
+                )
+                self.context.failure_groups = group_failures(
+                    self.context.failures, project_root
+                )
 
             # Update progress
             self.context.update_progress(
-                'grouping',
+                "grouping",
                 f"[green]Grouped {len(self.context.failures)} into {len(self.context.failure_groups)} distinct groups",
-                completed=True
+                completed=True,
             )
 
             # Log grouping result
@@ -308,7 +338,9 @@ class GroupFailures(State):
                 await self.context.transition_to(PrepareRepresentatives)
             else:
                 # Skip to post-processing if no groups were found
-                self.context.log_info("No failure groups found, skipping to post-processing")
+                self.context.log_info(
+                    "No failure groups found, skipping to post-processing"
+                )
                 await self.context.transition_to(PostProcess)
 
         except Exception as e:
@@ -333,9 +365,9 @@ class PrepareRepresentatives(State):
 
             # Add task for batch processing
             self.context.create_progress_task(
-                'batch_processing',
+                "batch_processing",
                 f"[cyan]Processing {len(self.context.representative_failures)} failure groups in parallel...",
-                total=1
+                total=1,
             )
 
             # Log processing start with resource usage warning
@@ -350,7 +382,9 @@ class PrepareRepresentatives(State):
             await self.context.transition_to(BatchProcess)
 
         except Exception as e:
-            raise RepresentativeSelectionError(f"Error preparing representative failures: {e}") from e
+            raise RepresentativeSelectionError(
+                f"Error preparing representative failures: {e}"
+            ) from e
 
 
 class BatchProcess(State):
@@ -360,10 +394,14 @@ class BatchProcess(State):
         try:
             async with self.context.track_performance("batch_process_failures"):
                 # Start resource monitoring with timeout
-                async with AsyncResourceMonitor(max_time_seconds=self.context.settings.llm_timeout):
+                async with AsyncResourceMonitor(
+                    max_time_seconds=self.context.settings.llm_timeout
+                ):
                     # Get suggestions for all representatives
-                    suggestions_by_test = await self.context.llm_suggester.batch_suggest_fixes(
-                        self.context.representative_failures
+                    suggestions_by_test = (
+                        await self.context.llm_suggester.batch_suggest_fixes(
+                            self.context.representative_failures
+                        )
                     )
 
                     # Process suggestions for all groups
@@ -373,17 +411,21 @@ class BatchProcess(State):
                             continue
 
                         # Get the representative failure
-                        representative = next((f for f in group if f.test_name == test_name), None)
+                        representative = next(
+                            (f for f in group if f.test_name == test_name), None
+                        )
 
                         if representative and suggestions:
                             # Process all suggestions for this group
-                            await self._process_suggestions_for_group(representative, group, suggestions)
+                            await self._process_suggestions_for_group(
+                                representative, group, suggestions
+                            )
 
             # Update progress
             self.context.update_progress(
-                'batch_processing',
+                "batch_processing",
                 f"[green]Completed processing {len(self.context.representative_failures)} failure groups",
-                completed=True
+                completed=True,
             )
 
             # Transition to post-processing
@@ -402,7 +444,7 @@ class BatchProcess(State):
         self,
         representative: PytestFailure,
         group: List[PytestFailure],
-        suggestions: List[FixSuggestion]
+        suggestions: List[FixSuggestion],
     ) -> None:
         """
         Process suggestions for a group of failures.
@@ -414,9 +456,7 @@ class BatchProcess(State):
         """
         for suggestion in suggestions:
             # Add marked suggestion for the representative
-            self.context.all_suggestions.append(
-                self.context.mark_llm_async(suggestion)
-            )
+            self.context.all_suggestions.append(self.context.mark_llm_async(suggestion))
 
             # Create duplicate suggestions for other failures in the group
             for other_failure in group:
@@ -426,7 +466,9 @@ class BatchProcess(State):
                         suggestion=suggestion.suggestion,
                         explanation=suggestion.explanation,
                         confidence=suggestion.confidence,
-                        code_changes=dict(suggestion.code_changes) if suggestion.code_changes else None
+                        code_changes=dict(suggestion.code_changes)
+                        if suggestion.code_changes
+                        else None,
                     )
                     # Add marked duplicate suggestion
                     self.context.all_suggestions.append(
@@ -441,7 +483,9 @@ class PostProcess(State):
         try:
             async with self.context.track_performance("async_post_processing"):
                 # Sort suggestions by confidence
-                self.context.all_suggestions.sort(key=lambda s: s.confidence, reverse=True)
+                self.context.all_suggestions.sort(
+                    key=lambda s: s.confidence, reverse=True
+                )
 
                 # Limit suggestions per failure if specified
                 if self.context.settings.max_suggestions_per_failure > 0:
@@ -468,7 +512,7 @@ class PostProcess(State):
         limited_suggestions = []
         for suggestions in suggestions_by_failure.values():
             limited_suggestions.extend(
-                suggestions[:self.context.settings.max_suggestions_per_failure]
+                suggestions[: self.context.settings.max_suggestions_per_failure]
             )
 
         # Update the suggestions list
@@ -488,10 +532,13 @@ class ErrorState(State):
         self.context.cleanup_progress_tasks()
 
         # Log that we're in error state
-        self.context.log_warning("Error encountered during async suggestion generation. Moving to post-processing with partial results.")
+        self.context.log_warning(
+            "Error encountered during async suggestion generation. Moving to post-processing with partial results."
+        )
 
         # Transition to post-processing to handle whatever results we have so far
         await self.context.transition_to(PostProcess)
+
 
 # --- End State Machine Implementation ---
 
@@ -533,11 +580,14 @@ class PytestAnalyzerService:
 
         # Check Git compatibility early on
         from ..utils.git_manager import confirm_git_setup
+
         self.git_available = False
         if self.settings.check_git:
             project_root = str(self.path_resolver.project_root)
             self.git_available = confirm_git_setup(project_root)
-            logger.info(f"Git integration {'enabled' if self.git_available else 'disabled'}")
+            logger.info(
+                f"Git integration {'enabled' if self.git_available else 'disabled'}"
+            )
 
         # Always initialize LLM suggester - no rule-based suggester
         self.llm_suggester = LLMSuggester(
@@ -545,7 +595,7 @@ class PytestAnalyzerService:
             min_confidence=self.settings.min_confidence,
             timeout_seconds=self.settings.llm_timeout,
             batch_size=batch_size,
-            max_concurrency=max_concurrency
+            max_concurrency=max_concurrency,
         )
 
         # Prepare fix_applier attribute to accept different implementations
@@ -553,16 +603,17 @@ class PytestAnalyzerService:
         # Initialize fix applier for applying suggestions
         if self.git_available:
             from ..utils.git_fix_applier import GitFixApplier
+
             self.fix_applier = GitFixApplier(
                 project_root=cast(Path, self.settings.project_root),
-                verbose_test_output=False  # Default to quiet mode for validation
+                verbose_test_output=False,  # Default to quiet mode for validation
             )
         else:
             # Fallback to traditional file backup approach
             self.fix_applier = FixApplier(
                 project_root=cast(Path, self.settings.project_root),
                 backup_suffix=".pytest-analyzer.bak",
-                verbose_test_output=False  # Default to quiet mode for validation
+                verbose_test_output=False,  # Default to quiet mode for validation
             )
 
         # Create our own event loop if running in async mode
@@ -574,10 +625,14 @@ class PytestAnalyzerService:
                 asyncio.set_event_loop(asyncio.new_event_loop())
 
         logger.info(f"Async processing: {'enabled' if self.use_async else 'disabled'}")
-        logger.info(f"Batch size: {self.batch_size}, Max concurrency: {self.max_concurrency}")
+        logger.info(
+            f"Batch size: {self.batch_size}, Max concurrency: {self.max_concurrency}"
+        )
 
     @with_timeout(300)
-    def analyze_pytest_output(self, output_path: Union[str, Path]) -> List[FixSuggestion]:
+    def analyze_pytest_output(
+        self, output_path: Union[str, Path]
+    ) -> List[FixSuggestion]:
         """
         Analyze pytest output from a file and generate fix suggestions.
 
@@ -605,8 +660,10 @@ class PytestAnalyzerService:
 
             # Limit the number of failures to analyze
             if len(failures) > self.settings.max_failures:
-                logger.warning(f"Found {len(failures)} failures, limiting to {self.settings.max_failures}")
-                failures = failures[:self.settings.max_failures]
+                logger.warning(
+                    f"Found {len(failures)} failures, limiting to {self.settings.max_failures}"
+                )
+                failures = failures[: self.settings.max_failures]
 
             # Generate suggestions for each failure
             return self._generate_suggestions(failures, use_async=self.use_async)
@@ -622,7 +679,7 @@ class PytestAnalyzerService:
         pytest_args: Optional[List[str]] = None,
         quiet: bool = False,
         progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None
+        task_id: Optional[TaskID] = None,
     ) -> List[PytestFailure]:
         """
         Run pytest on the given path and return failures without generating suggestions.
@@ -646,7 +703,7 @@ class PytestAnalyzerService:
             pytest_task_id = progress.add_task(
                 "[cyan]Running pytest...",
                 total=None,  # Indeterminate progress
-                parent=task_id
+                parent=task_id,
             )
 
         try:
@@ -656,17 +713,19 @@ class PytestAnalyzerService:
             # Add quiet-related arguments if needed
             if quiet:
                 # Suppress pytest output (using super quiet mode)
-                if '-qq' not in args_copy:
+                if "-qq" not in args_copy:
                     # First remove any existing -q flags
-                    args_copy = [arg for arg in args_copy if arg != '-q' and arg != '--quiet']
+                    args_copy = [
+                        arg for arg in args_copy if arg != "-q" and arg != "--quiet"
+                    ]
                     # Add super quiet mode flag
-                    args_copy.append('-qq')
+                    args_copy.append("-qq")
                 # Add short traceback flag for cleaner output
-                if '--tb=short' not in args_copy:
-                    args_copy.append('--tb=short')
+                if "--tb=short" not in args_copy:
+                    args_copy.append("--tb=short")
                 # Disable warnings
-                if '-W' not in args_copy and '--disable-warnings' not in args_copy:
-                    args_copy.append('--disable-warnings')
+                if "-W" not in args_copy and "--disable-warnings" not in args_copy:
+                    args_copy.append("--disable-warnings")
 
             # Choose extraction strategy based on settings
             if self.settings.preferred_format == "plugin":
@@ -690,14 +749,22 @@ class PytestAnalyzerService:
 
             # Update progress if active
             if progress and pytest_task_id is not None:
-                progress.update(pytest_task_id, description="[green]Pytest complete!", completed=True)
+                progress.update(
+                    pytest_task_id,
+                    description="[green]Pytest complete!",
+                    completed=True,
+                )
 
             return failures
 
         except Exception as e:
             # Update progress if active
             if progress and pytest_task_id is not None:
-                progress.update(pytest_task_id, description=f"[red]Pytest failed: {e}", completed=True)
+                progress.update(
+                    pytest_task_id,
+                    description=f"[red]Pytest failed: {e}",
+                    completed=True,
+                )
 
             logger.error(f"Error running tests: {e}")
             return []
@@ -708,7 +775,7 @@ class PytestAnalyzerService:
         test_path: str,
         pytest_args: Optional[List[str]] = None,
         quiet: bool = False,
-        use_async: Optional[bool] = None
+        use_async: Optional[bool] = None,
     ) -> List[FixSuggestion]:
         """
         Run pytest on the given path and analyze the output.
@@ -726,7 +793,13 @@ class PytestAnalyzerService:
         pytest_args = pytest_args or []
 
         # Import rich components
-        from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
+        from rich.progress import (
+            Progress,
+            SpinnerColumn,
+            TextColumn,
+            BarColumn,
+            TimeElapsedColumn,
+        )
         from rich.console import Console
 
         # Use the console from CLI if available, or create a new one with force_terminal=True
@@ -749,19 +822,21 @@ class PytestAnalyzerService:
             # Make sure quiet mode is reflected in pytest args (using super quiet mode)
             if "-qq" not in pytest_args:
                 # First remove any existing -q flags
-                pytest_args = [arg for arg in pytest_args if arg != '-q' and arg != '--quiet']
+                pytest_args = [
+                    arg for arg in pytest_args if arg != "-q" and arg != "--quiet"
+                ]
                 # Add super quiet mode flag
                 pytest_args.append("-qq")
             # Add short traceback flag for cleaner output
-            if '--tb=short' not in pytest_args:
-                pytest_args.append('--tb=short')
+            if "--tb=short" not in pytest_args:
+                pytest_args.append("--tb=short")
 
             # Create minimal progress display
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[cyan]{task.description}"),
                 console=console,
-                transient=True  # Progress bars disappear when done
+                transient=True,  # Progress bars disappear when done
             ) as progress:
                 # Create simplified task list
                 main_task_id = progress.add_task("Running tests...", total=2)
@@ -772,25 +847,35 @@ class PytestAnalyzerService:
                     pytest_args,
                     quiet=quiet,
                     progress=progress,
-                    task_id=main_task_id
+                    task_id=main_task_id,
                 )
 
-                progress.update(main_task_id, advance=1, description="Analyzing failures...")
+                progress.update(
+                    main_task_id, advance=1, description="Analyzing failures..."
+                )
 
                 try:
                     # Limit the number of failures to analyze
                     if len(failures) > self.settings.max_failures:
-                        failures = failures[:self.settings.max_failures]
+                        failures = failures[: self.settings.max_failures]
 
                     # Group failures to detect common issues
                     if failures:
-                        project_root = str(self.path_resolver.project_root) if self.path_resolver else None
+                        project_root = (
+                            str(self.path_resolver.project_root)
+                            if self.path_resolver
+                            else None
+                        )
                         from .analysis.failure_grouper import group_failures
+
                         failure_groups = group_failures(failures, project_root)
 
                         # Show minimal groups info
                         if len(failure_groups) < len(failures):
-                            progress.update(main_task_id, description=f"Found {len(failure_groups)} distinct issues...")
+                            progress.update(
+                                main_task_id,
+                                description=f"Found {len(failure_groups)} distinct issues...",
+                            )
 
                     # Generate suggestions with minimal progress tracking
                     suggestions = self._generate_suggestions(
@@ -798,14 +883,18 @@ class PytestAnalyzerService:
                         quiet=quiet,
                         progress=progress,
                         parent_task_id=main_task_id,
-                        use_async=use_async
+                        use_async=use_async,
                     )
 
-                    progress.update(main_task_id, description="Analysis complete!", completed=True)
+                    progress.update(
+                        main_task_id, description="Analysis complete!", completed=True
+                    )
                     return suggestions
 
                 except Exception as e:
-                    progress.update(main_task_id, description=f"Error: {e}", completed=True)
+                    progress.update(
+                        main_task_id, description=f"Error: {e}", completed=True
+                    )
                     logger.error(f"Error analyzing tests: {e}")
                     return []
         else:
@@ -815,7 +904,7 @@ class PytestAnalyzerService:
                 TextColumn("[progress.description]{task.description}"),
                 BarColumn(),
                 TimeElapsedColumn(),
-                console=console
+                console=console,
             ) as progress:
                 # Create main task
                 main_task_id = progress.add_task("[cyan]Running tests...", total=2)
@@ -826,16 +915,20 @@ class PytestAnalyzerService:
                     pytest_args,
                     quiet=quiet,
                     progress=progress,
-                    task_id=main_task_id
+                    task_id=main_task_id,
                 )
 
-                progress.update(main_task_id, advance=1, description="[cyan]Analyzing failures...")
+                progress.update(
+                    main_task_id, advance=1, description="[cyan]Analyzing failures..."
+                )
 
                 try:
                     # Limit the number of failures to analyze
                     if len(failures) > self.settings.max_failures:
-                        logger.warning(f"Found {len(failures)} failures, limiting to {self.settings.max_failures}")
-                        failures = failures[:self.settings.max_failures]
+                        logger.warning(
+                            f"Found {len(failures)} failures, limiting to {self.settings.max_failures}"
+                        )
+                        failures = failures[: self.settings.max_failures]
 
                     # Generate suggestions with progress tracking
                     suggestions = self._generate_suggestions(
@@ -843,18 +936,28 @@ class PytestAnalyzerService:
                         quiet=quiet,
                         progress=progress,
                         parent_task_id=main_task_id,
-                        use_async=use_async
+                        use_async=use_async,
                     )
 
-                    progress.update(main_task_id, description="[green]Analysis complete!", completed=True)
+                    progress.update(
+                        main_task_id,
+                        description="[green]Analysis complete!",
+                        completed=True,
+                    )
                     return suggestions
 
                 except Exception as e:
-                    progress.update(main_task_id, description=f"[red]Error analyzing tests: {e}", completed=True)
+                    progress.update(
+                        main_task_id,
+                        description=f"[red]Error analyzing tests: {e}",
+                        completed=True,
+                    )
                     logger.error(f"Error analyzing tests: {e}")
                     return []
 
-    def _run_and_extract_json(self, test_path: str, pytest_args: Optional[List[str]] = None) -> List[PytestFailure]:
+    def _run_and_extract_json(
+        self, test_path: str, pytest_args: Optional[List[str]] = None
+    ) -> List[PytestFailure]:
         """
         Run pytest with JSON output and extract failures.
 
@@ -865,58 +968,68 @@ class PytestAnalyzerService:
         Returns:
             List of test failures
         """
-        with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as tmp:
-            json_report_path = tmp.name # Store path before closing
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            json_report_path = tmp.name  # Store path before closing
 
         try:
             args = pytest_args or []
-            cmd = ['pytest', test_path, '--json-report', f'--json-report-file={json_report_path}']
+            cmd = [
+                "pytest",
+                test_path,
+                "--json-report",
+                f"--json-report-file={json_report_path}",
+            ]
 
             # Important: we need to extend args after defining base command to allow
             # custom args to override the defaults if needed
             cmd.extend(args)
 
             # Determine if we're in quiet mode
-            quiet_mode = '-q' in args or '-qq' in args or '--quiet' in args
+            quiet_mode = "-q" in args or "-qq" in args or "--quiet" in args
             # Determine if we want to show progress (requires -s to avoid pytest capturing output)
-            progress_mode = not quiet_mode and ('-s' in args or '--capture=no' in args)
+            progress_mode = not quiet_mode and ("-s" in args or "--capture=no" in args)
 
             if quiet_mode:
                 # When in quiet mode, redirect output to devnull
-                with open(os.devnull, 'w') as devnull:
+                with open(os.devnull, "w") as devnull:
                     # Run pytest with a timeout, redirecting output to devnull
                     subprocess.run(
                         cmd,
                         timeout=self.settings.pytest_timeout,
                         check=False,
                         stdout=devnull,
-                        stderr=devnull
+                        stderr=devnull,
                     )
             elif progress_mode:
                 # With progress mode enabled, make sure the output isn't being captured
                 from rich.console import Console
+
                 console = Console()
                 console.print("[cyan]Running pytest with JSON report...[/cyan]")
 
                 # Run pytest with normal output, needed for rich progress display
                 result = subprocess.run(
-                    cmd,
-                    timeout=self.settings.pytest_timeout,
-                    check=False
+                    cmd, timeout=self.settings.pytest_timeout, check=False
                 )
 
                 if result.returncode != 0 and not quiet_mode:
-                    console.print(f"[yellow]Pytest exited with code {result.returncode}[/yellow]")
+                    console.print(
+                        f"[yellow]Pytest exited with code {result.returncode}[/yellow]"
+                    )
             else:
                 # Run pytest with a timeout, normal output but no special progress display
                 subprocess.run(cmd, timeout=self.settings.pytest_timeout, check=False)
 
             # Extract failures from JSON output
-            extractor = get_extractor(Path(json_report_path), self.settings, self.path_resolver)
+            extractor = get_extractor(
+                Path(json_report_path), self.settings, self.path_resolver
+            )
             return extractor.extract_failures(Path(json_report_path))
 
         except subprocess.TimeoutExpired:
-            logger.error(f"Pytest execution timed out after {self.settings.pytest_timeout} seconds")
+            logger.error(
+                f"Pytest execution timed out after {self.settings.pytest_timeout} seconds"
+            )
             return []
         finally:
             # Ensure temporary file is deleted (ignore errors)
@@ -926,8 +1039,9 @@ class PytestAnalyzerService:
             except Exception:
                 pass
 
-
-    def _run_and_extract_xml(self, test_path: str, pytest_args: Optional[List[str]] = None) -> List[PytestFailure]:
+    def _run_and_extract_xml(
+        self, test_path: str, pytest_args: Optional[List[str]] = None
+    ) -> List[PytestFailure]:
         """
         Run pytest with XML output and extract failures.
 
@@ -938,58 +1052,63 @@ class PytestAnalyzerService:
         Returns:
             List of test failures
         """
-        with tempfile.NamedTemporaryFile(suffix='.xml', delete=False) as tmp:
-            xml_report_path = tmp.name # Store path before closing
+        with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as tmp:
+            xml_report_path = tmp.name  # Store path before closing
 
         try:
             args = pytest_args or []
-            cmd = ['pytest', test_path, f'--junit-xml={xml_report_path}']
+            cmd = ["pytest", test_path, f"--junit-xml={xml_report_path}"]
 
             # Important: we need to extend args after defining base command to allow
             # custom args to override the defaults if needed
             cmd.extend(args)
 
             # Determine if we're in quiet mode
-            quiet_mode = '-q' in args or '-qq' in args or '--quiet' in args
+            quiet_mode = "-q" in args or "-qq" in args or "--quiet" in args
             # Determine if we want to show progress (requires -s to avoid pytest capturing output)
-            progress_mode = not quiet_mode and ('-s' in args or '--capture=no' in args)
+            progress_mode = not quiet_mode and ("-s" in args or "--capture=no" in args)
 
             if quiet_mode:
                 # When in quiet mode, redirect output to devnull
-                with open(os.devnull, 'w') as devnull:
+                with open(os.devnull, "w") as devnull:
                     # Run pytest with a timeout, redirecting output to devnull
                     subprocess.run(
                         cmd,
                         timeout=self.settings.pytest_timeout,
                         check=False,
                         stdout=devnull,
-                        stderr=devnull
+                        stderr=devnull,
                     )
             elif progress_mode:
                 # With progress mode enabled, make sure the output isn't being captured
                 from rich.console import Console
+
                 console = Console()
                 console.print("[cyan]Running pytest with XML report...[/cyan]")
 
                 # Run pytest with normal output, needed for rich progress display
                 result = subprocess.run(
-                    cmd,
-                    timeout=self.settings.pytest_timeout,
-                    check=False
+                    cmd, timeout=self.settings.pytest_timeout, check=False
                 )
 
                 if result.returncode != 0 and not quiet_mode:
-                    console.print(f"[yellow]Pytest exited with code {result.returncode}[/yellow]")
+                    console.print(
+                        f"[yellow]Pytest exited with code {result.returncode}[/yellow]"
+                    )
             else:
                 # Run pytest with a timeout, normal output but no special progress display
                 subprocess.run(cmd, timeout=self.settings.pytest_timeout, check=False)
 
             # Extract failures from XML output
-            extractor = get_extractor(Path(xml_report_path), self.settings, self.path_resolver)
+            extractor = get_extractor(
+                Path(xml_report_path), self.settings, self.path_resolver
+            )
             return extractor.extract_failures(Path(xml_report_path))
 
         except subprocess.TimeoutExpired:
-            logger.error(f"Pytest execution timed out after {self.settings.pytest_timeout} seconds")
+            logger.error(
+                f"Pytest execution timed out after {self.settings.pytest_timeout} seconds"
+            )
             return []
         finally:
             # Ensure temporary file is deleted (ignore errors)
@@ -1005,7 +1124,7 @@ class PytestAnalyzerService:
         quiet: bool = False,
         progress: Optional[Progress] = None,
         parent_task_id: Optional[TaskID] = None,
-        use_async: Optional[bool] = None
+        use_async: Optional[bool] = None,
     ) -> List[FixSuggestion]:
         """
         Generate fix suggestions for the given failures using LLM-based approach.
@@ -1034,11 +1153,13 @@ class PytestAnalyzerService:
                             failures=failures,
                             quiet=quiet,
                             progress=progress,
-                            parent_task_id=parent_task_id
+                            parent_task_id=parent_task_id,
                         )
                     )
                 except Exception as e:
-                    logger.error(f"Error in async suggestions generation, falling back to sync: {e}")
+                    logger.error(
+                        f"Error in async suggestions generation, falling back to sync: {e}"
+                    )
                     should_use_async = False  # Fall back to synchronous processing
 
             # Use synchronous processing
@@ -1047,7 +1168,7 @@ class PytestAnalyzerService:
                     failures=failures,
                     quiet=quiet,
                     progress=progress,
-                    parent_task_id=parent_task_id
+                    parent_task_id=parent_task_id,
                 )
             # Add a default return in case logic fails (should not happen)
             return []
@@ -1057,7 +1178,7 @@ class PytestAnalyzerService:
         failures: List[PytestFailure],
         quiet: bool = False,
         progress: Optional[Progress] = None,
-        parent_task_id: Optional[TaskID] = None
+        parent_task_id: Optional[TaskID] = None,
     ) -> List[FixSuggestion]:
         """
         Generate fix suggestions synchronously for the given failures.
@@ -1088,12 +1209,16 @@ class PytestAnalyzerService:
                     group_task_id = progress.add_task(
                         "[cyan]Grouping similar failures...",
                         total=1,
-                        parent=parent_task_id
+                        parent=parent_task_id,
                     )
 
                 with performance_tracker.track("failure_grouping"):
                     # Group similar failures to avoid redundant LLM calls
-                    project_root = str(self.path_resolver.project_root) if self.path_resolver else None
+                    project_root = (
+                        str(self.path_resolver.project_root)
+                        if self.path_resolver
+                        else None
+                    )
                     failure_groups = group_failures(failures, project_root)
 
                 # Mark grouping task complete if active
@@ -1101,18 +1226,20 @@ class PytestAnalyzerService:
                     progress.update(
                         group_task_id,
                         description=f"[green]Grouped {len(failures)} failures into {len(failure_groups)} distinct groups",
-                        completed=True
+                        completed=True,
                     )
 
                 if not quiet:
-                    logger.info(f"Grouped {len(failures)} failures into {len(failure_groups)} distinct groups")
+                    logger.info(
+                        f"Grouped {len(failures)} failures into {len(failure_groups)} distinct groups"
+                    )
 
                 # Add task for LLM suggestions if progress is active and groups exist
                 if progress and parent_task_id is not None and failure_groups:
                     llm_task_id = progress.add_task(
                         "[cyan]Getting LLM suggestions...",
                         total=len(failure_groups),
-                        parent=parent_task_id
+                        parent=parent_task_id,
                     )
 
                 with performance_tracker.track("process_failure_groups"):
@@ -1132,25 +1259,33 @@ class PytestAnalyzerService:
                         if progress and llm_task_id is not None:
                             progress.update(
                                 llm_task_id,
-                                description=f"[cyan]Getting LLM suggestion {i+1}/{len(failure_groups)}: {representative.test_name}"
+                                description=f"[cyan]Getting LLM suggestion {i + 1}/{len(failure_groups)}: {representative.test_name}",
                             )
 
                         if not quiet:
-                            logger.info(f"Generating LLM suggestions for group: {fingerprint} ({len(group)} similar failures)")
-                            logger.info(f"Representative test: {representative.test_name}")
+                            logger.info(
+                                f"Generating LLM suggestions for group: {fingerprint} ({len(group)} similar failures)"
+                            )
+                            logger.info(
+                                f"Representative test: {representative.test_name}"
+                            )
 
                         # Generate suggestions for the representative failure
                         try:
                             with performance_tracker.track(f"llm_suggestion_{i}"):
-                                with ResourceMonitor(max_time_seconds=self.settings.llm_timeout):
-                                    llm_suggestions = self.llm_suggester.suggest_fixes(representative)
+                                with ResourceMonitor(
+                                    max_time_seconds=self.settings.llm_timeout
+                                ):
+                                    llm_suggestions = self.llm_suggester.suggest_fixes(
+                                        representative
+                                    )
 
                                     # Create a FixSuggestion for each failure in the group using the same solution
                                     for suggestion in llm_suggestions:
                                         # Mark the suggestion as LLM-based
                                         if not suggestion.code_changes:
                                             suggestion.code_changes = {}
-                                        suggestion.code_changes['source'] = 'llm'
+                                        suggestion.code_changes["source"] = "llm"
 
                                         # The original suggestion is for the representative failure
                                         all_suggestions.append(suggestion)
@@ -1164,11 +1299,19 @@ class PytestAnalyzerService:
                                                     suggestion=suggestion.suggestion,
                                                     explanation=suggestion.explanation,
                                                     confidence=suggestion.confidence,
-                                                    code_changes=dict(suggestion.code_changes) if suggestion.code_changes else None
+                                                    code_changes=dict(
+                                                        suggestion.code_changes
+                                                    )
+                                                    if suggestion.code_changes
+                                                    else None,
                                                 )
-                                                all_suggestions.append(duplicate_suggestion)
+                                                all_suggestions.append(
+                                                    duplicate_suggestion
+                                                )
                         except Exception as e:
-                            logger.error(f"Error generating LLM suggestions for group {fingerprint}: {e}")
+                            logger.error(
+                                f"Error generating LLM suggestions for group {fingerprint}: {e}"
+                            )
 
                         # Update progress after LLM call if active
                         if progress and llm_task_id is not None:
@@ -1179,7 +1322,7 @@ class PytestAnalyzerService:
                     progress.update(
                         llm_task_id,
                         description="[green]LLM suggestions complete",
-                        completed=True
+                        completed=True,
                     )
 
             except Exception as e:
@@ -1203,7 +1346,9 @@ class PytestAnalyzerService:
                     limited_suggestions: List[FixSuggestion] = []
                     for group_suggestions in suggestions_by_failure.values():
                         limited_suggestions.extend(
-                            group_suggestions[:self.settings.max_suggestions_per_failure]
+                            group_suggestions[
+                                : self.settings.max_suggestions_per_failure
+                            ]
                         )
                     return limited_suggestions
 
@@ -1215,7 +1360,7 @@ class PytestAnalyzerService:
         failures: List[PytestFailure],
         quiet: bool = False,
         progress: Optional[Progress] = None,
-        parent_task_id: Optional[TaskID] = None
+        parent_task_id: Optional[TaskID] = None,
     ) -> List[FixSuggestion]:
         """
         Generate fix suggestions asynchronously for the given failures.
@@ -1247,8 +1392,8 @@ class PytestAnalyzerService:
                 path_resolver=self.path_resolver,
                 settings=self.settings,
                 llm_suggester=self.llm_suggester,
-                logger=logger, # Use module-level logger
-                performance_tracker=performance_tracker # Use global tracker
+                logger=logger,  # Use module-level logger
+                performance_tracker=performance_tracker,  # Use global tracker
             )
 
             try:
@@ -1260,12 +1405,14 @@ class PytestAnalyzerService:
 
                 # If there was an error, log it
                 if context.final_error:
-                    logger.error(f"State machine execution failed: {context.final_error}")
+                    logger.error(
+                        f"State machine execution failed: {context.final_error}"
+                    )
 
             except asyncio.TimeoutError:
                 # Handle timeout from the async_with_timeout decorator
                 logger.warning(
-                    'Async suggestion generation timed out after 300 seconds. Returning partial results. Consider adjusting parameters.'
+                    "Async suggestion generation timed out after 300 seconds. Returning partial results. Consider adjusting parameters."
                 )
                 # Ensure progress tasks are cleaned up
                 context.cleanup_progress_tasks()
@@ -1293,12 +1440,12 @@ class PytestAnalyzerService:
             FixApplicationResult indicating success or failure
         """
         with performance_tracker.track("apply_suggestion"):
-            if not hasattr(suggestion, 'failure') or not suggestion.failure:
+            if not hasattr(suggestion, "failure") or not suggestion.failure:
                 return FixApplicationResult(
                     success=False,
                     message="Cannot apply fix: Missing original failure information.",
                     applied_files=[],
-                    rolled_back_files=[]
+                    rolled_back_files=[],
                 )
 
             if not suggestion.code_changes:
@@ -1306,7 +1453,7 @@ class PytestAnalyzerService:
                     success=False,
                     message="Cannot apply fix: No code changes provided in suggestion.",
                     applied_files=[],
-                    rolled_back_files=[]
+                    rolled_back_files=[],
                 )
 
             # Filter code_changes to include only file paths (not metadata)
@@ -1315,8 +1462,8 @@ class PytestAnalyzerService:
                 # Skip metadata keys like 'source' and 'fingerprint'
                 # Check if key looks like a file path (contains path separators)
                 # This is a heuristic and might need refinement based on actual keys
-                if isinstance(key, str) and ('/' in key or '\\' in key):
-                     # Skip empty values
+                if isinstance(key, str) and ("/" in key or "\\" in key):
+                    # Skip empty values
                     if not value:
                         continue
                     # Include valid file paths with content
@@ -1326,27 +1473,33 @@ class PytestAnalyzerService:
                     # logger.debug(f"Skipping non-file key in code_changes: {key}")
                     pass
 
-
             if not code_changes_to_apply:
                 return FixApplicationResult(
                     success=False,
                     message="Cannot apply fix: No valid file changes found in suggestion.",
                     applied_files=[],
-                    rolled_back_files=[]
+                    rolled_back_files=[],
                 )
 
             # Determine which tests to run for validation
             tests_to_validate = []
-            if hasattr(suggestion, 'validation_tests') and suggestion.validation_tests:
+            if hasattr(suggestion, "validation_tests") and suggestion.validation_tests:
                 tests_to_validate = suggestion.validation_tests
-            elif hasattr(suggestion.failure, 'test_name') and suggestion.failure.test_name:
+            elif (
+                hasattr(suggestion.failure, "test_name")
+                and suggestion.failure.test_name
+            ):
                 # Use the original failing test for validation
                 tests_to_validate = [suggestion.failure.test_name]
             else:
-                logger.warning("Could not determine specific tests for validation. Proceeding without test validation.")
+                logger.warning(
+                    "Could not determine specific tests for validation. Proceeding without test validation."
+                )
 
             # Log the application attempt
-            logger.info(f"Attempting to apply fix for failure: {getattr(suggestion.failure, 'test_name', 'Unknown Test')}")
+            logger.info(
+                f"Attempting to apply fix for failure: {getattr(suggestion.failure, 'test_name', 'Unknown Test')}"
+            )
             logger.info(f"Modifying files: {list(code_changes_to_apply.keys())}")
             logger.info(f"Validating with tests: {tests_to_validate}")
 
@@ -1355,16 +1508,20 @@ class PytestAnalyzerService:
                 result = self.fix_applier.apply_fix(
                     code_changes_to_apply,
                     tests_to_validate,
-                    verbose_test_output=False  # Use quiet mode for validation tests
+                    verbose_test_output=False,  # Use quiet mode for validation tests
                 )
 
             # Log the result
             if result.success:
-                logger.info(f"Successfully applied fix to: {[str(p) for p in result.applied_files]}")
+                logger.info(
+                    f"Successfully applied fix to: {[str(p) for p in result.applied_files]}"
+                )
             else:
                 logger.error(f"Failed to apply fix: {result.message}")
                 if result.rolled_back_files:
-                    logger.info(f"Rolled back changes in: {[str(p) for p in result.rolled_back_files]}")
+                    logger.info(
+                        f"Rolled back changes in: {[str(p) for p in result.rolled_back_files]}"
+                    )
 
             return result
 

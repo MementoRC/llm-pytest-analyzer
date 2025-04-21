@@ -14,11 +14,11 @@ from .utils.path_resolver import PathResolver
 
 # Define the public API
 __all__ = [
-    'PytestAnalyzerService',  # Main service
-    'PytestFailure',          # Data models
-    'FixSuggestion',
-    'Settings',               # Configuration
-    'load_settings',
-    'PathResolver',           # Utilities
-    '__version__'
+    "PytestAnalyzerService",  # Main service
+    "PytestFailure",  # Data models
+    "FixSuggestion",
+    "Settings",  # Configuration
+    "load_settings",
+    "PathResolver",  # Utilities
+    "__version__",
 ]
