@@ -19,7 +19,7 @@ jobs:
 
       - name: Install Pixi
         run: |
-          curl -sSL https://pixi.sh/install.sh | sh
+          curl -sSL https://pixi.sh/install.sh | bash
           export PATH="$HOME/.pixi/bin:$PATH"
 
       - name: Install dependencies with Pixi
@@ -56,7 +56,7 @@ jobs:
 
       - name: Install Pixi
         run: |
-          curl -sSL https://pixi.sh/install.sh | sh
+          curl -sSL https://pixi.sh/install.sh | bash
           export PATH="$HOME/.pixi/bin:$PATH"
 
       - name: Install dependencies with Pixi
