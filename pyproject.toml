@@ -113,3 +113,4 @@ test-cov = { cmd = "pytest --cov=src/pytest_analyzer --cov-report=term-missing -
 build = { cmd = "hatch build", depends-on = ["install-editable"] }
 clean = "rm -rf dist build .ruff_cache .mypy_cache .pytest_cache *.egg-info src/pytest_analyzer.egg-info"
 check-all = { depends-on = ["lint", "typecheck", "test"] }
+setup-pre-commit = "pre-commit install --install-hooks"
