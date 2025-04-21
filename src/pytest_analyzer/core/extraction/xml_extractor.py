@@ -1,11 +1,11 @@
 import logging
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import List, Optional
-import xml.etree.ElementTree as ET
 
-from ..models.pytest_failure import PytestFailure
-from ...utils.resource_manager import with_timeout, ResourceMonitor
 from ...utils.path_resolver import PathResolver
+from ...utils.resource_manager import ResourceMonitor, with_timeout
+from ..models.pytest_failure import PytestFailure
 
 logger = logging.getLogger(__name__)
 

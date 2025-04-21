@@ -9,21 +9,21 @@ The module now includes asynchronous processing capabilities for improved perfor
 when handling multiple test failures in parallel.
 """
 
-import logging
-import re
-import json
-import os
-import hashlib
 import asyncio
-from typing import List, Dict, Any, Optional, Callable, Awaitable
+import hashlib
+import json
+import logging
+import os
+import re
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
-from ..models.pytest_failure import PytestFailure, FixSuggestion
 from ...utils.resource_manager import (
-    with_timeout,
     async_with_timeout,
-    performance_tracker,
     batch_process,
+    performance_tracker,
+    with_timeout,
 )
+from ..models.pytest_failure import FixSuggestion, PytestFailure
 
 logger = logging.getLogger(__name__)
 

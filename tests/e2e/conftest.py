@@ -1,10 +1,11 @@
 """Pytest configuration for end-to-end tests."""
 
-import pytest
-import sys
 import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock
+
+import pytest
 
 # Add the src directory to the Python path for imports
 sys.path.insert(0, str(Path(__file__).parents[2] / "src"))
@@ -44,14 +45,16 @@ def sample_assertion_file(tmp_path):
     """Create a sample pytest file with an assertion error."""
     # Create the test file
     test_file = tmp_path / "test_assertion.py"
-    test_file.write_text("""
+    test_file.write_text(
+        """
 import pytest
 
 def test_assertion_error():
     x = 1
     y = 2
     assert x == y, "Values are not equal"
-""")
+"""
+    )
     return test_file
 
 
@@ -60,13 +63,15 @@ def sample_import_error_file(tmp_path):
     """Create a sample pytest file with an import error."""
     # Create the test file
     test_file = tmp_path / "test_import.py"
-    test_file.write_text("""
+    test_file.write_text(
+        """
 import pytest
 import nonexistent_module
 
 def test_function():
     assert True
-""")
+"""
+    )
     return test_file
 
 
@@ -75,13 +80,15 @@ def sample_syntax_error_file(tmp_path):
     """Create a sample pytest file with a syntax error."""
     # Create the test file
     test_file = tmp_path / "test_syntax.py"
-    test_file.write_text("""
+    test_file.write_text(
+        """
 import pytest
 
 def test_syntax_error():
     # Missing closing parenthesis
     print("Hello world"
-""")
+"""
+    )
     return test_file
 
 

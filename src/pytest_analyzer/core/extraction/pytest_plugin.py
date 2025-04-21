@@ -1,6 +1,7 @@
-import pytest
 import logging
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
+import pytest
 
 from ..models.pytest_failure import PytestFailure
 
@@ -32,9 +33,9 @@ class FailureCollectorPlugin:
                 self.test_items[item.nodeid] = {
                     "path": str(item.path) if hasattr(item, "path") else None,
                     "module": item.module.__name__ if hasattr(item, "module") else None,
-                    "function": item.function.__name__
-                    if hasattr(item, "function")
-                    else None,
+                    "function": (
+                        item.function.__name__ if hasattr(item, "function") else None
+                    ),
                 }
             except Exception as e:
                 logger.error(
@@ -101,9 +102,9 @@ class FailureCollectorPlugin:
             error_message=error_message,
             traceback=traceback_text,
             relevant_code=relevant_code,
-            raw_output_section=str(report.longrepr)
-            if hasattr(report, "longrepr")
-            else "",
+            raw_output_section=(
+                str(report.longrepr) if hasattr(report, "longrepr") else ""
+            ),
         )
 
         self.failures.append(failure)

@@ -8,23 +8,22 @@ and intelligent fix suggestions, avoiding the regex-based infinite loop issues o
 the original test_analyzer implementation.
 """
 
-import sys
-import os
 import argparse
-import logging
-import json
-from pathlib import Path
-from typing import List, Dict, Tuple
-
 import difflib
+import json
+import logging
+import os
+import sys
+from pathlib import Path
+from typing import Dict, List, Tuple
+
 from rich.console import Console
-from rich.table import Table
 from rich.syntax import Syntax
+from rich.table import Table
 
 from ..core.analyzer_service import PytestAnalyzerService
-from ..core.models.pytest_failure import PytestFailure, FixSuggestion
+from ..core.models.pytest_failure import FixSuggestion, PytestFailure
 from ..utils.settings import Settings, load_settings
-
 
 # Setup rich console
 console = Console()
@@ -592,12 +591,16 @@ def main() -> int:
                                     # Create at least one dummy suggestion for test to pass
                                     dummy_failure = PytestFailure(
                                         test_name=nodeid,
-                                        test_file=nodeid.split("::")[0]
-                                        if "::" in nodeid
-                                        else "unknown.py",
-                                        error_type="AssertionError"
-                                        if "AssertionError" in message
-                                        else "Error",
+                                        test_file=(
+                                            nodeid.split("::")[0]
+                                            if "::" in nodeid
+                                            else "unknown.py"
+                                        ),
+                                        error_type=(
+                                            "AssertionError"
+                                            if "AssertionError" in message
+                                            else "Error"
+                                        ),
                                         error_message=message,
                                         traceback="",
                                         line_number=test.get("lineno", 0),

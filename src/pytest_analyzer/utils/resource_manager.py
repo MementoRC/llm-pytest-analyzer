@@ -1,21 +1,21 @@
-import signal
-import resource
-import time
-import logging
 import asyncio
+import logging
+import resource
+import signal
+import time
 from collections import defaultdict
-from contextlib import contextmanager, asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from functools import wraps
 from typing import (
-    Optional,
-    Callable,
-    TypeVar,
     Any,
-    Dict,
-    List,
     AsyncIterator,
-    Iterator,
     Awaitable,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    TypeVar,
 )
 
 T = TypeVar("T")

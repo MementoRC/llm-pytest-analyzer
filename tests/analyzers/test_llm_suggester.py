@@ -1,10 +1,11 @@
 """Tests for the LLM suggester module."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from pytest_analyzer.core.analysis.llm_suggester import LLMSuggester
-from pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
+from pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
 
 
 @pytest.fixture
@@ -346,9 +347,9 @@ class TestLLMSuggester:
         # Create a text response with suggestion patterns
         text_response = """
         Suggestion: Fix the assertion to expect 1 instead of 2.
-        
+
         The test is expecting 2 but actually gets 1. You should update the assertion.
-        
+
         ```python
         def test_function():
             assert 1 == 1  # Fixed
@@ -401,14 +402,14 @@ class TestLLMSuggester:
         # Text with clear suggestion patterns
         text_with_suggestions = """
         Suggestion: Fix the assertion to expect 1 instead of 2.
-        
-        You should update the assertion in the test. 
-        
+
+        You should update the assertion in the test.
+
         ```python
         def test_function():
             assert 1 == 1  # Fixed
         ```
-        
+
         Suggestion 2: Fix the implementation of func() to return 2.
         """
 

@@ -1,31 +1,31 @@
 import asyncio
 import logging
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from rich.progress import Progress, TaskID
 
+from pytest_analyzer.core.analysis.llm_suggester import LLMSuggester
+
 # Import state machine components
 from pytest_analyzer.core.analyzer_service import (
-    Context,
-    Initialize,
-    GroupFailures,
-    PrepareRepresentatives,
     BatchProcess,
-    PostProcess,
-    ErrorState,
-    InitializationError,
-    FailureGroupingError,
-    RepresentativeSelectionError,
     BatchProcessingError,
+    Context,
+    ErrorState,
+    FailureGroupingError,
+    GroupFailures,
+    InitializationError,
+    Initialize,
+    PostProcess,
     PostProcessingError,
+    PrepareRepresentatives,
+    RepresentativeSelectionError,
 )
-from pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
-from pytest_analyzer.utils.settings import Settings
+from pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
 from pytest_analyzer.utils.path_resolver import PathResolver
-from pytest_analyzer.core.analysis.llm_suggester import LLMSuggester
 from pytest_analyzer.utils.resource_manager import PerformanceTracker
-
+from pytest_analyzer.utils.settings import Settings
 
 # --- Fixtures ---
 

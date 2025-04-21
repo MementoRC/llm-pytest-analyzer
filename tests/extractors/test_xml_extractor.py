@@ -1,10 +1,11 @@
 """Tests for the XML result extractor."""
 
-import pytest
-import xml.etree.ElementTree as ET
 import tempfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 from pytest_analyzer.core.extraction.xml_extractor import XmlResultExtractor
 from pytest_analyzer.utils.path_resolver import PathResolver

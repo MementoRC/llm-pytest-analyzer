@@ -1,18 +1,19 @@
 """Tests for the resource manager utilities."""
 
-import pytest
-import time
-import signal
 import resource
-from unittest.mock import patch, MagicMock
+import signal
+import time
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from pytest_analyzer.utils.resource_manager import (
-    timeout_context,
-    with_timeout,
-    limit_memory,
+    MemoryLimitError,
     ResourceMonitor,
     TimeoutError,
-    MemoryLimitError,
+    limit_memory,
+    timeout_context,
+    with_timeout,
 )
 
 

@@ -1,10 +1,11 @@
 """Tests for the JSON result extractor."""
 
-import pytest
 import json
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 from pytest_analyzer.core.extraction.json_extractor import JsonResultExtractor
 from pytest_analyzer.utils.path_resolver import PathResolver

@@ -1,11 +1,12 @@
 """Tests for the extractor factory module."""
 
-import pytest
 from pathlib import Path
 
+import pytest
+
 from pytest_analyzer.core.extraction.extractor_factory import (
-    get_extractor,
     ExtractorFactory,
+    get_extractor,
 )
 from pytest_analyzer.core.extraction.json_extractor import JsonResultExtractor
 from pytest_analyzer.core.extraction.xml_extractor import XmlResultExtractor

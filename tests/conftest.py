@@ -1,12 +1,13 @@
 """Pytest configuration for the pytest_analyzer tests."""
 
-import pytest
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 from typing import Optional
+from unittest.mock import MagicMock, patch
 
-from pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
+import pytest
+
+from pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
 
 
 # Register custom markers
@@ -19,7 +20,6 @@ def pytest_configure(config):
 def create_test_project(tmp_path):
     """Factory fixture to create test projects in a temp directory."""
     created_projects = []
-
 
     def _create_project(
         name: str, test_content: str, setup_content: Optional[str] = None

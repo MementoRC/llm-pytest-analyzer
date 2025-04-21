@@ -13,15 +13,15 @@ This implementation supports both:
 - Direct Mode: Makes changes directly with backup/rollback for use in test environments
 """
 
-import os
-import sys
-import shutil
 import difflib
 import logging
-import tempfile
+import os
+import shutil
 import subprocess
-from pathlib import Path
+import sys
+import tempfile
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)

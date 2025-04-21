@@ -2,16 +2,17 @@
 
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock, mock_open, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, mock_open
 
 # Make sure the pytest_analyzer package is importable
 sys.path.insert(0, str(Path(__file__).parents[2] / "src"))
 
 # Import the API classes
 from pytest_analyzer.core.analyzer_service import PytestAnalyzerService
-from pytest_analyzer.utils.settings import Settings
 from pytest_analyzer.core.models.pytest_failure import FixSuggestion
+from pytest_analyzer.utils.settings import Settings
 
 
 @pytest.mark.e2e

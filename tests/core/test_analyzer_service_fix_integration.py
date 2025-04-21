@@ -8,12 +8,13 @@ These tests verify that:
 3. It properly integrates with the FixApplier
 """
 
-import pytest
 from unittest.mock import patch
 
+import pytest
+
+from pytest_analyzer.core.analysis.fix_applier import FixApplicationResult, FixApplier
 from pytest_analyzer.core.analyzer_service import PytestAnalyzerService
-from pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
-from pytest_analyzer.core.analysis.fix_applier import FixApplier, FixApplicationResult
+from pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
 from pytest_analyzer.utils.settings import Settings
 
 
@@ -207,9 +208,10 @@ class TestAnalyzerServiceFixIntegration:
 
             # Check that custom tests were used
             tests_arg = mock_apply_fix.call_args[0][1]
-            assert tests_arg == ["custom_test1", "custom_test2"], (
-                "Custom validation tests should be used"
-            )
+            assert tests_arg == [
+                "custom_test1",
+                "custom_test2",
+            ], "Custom validation tests should be used"
 
 
 if __name__ == "__main__":

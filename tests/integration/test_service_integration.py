@@ -1,11 +1,12 @@
 """Integration tests for the PytestAnalyzerService with extractors and analyzers."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from pytest_analyzer.core.analyzer_service import PytestAnalyzerService
-from pytest_analyzer.utils.settings import Settings
 from pytest_analyzer.core.models.pytest_failure import PytestFailure
+from pytest_analyzer.utils.settings import Settings
 
 
 @pytest.fixture
@@ -136,7 +137,8 @@ def test_service_integration_run_pytest(mock_subprocess, analyzer_service, tmp_p
 
     # Create a temp JSON report file that will be "created" by pytest
     report_path = tmp_path / "json-report.json"
-    report_path.write_text("""
+    report_path.write_text(
+        """
     {
       "created": 1712621338.818604,
       "duration": 0.01588892936706543,
@@ -164,7 +166,8 @@ def test_service_integration_run_pytest(mock_subprocess, analyzer_service, tmp_p
         }
       ]
     }
-    """)
+    """
+    )
 
     # Configure the service to use JSON format
     analyzer_service.settings.preferred_format = "json"

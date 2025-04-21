@@ -1,21 +1,22 @@
 """Tests for the git_manager module."""
 
-import pytest
 import subprocess
-from unittest.mock import patch, MagicMock, mock_open, call
+from unittest.mock import MagicMock, call, mock_open, patch
+
+import pytest
 
 from pytest_analyzer.utils.git_manager import (
-    check_git_installed,
-    is_git_repository,
-    create_gitignore,
-    init_git_repository,
-    confirm_git_setup,
-    get_git_root,
-    create_branch_for_fixes,
-    is_working_tree_clean,
-    commit_fix,
-    reset_file,
     GitError,
+    check_git_installed,
+    commit_fix,
+    confirm_git_setup,
+    create_branch_for_fixes,
+    create_gitignore,
+    get_git_root,
+    init_git_repository,
+    is_git_repository,
+    is_working_tree_clean,
+    reset_file,
 )
 
 

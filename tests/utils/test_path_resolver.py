@@ -1,7 +1,8 @@
 """Tests for the path resolver utilities."""
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from pytest_analyzer.utils.path_resolver import PathResolver
 

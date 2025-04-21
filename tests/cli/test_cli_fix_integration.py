@@ -8,13 +8,14 @@ These tests verify that:
 3. The entire flow from analysis to fix application works
 """
 
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from pytest_analyzer.cli.analyzer_cli import main, apply_suggestions_interactively
-from pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
+import pytest
+
+from pytest_analyzer.cli.analyzer_cli import apply_suggestions_interactively, main
 from pytest_analyzer.core.analysis.fix_applier import FixApplicationResult
+from pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
 
 
 class TestCLIFixIntegration:

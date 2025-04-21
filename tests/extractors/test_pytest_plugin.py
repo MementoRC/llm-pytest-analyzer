@@ -1,7 +1,8 @@
 """Tests for the pytest plugin module."""
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from pytest_analyzer.core.extraction.pytest_plugin import (
     FailureCollectorPlugin,

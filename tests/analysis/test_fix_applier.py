@@ -10,9 +10,10 @@ These tests verify that the FixApplier:
 """
 
 import sys
-import pytest
-from unittest.mock import patch, MagicMock
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from pytest_analyzer.core.analysis.fix_applier import FixApplier
 

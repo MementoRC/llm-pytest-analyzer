@@ -1,11 +1,12 @@
 """End-to-end tests for the pytest-analyzer CLI on real projects."""
 
-import sys
 import os
 import subprocess
+import sys
 from pathlib import Path
+from unittest.mock import mock_open, patch
+
 import pytest
-from unittest.mock import patch, mock_open
 
 # Make sure the pytest_analyzer package is importable
 sys.path.insert(0, str(Path(__file__).parents[2] / "src"))
@@ -178,7 +179,7 @@ def test_cli_with_llm_integration(sample_json_report):
 
             # Capture output
             import io
-            from contextlib import redirect_stdout, redirect_stderr
+            from contextlib import redirect_stderr, redirect_stdout
 
             f_out = io.StringIO()
             f_err = io.StringIO()

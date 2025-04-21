@@ -2,8 +2,8 @@ import logging
 import re
 from typing import List, Tuple
 
-from ..models.pytest_failure import PytestFailure, FixSuggestion
 from ...utils.resource_manager import with_timeout
+from ..models.pytest_failure import FixSuggestion, PytestFailure
 
 logger = logging.getLogger(__name__)
 

@@ -1,18 +1,19 @@
 """Tests for the CLI module."""
 
-import pytest
-from unittest.mock import patch, MagicMock, ANY
-import sys
 import argparse
 import logging
+import sys
+from unittest.mock import ANY, MagicMock, patch
+
+import pytest
 
 from pytest_analyzer.cli.analyzer_cli import (
-    main,
-    setup_parser,
     configure_settings,
     display_suggestions,
+    main,
+    setup_parser,
 )
-from pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
+from pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
 
 
 @pytest.fixture

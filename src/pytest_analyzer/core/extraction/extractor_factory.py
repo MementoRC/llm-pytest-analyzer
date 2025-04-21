@@ -1,11 +1,11 @@
 import logging
 from pathlib import Path
-from typing import Optional, Union, Type, Dict
+from typing import Dict, Optional, Type, Union
 
-from .json_extractor import JsonResultExtractor
-from .xml_extractor import XmlResultExtractor
 from ...utils.path_resolver import PathResolver
 from ...utils.settings import Settings
+from .json_extractor import JsonResultExtractor
+from .xml_extractor import XmlResultExtractor
 
 logger = logging.getLogger(__name__)
 

@@ -1,10 +1,11 @@
 """Tests for the failure analyzer module."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from pytest_analyzer.core.analysis.failure_analyzer import FailureAnalyzer
-from pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
+from pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
 
 
 @pytest.fixture

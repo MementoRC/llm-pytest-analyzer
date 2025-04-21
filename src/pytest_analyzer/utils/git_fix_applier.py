@@ -5,18 +5,18 @@ This module provides a Git-based implementation of the fix applier that uses
 Git operations for managing changes instead of custom backup files.
 """
 
-import os
 import logging
+import os
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 from .git_manager import (
-    get_git_root,
-    create_branch_for_fixes,
-    is_working_tree_clean,
-    commit_fix,
-    reset_file,
     GitError,
+    commit_fix,
+    create_branch_for_fixes,
+    get_git_root,
+    is_working_tree_clean,
+    reset_file,
 )
 
 logger = logging.getLogger(__name__)

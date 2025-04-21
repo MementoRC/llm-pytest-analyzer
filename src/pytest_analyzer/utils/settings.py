@@ -2,11 +2,11 @@ import logging
 from pathlib import Path
 from typing import Optional, Union  # Added List and Dict
 
-# Import the manager and error classes from the configuration module
-from .configuration import ConfigurationManager, ConfigurationError
-
 # Import the Settings dataclass definition from the types module
 from .config_types import Settings
+
+# Import the manager and error classes from the configuration module
+from .configuration import ConfigurationError, ConfigurationManager
 
 # No longer need TYPE_CHECKING block for Settings
 

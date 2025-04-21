@@ -1,16 +1,18 @@
 """Tests for the git_fix_applier module."""
 
-import pytest
 import logging
 from pathlib import Path
-from unittest.mock import patch, mock_open, call
+from unittest.mock import call, mock_open, patch
+
+import pytest
+
+from pytest_analyzer.core.analysis.fix_applier import FixApplicationResult
 
 # Module under test
 from pytest_analyzer.utils.git_fix_applier import GitFixApplier
 
 # Dependencies
 from pytest_analyzer.utils.git_manager import GitError
-from pytest_analyzer.core.analysis.fix_applier import FixApplicationResult
 
 # Constants
 MOCK_GIT_ROOT = "/mock/git/repo"
@@ -75,9 +77,9 @@ def mock_dependencies():
         patch("pytest.main") as mock_pytest_main,
         patch(
             "os.path.abspath",
-            side_effect=lambda p: p
-            if p.startswith("/")
-            else str(MOCK_PROJECT_ROOT / p),
+            side_effect=lambda p: (
+                p if p.startswith("/") else str(MOCK_PROJECT_ROOT / p)
+            ),
         ),
     ):
         # Set default return values for mocks

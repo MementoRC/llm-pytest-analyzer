@@ -1,10 +1,10 @@
 """Tests for the PytestAnalyzerService."""
 
 import subprocess
+import tempfile
+from unittest.mock import MagicMock, patch
 
 import pytest
-from unittest.mock import patch, MagicMock
-import tempfile
 
 from pytest_analyzer.core.analyzer_service import PytestAnalyzerService
 from pytest_analyzer.core.models.pytest_failure import PytestFailure

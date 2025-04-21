@@ -1,8 +1,9 @@
 """Tests for the settings module."""
 
-import pytest
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 from pytest_analyzer.utils.settings import Settings, load_settings
 

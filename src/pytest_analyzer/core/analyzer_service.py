@@ -1,31 +1,32 @@
+import asyncio
 import logging
 import os
 import subprocess
 import tempfile
-import asyncio
-from pathlib import Path
-from typing import List, Optional, Dict, Any, Union, Type, TypeVar, cast
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Type, TypeVar, Union, cast
+
 from rich.progress import Progress, TaskID
 
-from .models.pytest_failure import PytestFailure, FixSuggestion
-from .extraction.extractor_factory import get_extractor
-from .extraction.pytest_plugin import collect_failures_with_plugin
-from .analysis.failure_analyzer import FailureAnalyzer
-from .analysis.llm_suggester import LLMSuggester
-from .analysis.failure_grouper import group_failures, select_representative_failure
-from .analysis.fix_applier import FixApplier, FixApplicationResult
+from ..utils.path_resolver import PathResolver
 from ..utils.resource_manager import (
-    with_timeout,
+    AsyncResourceMonitor,
+    ResourceMonitor,
     async_with_timeout,
     limit_memory,
-    ResourceMonitor,
-    AsyncResourceMonitor,
     performance_tracker,
+    with_timeout,
 )
 from ..utils.settings import Settings
-from ..utils.path_resolver import PathResolver
+from .analysis.failure_analyzer import FailureAnalyzer
+from .analysis.failure_grouper import group_failures, select_representative_failure
+from .analysis.fix_applier import FixApplicationResult, FixApplier
+from .analysis.llm_suggester import LLMSuggester
+from .extraction.extractor_factory import get_extractor
+from .extraction.pytest_plugin import collect_failures_with_plugin
+from .models.pytest_failure import FixSuggestion, PytestFailure
 
 logger = logging.getLogger(__name__)
 
@@ -466,9 +467,11 @@ class BatchProcess(State):
                         suggestion=suggestion.suggestion,
                         explanation=suggestion.explanation,
                         confidence=suggestion.confidence,
-                        code_changes=dict(suggestion.code_changes)
-                        if suggestion.code_changes
-                        else None,
+                        code_changes=(
+                            dict(suggestion.code_changes)
+                            if suggestion.code_changes
+                            else None
+                        ),
                     )
                     # Add marked duplicate suggestion
                     self.context.all_suggestions.append(
@@ -793,14 +796,14 @@ class PytestAnalyzerService:
         pytest_args = pytest_args or []
 
         # Import rich components
+        from rich.console import Console
         from rich.progress import (
+            BarColumn,
             Progress,
             SpinnerColumn,
             TextColumn,
-            BarColumn,
             TimeElapsedColumn,
         )
-        from rich.console import Console
 
         # Use the console from CLI if available, or create a new one with force_terminal=True
         try:
@@ -1299,11 +1302,11 @@ class PytestAnalyzerService:
                                                     suggestion=suggestion.suggestion,
                                                     explanation=suggestion.explanation,
                                                     confidence=suggestion.confidence,
-                                                    code_changes=dict(
-                                                        suggestion.code_changes
-                                                    )
-                                                    if suggestion.code_changes
-                                                    else None,
+                                                    code_changes=(
+                                                        dict(suggestion.code_changes)
+                                                        if suggestion.code_changes
+                                                        else None
+                                                    ),
                                                 )
                                                 all_suggestions.append(
                                                     duplicate_suggestion

@@ -2,11 +2,11 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
-from ..models.pytest_failure import PytestFailure
-from ...utils.resource_manager import with_timeout, ResourceMonitor
 from ...utils.path_resolver import PathResolver
+from ...utils.resource_manager import ResourceMonitor, with_timeout
+from ..models.pytest_failure import PytestFailure
 
 logger = logging.getLogger(__name__)
 
