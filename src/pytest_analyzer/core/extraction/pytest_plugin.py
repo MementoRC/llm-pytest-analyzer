@@ -20,7 +20,7 @@ class FailureCollectorPlugin:
         failures = plugin.get_failures()
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.failures: List[PytestFailure] = []
         self.test_items: Dict[str, Any] = {}
 

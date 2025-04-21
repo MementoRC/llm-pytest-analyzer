@@ -47,3 +47,6 @@ pixi.lock
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+# pixi environments
+.pixi
+*.egg-info

@@ -219,7 +219,7 @@ class PerformanceTracker:
     track success rates, and generate reports.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.timings: Dict[str, List[float]] = defaultdict(list)
         self.counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
         self.start_times: Dict[str, float] = {}

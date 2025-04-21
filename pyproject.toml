@@ -63,16 +63,47 @@ Issues = "https://github.com/yourusername/pytest_analyzer/issues"
 [tool.hatch.version]
 path = "src/pytest_analyzer/__version__.py"
 
-[tool.pixi]
-package-dir = {"" = "src"}
-
-[tool.pixi.build]
-packages = ["src/pytest_analyzer"]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_default_fixture_loop_scope = "function"
-log_cli = false
-log_level = "WARNING"
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+pythonpath = ["src"]
+log_cli = true
+log_cli_level = "INFO"
 filterwarnings = ["ignore::DeprecationWarning", "ignore::pytest.PytestDeprecationWarning"]
-addopts = "--quiet"
+addopts = "--quiet --cov=src/pytest_analyzer --cov-report=term-missing"
+markers = [
+    "e2e: mark test as an end-to-end test",
+]
+
+[tool.mypy]
+mypy_path = ["src"]
+namespace_packages = true
+explicit_package_bases = true
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.pypi-dependencies]
+pytest-analyzer = { path = ".", editable = true }
+
+[tool.pixi.environments]
+default = { solve-group = "default" }
+dev = { features = ["dev"], solve-group = "default" }
+test = { features = ["test"], solve-group = "default" }
+
+[tool.pixi.tasks]
+dev = "pip install -e ."
+install-editable = "pip install -e ."
+lint = "ruff check src tests"
+lint-fix = "ruff check --fix src tests"
+format = "ruff format src tests"
+typecheck = "mypy src tests"
+test = "pytest tests"
+test-cov = { cmd = "pytest --cov=src/pytest_analyzer --cov-report=term-missing --cov-report=xml tests", depends-on = ["install-editable"] }
+build = { cmd = "hatch build", depends-on = ["install-editable"] }
+clean = "rm -rf dist build .ruff_cache .mypy_cache .pytest_cache *.egg-info src/pytest_analyzer.egg-info"
+check-all = { depends-on = ["lint", "typecheck", "test"] }
