@@ -31,18 +31,6 @@ jobs:
       - name: Run pre-commit
         run: pixi run -e dev pre-commit run --all-files
 
-      - name: Check formatting with Black
-        run: pixi run -e dev black --check .
-
-      - name: Check import sorting with isort
-        run: pixi run -e dev isort --check-only .
-
-      - name: Lint with ruff
-        run: pixi run -e dev ruff check .
-
-      - name: Type check with mypy
-        run: pixi run -e dev mypy src tests
-
   test:
     needs: lint_and_type
     runs-on: ${{ matrix.os }}
