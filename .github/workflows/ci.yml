@@ -23,7 +23,7 @@ jobs:
           manifest-path: pyproject.toml
 
       - name: Install dependencies with Pixi
-        run: pixi install -e dev
+        run: pixi install -e dev -v
 
       - name: Install pre-commit hooks
         run: pixi run setup-pre-commit
@@ -60,7 +60,7 @@ jobs:
           manifest-path: pyproject.toml
 
       - name: Install dependencies with Pixi
-        run: pixi install -e dev
+        run: pixi install -e dev -v
 
       - name: Run tests with coverage
         run: pixi run test
