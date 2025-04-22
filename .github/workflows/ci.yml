@@ -9,7 +9,7 @@ on:
 jobs:
   lint_and_type:
     runs-on: ubuntu-latest
-    name: lint_and_type-${{ github.event_name }}
+    name: lint_and_type (${{ github.event_name }})
 
     steps:
       - uses: actions/checkout@v3
@@ -37,9 +37,9 @@ jobs:
           fi
 
   test:
-    needs: lint_and_type-${{ github.event_name }}
+    needs: lint_and_type
     runs-on: ${{ matrix.os }}
-    name: test-${{ matrix.python-version }}-${{ github.event_name }}
+    name: test-${{ matrix.python-version }} (${{ github.event_name }})
     strategy:
       matrix:
         os: [ubuntu-latest]
