@@ -1,12 +1,12 @@
 import logging
 from pathlib import Path
-from typing import Optional, Union, List, Dict # Added List and Dict
-from dataclasses import field # No longer need dataclass here
+from typing import Optional, Union  # Added List and Dict
 
-# Import the manager and error classes from the configuration module
-from .configuration import ConfigurationManager, ConfigurationError
 # Import the Settings dataclass definition from the types module
 from .config_types import Settings
+
+# Import the manager and error classes from the configuration module
+from .configuration import ConfigurationError, ConfigurationManager
 
 # No longer need TYPE_CHECKING block for Settings
 
@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 # Keep a single instance to manage configuration loading efficiently.
 _config_manager_instance: Optional[ConfigurationManager] = None
 
+
 def get_config_manager(
-    config_file: Optional[Union[str, Path]] = None,
-    force_reload: bool = False
+    config_file: Optional[Union[str, Path]] = None, force_reload: bool = False
 ) -> ConfigurationManager:
     """
     Get the global ConfigurationManager instance, initializing if needed.
@@ -45,19 +45,21 @@ def get_config_manager(
     global _config_manager_instance
 
     # Determine if a reload is needed or if the specified config file differs
-    needs_init_or_reload = (_config_manager_instance is None or force_reload)
+    needs_init_or_reload = _config_manager_instance is None or force_reload
     config_file_specified_without_reload = (
-        config_file is not None and
-        _config_manager_instance is not None and
-        not force_reload
+        config_file is not None
+        and _config_manager_instance is not None
+        and not force_reload
     )
 
     if needs_init_or_reload:
-        logger.debug(f"Initializing or reloading ConfigurationManager (force_reload={force_reload}).")
+        logger.debug(
+            f"Initializing or reloading ConfigurationManager (force_reload={force_reload})."
+        )
         # Pass the specific config file path during initialization
         _config_manager_instance = ConfigurationManager(
-            settings_cls=Settings, # Settings is now imported from .config_types
-            config_file_path=config_file
+            settings_cls=Settings,  # Settings is now imported from .config_types
+            config_file_path=config_file,
             # env_prefix can be customized here if needed
         )
         try:
@@ -70,19 +72,24 @@ def get_config_manager(
             # Do not re-raise here; let get_settings handle fallback if possible.
 
     elif config_file_specified_without_reload:
-         # Warn if called with a specific file but not reloading the existing instance
-         current_config_path = getattr(_config_manager_instance, '_config_file_path', 'N/A')
-         logger.warning(
-             f"get_config_manager called with config_file='{config_file}' but "
-             f"force_reload=False. Returning existing manager instance which might be "
-             f"using config file '{current_config_path}' or defaults."
-         )
+        # Warn if called with a specific file but not reloading the existing instance
+        current_config_path = getattr(
+            _config_manager_instance, "_config_file_path", "N/A"
+        )
+        logger.warning(
+            f"get_config_manager called with config_file='{config_file}' but "
+            f"force_reload=False. Returning existing manager instance which might be "
+            f"using config file '{current_config_path}' or defaults."
+        )
 
     # Always return the current instance
+    assert _config_manager_instance is not None
     return _config_manager_instance
 
 
-def load_settings(config_file: Optional[Union[str, Path]] = None, force_reload: bool = False) -> Settings:
+def load_settings(
+    config_file: Optional[Union[str, Path]] = None, force_reload: bool = False
+) -> Settings:
     """
     Load settings using the ConfigurationManager.
 
