@@ -30,15 +30,12 @@ jobs:
 
       - name: Run pre-commit
         run: |
-          pixi run -e dev pre-commit run ruff-format isort end-of-file-fixer trailing-whitespace clang-format --all-files
+          pixi run -e dev pre-commit run --all-files
           if [ -n "$(git status --porcelain)" ]; then
             echo "::error::Code is not properly formatted. Please run formatters locally before pushing."
             git diff
             exit 1
           fi
-
-      - name: Run linting and type checking
-        run: pixi run -e dev pre-commit run --hook-stage push --all-files
 
   test:
     needs: lint_and_type
