@@ -2,20 +2,19 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
-      - development
+    branches: [main, development]
   pull_request:
-    branches:
-      - main
-      - development
+    branches: [main, development]
 
 jobs:
   lint_and_type:
     runs-on: ubuntu-latest
+    name: lint_and_type-${{ github.event_name }}
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - uses: prefix-dev/setup-pixi@v0.8.3
         with:
@@ -38,12 +37,13 @@ jobs:
           fi
 
   test:
-    needs: lint_and_type
+    needs: lint_and_type-${{ github.event_name }}
     runs-on: ${{ matrix.os }}
+    name: test-${{ matrix.python-version }}-${{ github.event_name }}
     strategy:
       matrix:
         os: [ubuntu-latest]
-        python-version: [3.8, 3.9, 3.10, 3.11, 3.12]
+        python-version: [3.9, 3.10, 3.11, 3.12]
 
     steps:
       - uses: actions/checkout@v3
