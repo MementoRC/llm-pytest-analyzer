@@ -18,7 +18,7 @@ pip install -e .[dev]
 
 ## Documentation Structure
 
-- **README**: Core usage, CLI flags, and API examples ([README.md](../README.md)).
+- **README**: Core usage, CLI flags, and API examples ([README.md]).
 - **Configuration**: See the `mkdocs.yml` and docs/ for this site’s configuration.
 - **Source Code**: Explore modules under `src/pytest_analyzer/` for internals.
 
