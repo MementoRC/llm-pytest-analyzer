@@ -315,8 +315,17 @@ class ResponseParser:
 
         # Look for code changes
         code_changes = {}
+        # Look for code blocks in both the suggestion_text and full_text
+        # This ensures we find code blocks that may appear in the full response but not in the extracted suggestion
         code_pattern = r"```(?:python)?\s*(.+?)\s*```"
-        code_matches = re.findall(code_pattern, suggestion_text, re.DOTALL)
+        code_matches_suggestion = re.findall(code_pattern, suggestion_text, re.DOTALL)
+        code_matches_full = re.findall(code_pattern, full_text, re.DOTALL)
+
+        # Use the suggestion text code matches if available, otherwise use full text
+        code_matches = (
+            code_matches_suggestion if code_matches_suggestion else code_matches_full
+        )
+
         if code_matches:
             for j, code in enumerate(code_matches):
                 code_changes[f"code_snippet_{j + 1}"] = code.strip()
@@ -325,21 +334,25 @@ class ResponseParser:
             file_pattern = (
                 r"(?:in|for|to|update|modify)\s+['\"]?([\/\w\.-]+\.\w+)['\"]?:\s*```"
             )
-            file_matches = re.findall(file_pattern, suggestion_text, re.IGNORECASE)
+            file_matches = re.findall(file_pattern, full_text, re.IGNORECASE)
             for j, file_path in enumerate(file_matches):
                 if j < len(code_matches):
                     code_changes[f"file_{j + 1}"] = file_path
                     code_changes[f"code_{j + 1}"] = code_matches[j].strip()
 
+        # Add debug logging
+        logger.debug(f"Extracted code_changes: {code_changes}")
+
         # Generate a fingerprint for source tracking
         fingerprint = f"suggestion_{index}"
 
+        # Make sure code_changes is initialized as a dict
+        if not isinstance(code_changes, dict):
+            code_changes = {}
+
         # Add metadata to code changes
-        if isinstance(code_changes, dict):
-            code_changes["source"] = "llm"
-            code_changes["fingerprint"] = fingerprint
-        else:
-            code_changes = {"source": "llm", "fingerprint": fingerprint}
+        code_changes["source"] = "llm"
+        code_changes["fingerprint"] = fingerprint
 
         # Create the suggestion
         return FixSuggestion(
