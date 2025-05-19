@@ -41,7 +41,7 @@ def mock_failure():
     """Create a mock test failure."""
     return PytestFailure(
         test_name="test_example",
-        state="failed",
+        status="failed",
         message="Test failure",
         traceback="Traceback info",
         test_file="test_file.py",
@@ -226,10 +226,11 @@ class TestAnalyzerServiceStateMachine:
 
     def test_no_failures(self, service):
         """Test handling no failures."""
-        # Setup to extracting state
-        service.state_machine.add_state(
-            service.state_machine.states[AnalyzerState.EXTRACTING], is_initial=True
-        )
+        # Directly set the current state to EXTRACTING
+        service.state_machine._current_state = service.state_machine._states[
+            AnalyzerState.EXTRACTING
+        ]
+        service.state_machine._history = [AnalyzerState.EXTRACTING]
 
         # Set no failures
         service.context.failures = []
@@ -243,10 +244,11 @@ class TestAnalyzerServiceStateMachine:
 
     def test_empty_suggestions(self, service, mock_failure):
         """Test handling no suggestions."""
-        # Setup to suggesting state
-        service.state_machine.add_state(
-            service.state_machine.states[AnalyzerState.SUGGESTING], is_initial=True
-        )
+        # Directly set the current state to SUGGESTING
+        service.state_machine._current_state = service.state_machine._states[
+            AnalyzerState.SUGGESTING
+        ]
+        service.state_machine._history = [AnalyzerState.SUGGESTING]
 
         # Set failures but no suggestions
         service.context.failures = [mock_failure]
