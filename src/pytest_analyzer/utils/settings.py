@@ -33,6 +33,10 @@ class Settings:
     llm_model: str = "auto"  # Model to use (auto selects available models)
     llm_provider: Optional[str] = None  # Provider to use (e.g. anthropic, openai)
 
+    # Prompt settings
+    max_prompt_size: int = 4000  # Maximum size of prompt in characters
+    templates_dir: Optional[Path] = None  # Directory containing prompt templates
+
     # Debug settings
     debug: bool = False  # Enable debug mode
 

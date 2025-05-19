@@ -5,6 +5,7 @@ from typing import Dict, Optional, Type, Union
 from ...utils.path_resolver import PathResolver
 from ...utils.settings import Settings
 from .json_extractor import JsonResultExtractor
+from .pytest_output_extractor import PytestOutputExtractor
 from .xml_extractor import XmlResultExtractor
 
 logger = logging.getLogger(__name__)
@@ -19,7 +20,9 @@ class BaseExtractor:
 
 
 # Type alias for extractor classes
-ExtractorClass = Type[Union[JsonResultExtractor, XmlResultExtractor]]
+ExtractorClass = Type[
+    Union[JsonResultExtractor, XmlResultExtractor, PytestOutputExtractor]
+]
 
 
 class ExtractorFactory:
@@ -44,11 +47,13 @@ class ExtractorFactory:
         self.extractor_map: Dict[str, ExtractorClass] = {
             ".json": JsonResultExtractor,
             ".xml": XmlResultExtractor,
+            ".txt": PytestOutputExtractor,
+            ".log": PytestOutputExtractor,
         }
 
     def get_extractor(
         self, input_path: Path
-    ) -> Union[JsonResultExtractor, XmlResultExtractor]:
+    ) -> Union[JsonResultExtractor, XmlResultExtractor, PytestOutputExtractor]:
         """
         Get the appropriate extractor for the input path.
 
@@ -85,6 +90,13 @@ class ExtractorFactory:
         if self._is_xml_file(input_path):
             logger.debug(f"Detected XML content in {input_path}")
             return XmlResultExtractor(
+                path_resolver=self.path_resolver, timeout=self.settings.parser_timeout
+            )
+
+        # Try to see if it's a pytest output file by checking for common patterns
+        if self._is_pytest_output_file(input_path):
+            logger.debug(f"Detected pytest output content in {input_path}")
+            return PytestOutputExtractor(
                 path_resolver=self.path_resolver, timeout=self.settings.parser_timeout
             )
 
@@ -134,12 +146,39 @@ class ExtractorFactory:
         except Exception:
             return False
 
+    def _is_pytest_output_file(self, file_path: Path) -> bool:
+        """
+        Check if a file contains pytest output.
+
+        Args:
+            file_path: Path to the file
+
+        Returns:
+            True if the file contains pytest output, False otherwise
+        """
+        try:
+            with file_path.open("r") as f:
+                # Read the first 1000 characters to check for pytest patterns
+                content = f.read(1000)
+                # Look for common pytest output patterns
+                return (
+                    "=== test session starts ===" in content
+                    or "collected " in content
+                    and "item" in content
+                    or "PASSED" in content
+                    or "FAILED" in content
+                    or "ERROR" in content
+                    and "=== FAILURES ===" in content
+                )
+        except Exception:
+            return False
+
 
 def get_extractor(
     input_path: Path,
     settings: Optional[Settings] = None,
     path_resolver: Optional[PathResolver] = None,
-) -> Union[JsonResultExtractor, XmlResultExtractor]:
+) -> Union[JsonResultExtractor, XmlResultExtractor, PytestOutputExtractor]:
     """
     Convenience function to get an extractor for the input path.
 

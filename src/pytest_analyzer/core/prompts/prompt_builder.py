@@ -104,10 +104,23 @@ class PromptBuilder:
         self.suggestion_template = (
             suggestion_template or self._DEFAULT_SUGGESTION_TEMPLATE
         )
-        self.templates_dir = Path(templates_dir) if templates_dir else None
+        # Handle templates_dir carefully to avoid file not found errors
+        if templates_dir:
+            try:
+                self.templates_dir = Path(templates_dir)
+                # Only store if it exists
+                if not self.templates_dir.exists():
+                    logger.warning(f"Templates directory not found: {templates_dir}")
+                    self.templates_dir = None
+            except Exception as e:
+                logger.warning(f"Error processing templates directory: {e}")
+                self.templates_dir = None
+        else:
+            self.templates_dir = None
+
         self.max_prompt_size = max_prompt_size
 
-        # Load templates from files if provided
+        # Load templates from files if provided and directory exists
         if self.templates_dir and self.templates_dir.exists():
             self._load_templates_from_dir()
 

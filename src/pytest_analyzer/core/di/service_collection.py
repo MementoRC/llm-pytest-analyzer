@@ -207,26 +207,25 @@ def _create_llm_service(container: Container = None) -> Optional[LLMServiceProto
         # Fall back to default settings
         settings = Settings()
 
-    # Always check use_llm - make sure we don't create a service unless it's enabled
-    if not settings.use_llm:
-        return None
+    # Note: In the DI context, we always create the service when requested, and leave it to the
+    # DIPytestAnalyzerService factory to decide whether to include it based on settings.use_llm
+    # This ensures the LLMServiceProtocol is always resolvable when tests explicitly enable use_llm=True
 
     # Import needed dependencies (import here to avoid circular imports)
-    from ..parsers.response_parser import ResponseParser
-    from ..prompts.prompt_builder import PromptBuilder
 
-    # Create prompt builder and response parser
-    prompt_builder = PromptBuilder(
-        max_prompt_size=settings.max_prompt_size, templates_dir=settings.templates_dir
-    )
-    response_parser = ResponseParser()
-
-    # Create LLM service if we reach here (meaning use_llm is True)
-    return LLMService(
-        prompt_builder=prompt_builder,
-        response_parser=response_parser,
-        timeout_seconds=settings.llm_timeout,
-    )
+    # Create LLM service using backward compatible interface
+    try:
+        # Use the backward-compatible constructor
+        return LLMService(
+            llm_client=None,
+            timeout_seconds=settings.llm_timeout,
+        )
+    except Exception as e:
+        logger.warning(
+            f"Error creating LLM service: {e}. Creating with default values."
+        )
+        # Fallback to creating with bare minimum default values
+        return LLMService()
 
 
 def _create_llm_suggester(container: Container = None) -> Optional[LLMSuggester]:
