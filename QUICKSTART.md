@@ -94,7 +94,7 @@ for suggestion in suggestions:
     print(f"Error: {suggestion.failure.error_type}: {suggestion.failure.error_message}")
     print(f"Suggestion: {suggestion.suggestion}")
     print(f"Confidence: {suggestion.confidence}")
-    
+
     # Access more detailed information
     failure = suggestion.failure
     print(f"File: {failure.test_file}")

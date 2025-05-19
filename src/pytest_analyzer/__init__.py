@@ -8,17 +8,17 @@ fix suggestions based on error patterns.
 
 from .__version__ import __version__
 from .core.analyzer_service import PytestAnalyzerService
-from .core.models.pytest_failure import PytestFailure, FixSuggestion
-from .utils.settings import Settings, load_settings
+from .core.models.pytest_failure import FixSuggestion, PytestFailure
 from .utils.path_resolver import PathResolver
+from .utils.settings import Settings, load_settings
 
 # Define the public API
 __all__ = [
-    'PytestAnalyzerService',  # Main service
-    'PytestFailure',          # Data models
-    'FixSuggestion',
-    'Settings',               # Configuration
-    'load_settings',
-    'PathResolver',           # Utilities
-    '__version__'
+    "PytestAnalyzerService",  # Main service
+    "PytestFailure",  # Data models
+    "FixSuggestion",
+    "Settings",  # Configuration
+    "load_settings",
+    "PathResolver",  # Utilities
+    "__version__",
 ]

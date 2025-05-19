@@ -1,42 +1,45 @@
-import signal
-import resource
-import time
 import logging
+import resource
+import signal
+import time
 from contextlib import contextmanager
 from functools import wraps
-from typing import Optional, Callable, TypeVar, Any
+from typing import Callable, Optional, TypeVar
 
-T = TypeVar('T')
+T = TypeVar("T")
 logger = logging.getLogger(__name__)
 
 
 class TimeoutError(Exception):
     """Raised when execution time exceeds the limit"""
+
     pass
 
 
 class MemoryLimitError(Exception):
     """Raised when memory usage exceeds the limit"""
+
     pass
 
 
 @contextmanager
 def timeout_context(seconds: float):
     """Context manager for timing out operations"""
+
     def handler(signum, frame):
         raise TimeoutError(f"Operation exceeded time limit of {seconds} seconds")
-    
+
     # Check for negative timeout
     if seconds < 0:
         raise ValueError("Timeout seconds must be non-negative")
-    
+
     # Store original handler
     original_handler = signal.getsignal(signal.SIGALRM)
-    
+
     # Set new handler and timer
     signal.signal(signal.SIGALRM, handler)
     signal.setitimer(signal.ITIMER_REAL, seconds)  # Use setitimer for float support
-    
+
     try:
         yield
     finally:
@@ -47,12 +50,15 @@ def timeout_context(seconds: float):
 
 def with_timeout(seconds: float) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """Decorator for adding timeout to functions"""
+
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
         def wrapper(*args, **kwargs) -> T:
             with timeout_context(seconds):
                 return func(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
@@ -71,36 +77,45 @@ def limit_memory(max_mb: Optional[int] = None) -> None:
 
 class ResourceMonitor:
     """Monitors resource usage during operations"""
-    
-    def __init__(self, 
-                 max_memory_mb: Optional[int] = None,
-                 max_time_seconds: Optional[int] = None):
+
+    def __init__(
+        self,
+        max_memory_mb: Optional[int] = None,
+        max_time_seconds: Optional[int] = None,
+    ):
         self.max_memory_bytes = max_memory_mb * 1024 * 1024 if max_memory_mb else None
         self.max_time_seconds = max_time_seconds
         self.start_time = None
         self.peak_memory = 0
-        
+
     def __enter__(self):
         self.start_time = time.time()
         return self
-        
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type is not None:
             logger.error(f"Operation failed with {exc_type.__name__}: {exc_val}")
-        
+
         elapsed = time.time() - self.start_time
         logger.debug(f"Operation completed in {elapsed:.2f} seconds")
-        logger.debug(f"Peak memory usage: {self.peak_memory / (1024*1024):.2f} MB")
-        
+        logger.debug(f"Peak memory usage: {self.peak_memory / (1024 * 1024):.2f} MB")
+
     def check(self):
         """Check if resource limits have been exceeded"""
         # Check time limit
-        if self.max_time_seconds and time.time() - self.start_time > self.max_time_seconds:
-            raise TimeoutError(f"Operation exceeded time limit of {self.max_time_seconds} seconds")
-            
+        if (
+            self.max_time_seconds
+            and time.time() - self.start_time > self.max_time_seconds
+        ):
+            raise TimeoutError(
+                f"Operation exceeded time limit of {self.max_time_seconds} seconds"
+            )
+
         # Check memory limit
         if self.max_memory_bytes:
             usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
             self.peak_memory = max(self.peak_memory, usage)
             if usage > self.max_memory_bytes:
-                raise MemoryLimitError(f"Operation exceeded memory limit of {self.max_memory_bytes / (1024*1024):.2f} MB")
+                raise MemoryLimitError(
+                    f"Operation exceeded memory limit of {self.max_memory_bytes / (1024 * 1024):.2f} MB"
+                )

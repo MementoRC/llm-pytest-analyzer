@@ -7,10 +7,10 @@ name = "pytest-analyzer"
 dynamic = ["version"]
 description = "Analyzes pytest test results to identify patterns and suggest fixes."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [
-    { name = "Your Name", email = "your.email@example.com" },
+    { name = "Memento", email = "claude.rc@gmail.com" },
 ]
 keywords = ["pytest", "testing", "analysis", "reporting", "debugging"]
 classifiers = [
@@ -20,7 +20,6 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -31,21 +30,33 @@ classifiers = [
 ]
 
 dependencies = [
-    "pytest>=7.0.0",
-    "pytest-cov>=6.0.0",
-    "pytest-json-report>=1.5.0",
+    "anthropic",
+    "openai",
+    "pyyaml",
     "rich>=12.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest-cov",
-    "ruff",
+    "clang-format",
+    "isort",
+    "mkdocs",
     "mypy",
+    "pre-commit",
+    "pre-commit-hooks",
+    "pytest>=7.0.0",
+    "pytest-asyncio",
+    "pytest-cov",
+    "pytest-json-report>=1.5.0",
+    "ruff",
+    "types-pyyaml",
 ]
 
 test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio",
     "pytest-cov",
+    "pytest-json-report>=1.5.0",
 ]
 
 [project.scripts]
@@ -59,16 +70,58 @@ Issues = "https://github.com/yourusername/pytest_analyzer/issues"
 [tool.hatch.version]
 path = "src/pytest_analyzer/__version__.py"
 
-[tool.pixi]
-package-dir = {"" = "src"}
-
-[tool.pixi.build]
-packages = ["src/pytest_analyzer"]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_default_fixture_loop_scope = "function"
-log_cli = false
-log_level = "WARNING"
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+pythonpath = ["src"]
+log_cli = true
+log_cli_level = "INFO"
 filterwarnings = ["ignore::DeprecationWarning", "ignore::pytest.PytestDeprecationWarning"]
-addopts = "--quiet"
+addopts = "--quiet --cov=src/pytest_analyzer --cov-report=term-missing"
+markers = [
+    "e2e: mark test as an end-to-end test",
+]
+
+[tool.mypy]
+mypy_path = ["src"]
+namespace_packages = true
+explicit_package_bases = true
+exclude = ["examples/*", "demo_script.py"]
+python_version = "3.9"
+
+[[tool.mypy.overrides]]
+module = ["anthropic.*", "openai.*"]
+ignore_missing_imports = true
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.dependencies]
+"pyyaml" = "*"
+"rich" = ">=12.0.0"
+
+[tool.pixi.pypi-dependencies]
+# pytest-analyzer = { path = ".", editable = true }
+
+[tool.pixi.environments]
+default = { solve-group = "default" }
+dev = { features = ["dev"], solve-group = "default" }
+test = { features = ["test"], solve-group = "default" }
+
+[tool.pixi.tasks]
+dev = "pip install -e ."
+install-editable = "pip install -e ."
+lint = "ruff check src tests"
+lint-fix = "ruff check --fix src tests"
+format = "ruff format src tests"
+typecheck = "mypy src tests"
+test = "pytest tests"
+test-cov = { cmd = "pytest --cov=src/pytest_analyzer --cov-report=term-missing --cov-report=xml tests", depends-on = ["install-editable"] }
+build = { cmd = "hatch build", depends-on = ["install-editable"] }
+clean = "rm -rf dist build .ruff_cache .mypy_cache .pytest_cache *.egg-info src/pytest_analyzer.egg-info"
+check-all = { depends-on = ["lint", "typecheck", "test"] }
+setup-pre-commit = "pre-commit install --install-hooks"

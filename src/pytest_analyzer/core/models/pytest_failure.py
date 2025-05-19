@@ -1,11 +1,12 @@
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
 class PytestFailure:
     """Represents a single test failure from pytest output."""
-    test_name: str 
+
+    test_name: str
     test_file: str
     error_type: str
     error_message: str
@@ -26,6 +27,7 @@ class PytestFailure:
 @dataclass
 class FixSuggestion:
     """Represents a suggested fix for a test failure."""
+
     failure: PytestFailure
     suggestion: str
     confidence: float

@@ -1,17 +1,17 @@
 """Pytest configuration for end-to-end tests."""
-import pytest
-import os
-import sys
+
 import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock
+
+import pytest
 
 # Add the src directory to the Python path for imports
 sys.path.insert(0, str(Path(__file__).parents[2] / "src"))
 
+
 # Import from the package
-from pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
-from pytest_analyzer.core.analysis.llm_suggester import LLMSuggester
 
 
 @pytest.fixture
@@ -125,6 +125,7 @@ def sample_json_report(tmp_path):
 
 class MockProcess:
     """Mock subprocess result."""
+
     def __init__(self, returncode=0, stdout="", stderr=""):
         self.returncode = returncode
         self.stdout = stdout
@@ -134,17 +135,18 @@ class MockProcess:
 @pytest.fixture
 def patch_subprocess(monkeypatch):
     """Patch subprocess.run for testing."""
+
     def mock_run(cmd, *args, **kwargs):
         # Record the command that was executed
         mock_run.last_command = cmd
-        
+
         # Return a success result by default
         return MockProcess(returncode=0, stdout="Test output", stderr="")
-    
+
     # Initialize the last_command attribute
     mock_run.last_command = None
-    
+
     # Apply the monkeypatch
     monkeypatch.setattr(subprocess, "run", mock_run)
-    
+
     return mock_run
