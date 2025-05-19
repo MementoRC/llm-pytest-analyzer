@@ -211,8 +211,22 @@ def _create_llm_service(container: Container = None) -> Optional[LLMServiceProto
     if not settings.use_llm:
         return None
 
+    # Import needed dependencies (import here to avoid circular imports)
+    from ..parsers.response_parser import ResponseParser
+    from ..prompts.prompt_builder import PromptBuilder
+
+    # Create prompt builder and response parser
+    prompt_builder = PromptBuilder(
+        max_prompt_size=settings.max_prompt_size, templates_dir=settings.templates_dir
+    )
+    response_parser = ResponseParser()
+
     # Create LLM service if we reach here (meaning use_llm is True)
-    return LLMService(timeout_seconds=settings.llm_timeout)
+    return LLMService(
+        prompt_builder=prompt_builder,
+        response_parser=response_parser,
+        timeout_seconds=settings.llm_timeout,
+    )
 
 
 def _create_llm_suggester(container: Container = None) -> Optional[LLMSuggester]:
