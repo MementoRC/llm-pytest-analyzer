@@ -65,14 +65,14 @@ def state_machine(context):
     return AnalyzerStateMachine(context)
 
 
-def create_test_failure(test_name="test_example", status="failed"):
+def create_test_failure(test_name="test_example"):
     """Create a test failure for testing."""
     return PytestFailure(
         test_name=test_name,
-        status=status,
-        message="Test failure",
-        traceback="Traceback info",
         test_file="/path/to/test_file.py",
+        error_type="AssertionError",
+        error_message="Test failure",
+        traceback="Traceback info",
         line_number=10,
     )
 

@@ -41,10 +41,10 @@ def mock_failure():
     """Create a mock test failure."""
     return PytestFailure(
         test_name="test_example",
-        status="failed",
-        message="Test failure",
-        traceback="Traceback info",
         test_file="test_file.py",
+        error_type="AssertionError",
+        error_message="Test failure",
+        traceback="Traceback info",
         line_number=10,
     )
 
