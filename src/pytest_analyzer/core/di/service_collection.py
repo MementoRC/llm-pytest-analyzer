@@ -2,7 +2,28 @@
 Service collection for dependency registration.
 
 This module provides functionality to register all services and dependencies
-for the pytest analyzer with the DI container.
+for the pytest analyzer with the DI container. It implements a fluent builder pattern
+for configuring services and handles automatic detection and initialization of
+external dependencies like LLM clients.
+
+The ServiceCollection class offers methods to:
+- Register singleton, transient, and factory services
+- Configure core services needed by the analyzer
+- Automatically detect and configure LLM providers based on settings
+- Build and finalize the dependency injection container
+
+Example usage:
+    # Create a new service collection
+    services = ServiceCollection()
+
+    # Configure core services with automatic LLM detection
+    services.configure_core_services().configure_llm_services()
+
+    # Get the configured container
+    container = services.build_container()
+
+    # Resolve a service
+    analyzer = container.resolve(DIPytestAnalyzerService)
 """
 
 # ServiceCollection class for fluent registration interface
@@ -35,7 +56,24 @@ class ServiceCollection:
     Fluent API for registering services with the DI container.
 
     This class provides a builder-style interface for registering services
-    and configuring the DI container.
+    and configuring the DI container. It supports method chaining for a
+    cleaner configuration experience and handles the detection and initialization
+    of external dependencies like LLM clients.
+
+    Key features:
+    - Fluent builder pattern with method chaining
+    - Service registration with different lifetimes (singleton, transient)
+    - Factory method registration for complex service initialization
+    - Automatic LLM client detection based on settings or environment variables
+    - Provider preference and fallback handling for LLM services
+    - Structured composition of the dependency tree
+
+    Usage pattern:
+    1. Create ServiceCollection instance
+    2. Register services with add_* methods
+    3. Configure system components with configure_* methods
+    4. Build and get the container
+    5. Resolve services from the container
     """
 
     def __init__(self):
@@ -129,9 +167,29 @@ class ServiceCollection:
         """
         Configure LLM services with an optional specific client or provider override.
 
+        This method handles the registration of LLM services with the container. It supports
+        three operational modes:
+
+        1. Using a provided client directly (bypassing auto-detection)
+        2. Using a specific provider with override_provider (e.g., "anthropic", "openai")
+        3. Using automatic detection based on settings.llm_provider with fallback capability
+
+        The method will:
+        - Attempt to detect available LLM clients if none provided directly
+        - Respect provider preferences from settings.llm_provider or override_provider
+        - Honor fallback settings (settings.use_fallback) when appropriate
+        - Register the resulting LLM service with the container
+
+        Supported providers:
+        - anthropic: Anthropic Claude models
+        - openai: OpenAI GPT models
+        - azure: Azure OpenAI service
+        - together: Together.ai models
+        - ollama: Local Ollama deployments
+
         Args:
-            llm_client: Optional specific LLM client to use
-            override_provider: Optional provider to use, overriding settings.llm_provider
+            llm_client: Optional specific LLM client to use directly (bypasses detection)
+            override_provider: Optional provider name to use, overriding settings.llm_provider
 
         Returns:
             Self for method chaining
@@ -367,13 +425,27 @@ def _create_analyzer_context(container: Container = None) -> AnalyzerContext:
 
 def _create_llm_service(container: Container = None) -> Optional[LLMServiceProtocol]:
     """
-    Factory function to create an LLM service if enabled in settings.
+    Factory function to create an LLM service with automatic client detection.
+
+    This function is designed to be used as a factory for the DI container to
+    create and configure LLM services. It:
+
+    1. Resolves settings from the container
+    2. Uses the llm_service_factory module to auto-detect available LLM clients
+    3. Respects provider preferences specified in settings.llm_provider
+    4. Handles fallback behavior based on settings.use_fallback
+    5. Creates an appropriate LLM service with the detected client
+    6. Properly handles import errors and other exceptions with sensible defaults
+
+    The function is used internally by the DI system when an LLMServiceProtocol
+    is resolved from the container. The auto-detection uses both settings and
+    environment variables to find API keys for different providers.
 
     Args:
         container: Optional container, if not provided the global container will be used
 
     Returns:
-        An LLM service instance if use_llm is True, None otherwise
+        A properly configured LLM service instance with detected client
     """
     # If no container provided, get the global container
     if container is None:
