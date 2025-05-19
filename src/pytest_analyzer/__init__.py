@@ -7,14 +7,17 @@ fix suggestions based on error patterns.
 """
 
 from .__version__ import __version__
-from .core.analyzer_service import PytestAnalyzerService
+
+# Import from the facade and backward compatibility module
+from .core import PytestAnalyzerFacade, PytestAnalyzerService
 from .core.models.pytest_failure import FixSuggestion, PytestFailure
 from .utils.path_resolver import PathResolver
 from .utils.settings import Settings, load_settings
 
 # Define the public API
 __all__ = [
-    "PytestAnalyzerService",  # Main service
+    "PytestAnalyzerService",  # Backward compatibility
+    "PytestAnalyzerFacade",  # New facade
     "PytestFailure",  # Data models
     "FixSuggestion",
     "Settings",  # Configuration

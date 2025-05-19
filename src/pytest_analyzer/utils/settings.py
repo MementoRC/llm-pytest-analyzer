@@ -29,7 +29,9 @@ class Settings:
     # LLM settings
     use_llm: bool = True  # Whether to use LLM-based suggestions
     llm_timeout: int = 60  # Timeout for LLM requests in seconds
-    llm_api_key: Optional[str] = None  # API key for LLM service
+    llm_api_key: Optional[str] = None  # Generic API key for LLM service (deprecated)
+    openai_api_key: Optional[str] = None  # API key for OpenAI
+    anthropic_api_key: Optional[str] = None  # API key for Anthropic
     llm_model: str = "auto"  # Model to use (auto selects available models)
     llm_provider: Optional[str] = None  # Provider to use (e.g. anthropic, openai)
 

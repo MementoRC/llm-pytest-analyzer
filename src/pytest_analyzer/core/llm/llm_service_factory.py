@@ -6,9 +6,22 @@ with appropriate dependencies injected.
 """
 
 import logging
+import os
 from typing import Any, Dict, Optional, Union
 
+# Attempt to import supported LLM clients
+try:
+    from anthropic import Anthropic
+except ImportError:
+    Anthropic = None  # type: ignore
+
+try:
+    import openai
+except ImportError:
+    openai = None  # type: ignore
+
 from ...utils.resource_manager import ResourceMonitor
+from ...utils.settings import Settings
 from ..parsers.response_parser import ResponseParser
 from ..prompts.prompt_builder import PromptBuilder
 from .async_llm_service import AsyncLLMService
@@ -96,3 +109,46 @@ class LLMServiceFactory:
                 max_tokens=max_tokens,
                 model_name=model_name,
             )
+
+
+def detect_llm_client(settings: Optional[Settings] = None) -> Optional[Any]:
+    """
+    Detect and initialize an LLM client based on available libraries and credentials.
+
+    This function attempts to create a client for one of the supported LLM providers
+    based on available libraries and API keys. It tries to detect credentials from
+    environment variables or from the provided settings.
+
+    Args:
+        settings: Optional settings containing API keys and configuration
+
+    Returns:
+        Initialized LLM client or None if no suitable client could be created
+    """
+    if settings is None:
+        settings = Settings()
+
+    # Check for Anthropic client first
+    if Anthropic is not None:
+        # Get API key from settings or environment
+        api_key = settings.anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY")
+        if api_key:
+            try:
+                logger.info("Creating Anthropic client for LLM requests")
+                return Anthropic(api_key=api_key)
+            except Exception as e:
+                logger.warning(f"Failed to initialize Anthropic client: {e}")
+
+    # Check for OpenAI client next
+    if openai is not None and hasattr(openai, "OpenAI"):
+        # Get API key from settings or environment
+        api_key = settings.openai_api_key or os.environ.get("OPENAI_API_KEY")
+        if api_key:
+            try:
+                logger.info("Creating OpenAI client for LLM requests")
+                return openai.OpenAI(api_key=api_key)
+            except Exception as e:
+                logger.warning(f"Failed to initialize OpenAI client: {e}")
+
+    logger.warning("No suitable LLM client could be detected or initialized")
+    return None

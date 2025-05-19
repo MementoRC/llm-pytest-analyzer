@@ -5,8 +5,10 @@ This module provides functionality to register all services and dependencies
 for the pytest analyzer with the DI container.
 """
 
+# ServiceCollection class for fluent registration interface
+
 import logging
-from typing import Optional, Type, TypeVar
+from typing import Any, Callable, Optional, Type, TypeVar, Union
 
 from ...utils.path_resolver import PathResolver
 from ...utils.settings import Settings
@@ -19,11 +21,147 @@ from ..analysis.llm_suggester import LLMSuggester
 from ..analyzer_state_machine import AnalyzerContext, AnalyzerStateMachine
 from ..llm.backward_compat import LLMService
 from ..llm.llm_service_protocol import LLMServiceProtocol
-from .container import Container
+from .container import Container, RegistrationMode
+
+# Type variable for generic type annotations
+T = TypeVar("T")
+TImpl = TypeVar("TImpl")
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
+
+class ServiceCollection:
+    """
+    Fluent API for registering services with the DI container.
+
+    This class provides a builder-style interface for registering services
+    and configuring the DI container.
+    """
+
+    def __init__(self):
+        """Initialize a new service collection."""
+        self.container = Container()
+
+    def add_singleton(
+        self, interface_type: Type[T], implementation: Union[Type[Any], Any]
+    ) -> "ServiceCollection":
+        """
+        Register a singleton service.
+
+        Args:
+            interface_type: The interface or type to register
+            implementation: The implementation type or instance
+
+        Returns:
+            Self for method chaining
+        """
+        self.container.register(
+            interface_type, implementation, RegistrationMode.SINGLETON
+        )
+        return self
+
+    def add_transient(
+        self, interface_type: Type[T], implementation: Union[Type[Any], Any]
+    ) -> "ServiceCollection":
+        """
+        Register a transient service.
+
+        Args:
+            interface_type: The interface or type to register
+            implementation: The implementation type or instance
+
+        Returns:
+            Self for method chaining
+        """
+        self.container.register(
+            interface_type, implementation, RegistrationMode.TRANSIENT
+        )
+        return self
+
+    def add_factory(
+        self, interface_type: Type[T], factory: Callable[[], T]
+    ) -> "ServiceCollection":
+        """
+        Register a factory for creating service instances.
+
+        Args:
+            interface_type: The interface or type to register
+            factory: Factory function for creating instances
+
+        Returns:
+            Self for method chaining
+        """
+        self.container.register_factory(interface_type, factory)
+        return self
+
+    def configure_core_services(self) -> "ServiceCollection":
+        """
+        Configure the core services needed by the pytest analyzer.
+
+        Returns:
+            Self for method chaining
+        """
+        # Get the settings instance
+        settings = (
+            self.container.resolve(Settings)
+            if Settings in self._get_registrations()
+            else Settings()
+        )
+
+        # Configure all services using the existing function
+        configure_services(self.container, settings)
+        return self
+
+    def configure_extractors(self) -> "ServiceCollection":
+        """
+        Configure the extraction services.
+
+        Returns:
+            Self for method chaining
+        """
+        # This method doesn't need to do anything special because
+        # extractors are already configured in configure_services
+        return self
+
+    def configure_llm_services(
+        self, llm_client: Optional[Any] = None
+    ) -> "ServiceCollection":
+        """
+        Configure LLM services with an optional specific client.
+
+        Args:
+            llm_client: Optional specific LLM client to use
+
+        Returns:
+            Self for method chaining
+        """
+        # If a specific LLM client was provided, use it to create the service
+        if llm_client is not None:
+            try:
+                # Create LLM service with the provided client
+                llm_service = LLMService(
+                    llm_client=llm_client,
+                    timeout_seconds=60,  # Default
+                )
+                # Register the service
+                self.container.register_instance(LLMServiceProtocol, llm_service)
+            except Exception as e:
+                logger.warning(f"Error creating LLM service with provided client: {e}")
+
+        return self
+
+    def build_container(self) -> Container:
+        """
+        Build and return the configured container.
+
+        Returns:
+            The configured Container instance
+        """
+        return self.container
+
+    def _get_registrations(self):
+        """Get the registrations dictionary from the container."""
+        return getattr(self.container, "_registrations", {})
 
 
 def configure_services(
@@ -211,11 +349,24 @@ def _create_llm_service(container: Container = None) -> Optional[LLMServiceProto
     # DIPytestAnalyzerService factory to decide whether to include it based on settings.use_llm
     # This ensures the LLMServiceProtocol is always resolvable when tests explicitly enable use_llm=True
 
-    # Import needed dependencies (import here to avoid circular imports)
-
-    # Create LLM service using backward compatible interface
+    # The backward-compatible interface will auto-create PromptBuilder and ResponseParser
     try:
-        # Use the backward-compatible constructor
+        # Attempt to detect LLM clients and configure them
+        from ..llm.llm_service_factory import detect_llm_client
+
+        # Try to detect an available LLM client
+        llm_client = detect_llm_client(settings=settings)
+
+        # Create service with detected client if available, otherwise None
+        return LLMService(
+            llm_client=llm_client,
+            timeout_seconds=settings.llm_timeout,
+        )
+    except ImportError:
+        # If the factory module isn't available, continue with None client
+        logger.debug(
+            "LLM service factory not available, creating service with no client"
+        )
         return LLMService(
             llm_client=None,
             timeout_seconds=settings.llm_timeout,
