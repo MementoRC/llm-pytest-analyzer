@@ -9,6 +9,8 @@ import pytest
 from pytest_analyzer.core.llm.llm_service import LLMService
 from pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
 
+# Import DI fixtures
+
 
 # Register custom markers
 def pytest_configure(config):

@@ -24,12 +24,17 @@ class Settings:
     max_suggestions: int = 3  # Maximum suggestions overall
     max_suggestions_per_failure: int = 3  # Maximum suggestions per failure
     min_confidence: float = 0.5  # Minimum confidence for suggestions
+    auto_apply: bool = False  # Whether to automatically apply fixes
 
     # LLM settings
     use_llm: bool = True  # Whether to use LLM-based suggestions
     llm_timeout: int = 60  # Timeout for LLM requests in seconds
     llm_api_key: Optional[str] = None  # API key for LLM service
     llm_model: str = "auto"  # Model to use (auto selects available models)
+    llm_provider: Optional[str] = None  # Provider to use (e.g. anthropic, openai)
+
+    # Debug settings
+    debug: bool = False  # Enable debug mode
 
     # Path settings
     project_root: Optional[Path] = None  # Root directory of the project

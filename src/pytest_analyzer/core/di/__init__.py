@@ -9,6 +9,11 @@ from typing import Optional
 
 from .container import Container, Registration, RegistrationMode
 from .decorators import factory, inject, register, singleton, transient
+from .service_collection import (
+    configure_services,
+    get_service,
+    initialize_container,
+)
 
 # Global container instance (lazy initialization)
 _global_container = None
@@ -55,4 +60,8 @@ __all__ = [
     "inject",
     "get_container",
     "set_container",
+    # Service collection
+    "configure_services",
+    "get_service",
+    "initialize_container",
 ]
