@@ -124,29 +124,78 @@ class ServiceCollection:
         return self
 
     def configure_llm_services(
-        self, llm_client: Optional[Any] = None
+        self, llm_client: Optional[Any] = None, override_provider: Optional[str] = None
     ) -> "ServiceCollection":
         """
-        Configure LLM services with an optional specific client.
+        Configure LLM services with an optional specific client or provider override.
 
         Args:
             llm_client: Optional specific LLM client to use
+            override_provider: Optional provider to use, overriding settings.llm_provider
 
         Returns:
             Self for method chaining
         """
+        # Get the settings instance if available
+        settings = (
+            self.container.resolve(Settings)
+            if Settings in self._get_registrations()
+            else Settings()
+        )
+
         # If a specific LLM client was provided, use it to create the service
         if llm_client is not None:
             try:
                 # Create LLM service with the provided client
                 llm_service = LLMService(
                     llm_client=llm_client,
-                    timeout_seconds=60,  # Default
+                    timeout_seconds=settings.llm_timeout,
                 )
                 # Register the service
                 self.container.register_instance(LLMServiceProtocol, llm_service)
+                logger.info(
+                    f"Registered LLM service with provided client of type: {type(llm_client).__name__}"
+                )
             except Exception as e:
                 logger.warning(f"Error creating LLM service with provided client: {e}")
+        # Otherwise use the factory to automatically detect and create a client
+        else:
+            try:
+                from ..llm.llm_service_factory import detect_llm_client
+
+                # Choose the provider preference, with override taking precedence
+                preferred_provider = (
+                    override_provider if override_provider else settings.llm_provider
+                )
+
+                # Try to detect an LLM client with the specified provider preference
+                llm_client, provider = detect_llm_client(
+                    settings=settings,
+                    preferred_provider=preferred_provider,
+                    fallback=settings.use_fallback
+                    and not override_provider,  # Only fall back if using settings provider
+                )
+
+                if llm_client:
+                    # Create service with detected client
+                    llm_service = LLMService(
+                        llm_client=llm_client,
+                        timeout_seconds=settings.llm_timeout,
+                    )
+                    # Register the service
+                    self.container.register_instance(LLMServiceProtocol, llm_service)
+                    provider_name = (
+                        provider.name if hasattr(provider, "name") else str(provider)
+                    )
+                    logger.info(
+                        f"Registered LLM service with auto-detected {provider_name} client"
+                    )
+                else:
+                    logger.warning(
+                        f"No LLM client could be detected for provider '{preferred_provider}'"
+                    )
+            except Exception as e:
+                logger.warning(f"Error detecting or creating LLM service: {e}")
 
         return self
 
@@ -354,8 +403,19 @@ def _create_llm_service(container: Container = None) -> Optional[LLMServiceProto
         # Attempt to detect LLM clients and configure them
         from ..llm.llm_service_factory import detect_llm_client
 
-        # Try to detect an available LLM client
-        llm_client = detect_llm_client(settings=settings)
+        # Try to detect an available LLM client with the specified provider preference
+        llm_client, provider = detect_llm_client(
+            settings=settings,
+            preferred_provider=settings.llm_provider,
+            fallback=settings.use_fallback,  # Use the fallback setting from settings
+        )
+
+        if llm_client:
+            logger.info(
+                f"Created LLM service with detected client type: {type(llm_client).__name__}"
+            )
+        else:
+            logger.warning("No LLM client detected, creating service with no client")
 
         # Create service with detected client if available, otherwise None
         return LLMService(
