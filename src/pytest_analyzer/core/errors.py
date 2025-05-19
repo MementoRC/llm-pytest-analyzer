@@ -60,3 +60,11 @@ class FixApplicationError(PytestAnalyzerError):
     def __init__(self, message: str = None, *args):
         self.message = message or "Failed to apply suggested fix"
         super().__init__(self.message, *args)
+
+
+class DependencyResolutionError(PytestAnalyzerError):
+    """Error resolving dependencies from the container."""
+
+    def __init__(self, message: str = None, *args):
+        self.message = message or "Failed to resolve dependency"
+        super().__init__(self.message, *args)
