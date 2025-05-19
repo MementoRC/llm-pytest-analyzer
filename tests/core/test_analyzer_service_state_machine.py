@@ -227,10 +227,9 @@ class TestAnalyzerServiceStateMachine:
     def test_no_failures(self, service):
         """Test handling no failures."""
         # Directly set the current state to EXTRACTING
-        service.state_machine._current_state = service.state_machine._states[
-            AnalyzerState.EXTRACTING
-        ]
-        service.state_machine._history = [AnalyzerState.EXTRACTING]
+        state_name = AnalyzerState.EXTRACTING
+        service.state_machine._current_state = service.state_machine._states[state_name]
+        service.state_machine._history = [state_name]
 
         # Set no failures
         service.context.failures = []
@@ -245,10 +244,9 @@ class TestAnalyzerServiceStateMachine:
     def test_empty_suggestions(self, service, mock_failure):
         """Test handling no suggestions."""
         # Directly set the current state to SUGGESTING
-        service.state_machine._current_state = service.state_machine._states[
-            AnalyzerState.SUGGESTING
-        ]
-        service.state_machine._history = [AnalyzerState.SUGGESTING]
+        state_name = AnalyzerState.SUGGESTING
+        service.state_machine._current_state = service.state_machine._states[state_name]
+        service.state_machine._history = [state_name]
 
         # Set failures but no suggestions
         service.context.failures = [mock_failure]

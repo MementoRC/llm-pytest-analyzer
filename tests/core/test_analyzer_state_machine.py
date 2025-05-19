@@ -141,8 +141,9 @@ class TestAnalyzerStateMachine:
     def test_transition_to_analyzing(self, state_machine):
         """Test transitioning from extracting to analyzing state."""
         # Directly set the current state to EXTRACTING
-        state_machine._current_state = state_machine._states[AnalyzerState.EXTRACTING]
-        state_machine._history = [AnalyzerState.EXTRACTING]
+        state_name = AnalyzerState.EXTRACTING
+        state_machine._current_state = state_machine._states[state_name]
+        state_machine._history = [state_name]
 
         # Add some test failures
         failure = create_test_failure()
@@ -157,8 +158,9 @@ class TestAnalyzerStateMachine:
     def test_transition_to_suggesting(self, state_machine):
         """Test transitioning from analyzing to suggesting state."""
         # Directly set the current state to ANALYZING
-        state_machine._current_state = state_machine._states[AnalyzerState.ANALYZING]
-        state_machine._history = [AnalyzerState.ANALYZING]
+        state_name = AnalyzerState.ANALYZING
+        state_machine._current_state = state_machine._states[state_name]
+        state_machine._history = [state_name]
 
         # Add some test failures
         failure = create_test_failure()
@@ -173,8 +175,9 @@ class TestAnalyzerStateMachine:
     def test_transition_to_applying(self, state_machine):
         """Test transitioning from suggesting to applying state."""
         # Directly set the current state to SUGGESTING
-        state_machine._current_state = state_machine._states[AnalyzerState.SUGGESTING]
-        state_machine._history = [AnalyzerState.SUGGESTING]
+        state_name = AnalyzerState.SUGGESTING
+        state_machine._current_state = state_machine._states[state_name]
+        state_machine._history = [state_name]
 
         # Add some test suggestions
         failure = create_test_failure()
@@ -190,8 +193,9 @@ class TestAnalyzerStateMachine:
     def test_transition_to_completed(self, state_machine):
         """Test transitioning to completed state."""
         # Directly set the current state to APPLYING
-        state_machine._current_state = state_machine._states[AnalyzerState.APPLYING]
-        state_machine._history = [AnalyzerState.APPLYING]
+        state_name = AnalyzerState.APPLYING
+        state_machine._current_state = state_machine._states[state_name]
+        state_machine._history = [state_name]
 
         # Trigger transition to completed state
         result = state_machine.trigger(AnalyzerEvent.COMPLETE)
@@ -317,8 +321,9 @@ class TestAnalyzerStateMachine:
         state_machine.context.failures = []
 
         # Directly set the current state to EXTRACTING
-        state_machine._current_state = state_machine._states[AnalyzerState.EXTRACTING]
-        state_machine._history = [AnalyzerState.EXTRACTING]
+        state_name = AnalyzerState.EXTRACTING
+        state_machine._current_state = state_machine._states[state_name]
+        state_machine._history = [state_name]
 
         # Trigger completion
         state_machine.trigger(AnalyzerEvent.COMPLETE)
@@ -332,8 +337,9 @@ class TestAnalyzerStateMachine:
         state_machine.context.suggestions = []
 
         # Directly set the current state to SUGGESTING
-        state_machine._current_state = state_machine._states[AnalyzerState.SUGGESTING]
-        state_machine._history = [AnalyzerState.SUGGESTING]
+        state_name = AnalyzerState.SUGGESTING
+        state_machine._current_state = state_machine._states[state_name]
+        state_machine._history = [state_name]
 
         # Trigger completion
         state_machine.trigger(AnalyzerEvent.COMPLETE)
@@ -348,8 +354,9 @@ class TestAnalyzerStateMachine:
         state_machine.context.suggestions = suggestions
 
         # Directly set the current state to COMPLETED
-        state_machine._current_state = state_machine._states[AnalyzerState.COMPLETED]
-        state_machine._history = [AnalyzerState.COMPLETED]
+        state_name = AnalyzerState.COMPLETED
+        state_machine._current_state = state_machine._states[state_name]
+        state_machine._history = [state_name]
 
         # Reset the state machine
         state_machine.trigger(AnalyzerEvent.RESET)
