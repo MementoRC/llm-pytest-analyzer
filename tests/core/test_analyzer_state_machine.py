@@ -292,9 +292,19 @@ class TestAnalyzerStateMachine:
 
     def test_workflow_failure_to_complete(self, state_machine):
         """Test the entire workflow from extraction to completion with failures."""
+        # First, manually set the state to EXTRACTING to start the workflow
+        state_name = AnalyzerState.EXTRACTING
+        state_machine._current_state = state_machine._states[state_name]
+        state_machine._history = [state_name]
+
         # Set up the context with failures
         failures = [create_test_failure("test_1"), create_test_failure("test_2")]
         state_machine.context.failures = failures
+
+        # Make sure analyzer and suggester are initialized
+        state_machine.context.analyzer = MagicMock()
+        state_machine.context.suggester = MagicMock()
+        state_machine.context.fix_applier = MagicMock()
 
         # Manually step through the state machine
         state_machine.trigger(AnalyzerEvent.START_ANALYSIS)
