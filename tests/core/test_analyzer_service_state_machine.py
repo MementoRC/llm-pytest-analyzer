@@ -14,8 +14,13 @@ import pytest
 from src.pytest_analyzer.core.analyzer_service_state_machine import (
     StateMachinePytestAnalyzerService,
 )
-from src.pytest_analyzer.core.analyzer_state_machine import AnalyzerEvent, AnalyzerState
+from src.pytest_analyzer.core.analyzer_state_machine import (
+    AnalyzerContext,
+    AnalyzerEvent,
+    AnalyzerState,
+)
 from src.pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
+from src.pytest_analyzer.utils.path_resolver import PathResolver
 from src.pytest_analyzer.utils.settings import Settings
 
 
@@ -31,9 +36,24 @@ def settings():
 
 
 @pytest.fixture
-def service(settings):
+def path_resolver(settings):
+    """Create a path resolver for testing."""
+    return PathResolver(settings.project_root)
+
+
+@pytest.fixture
+def context(settings, path_resolver):
+    """Create an analyzer context for testing."""
+    return AnalyzerContext(
+        settings=settings,
+        path_resolver=path_resolver,
+    )
+
+
+@pytest.fixture
+def service(context):
     """Create an analyzer service for testing."""
-    return StateMachinePytestAnalyzerService(settings=settings)
+    return StateMachinePytestAnalyzerService(context=context)
 
 
 @pytest.fixture
@@ -66,10 +86,10 @@ class TestAnalyzerServiceStateMachine:
 
     def test_initialization(self, service):
         """Test initialization of the analyzer service."""
-        assert service.settings is not None
-        assert service.path_resolver is not None
-        assert service.state_machine is not None
         assert service.context is not None
+        assert service.context.settings is not None
+        assert service.context.path_resolver is not None
+        assert service.state_machine is not None
         assert service.state_machine.current_state_name == AnalyzerState.INITIALIZING
 
     def test_analyze_pytest_output(self, service, mock_failure, mock_suggestion):
