@@ -17,7 +17,7 @@ T = TypeVar('T', bound=BaseModel)
 class ResponseParser(Generic[T]):
     def __init__(self, model_class: Type[T]):
         self.model_class = model_class
-    
+
     def parse_json(self, response_text: str) -> T:
         try:
             # Extract JSON from response if needed
@@ -30,19 +30,19 @@ class ResponseParser(Generic[T]):
             raise ResponseParseError(f"Invalid JSON in response: {str(e)}") from e
         except ValidationError as e:
             raise ResponseParseError(f"Response validation failed: {str(e)}") from e
-    
+
     def _extract_json(self, text: str) -> str:
         # Handle cases where JSON is embedded in markdown or other text
         # This is a simple implementation - might need to be more robust
-        if text.strip().startswith('{') and text.strip().endswith('}'): 
+        if text.strip().startswith('{') and text.strip().endswith('}'):
             return text
-        
+
         # Try to find JSON between triple backticks
         import re
         json_match = re.search(r'```(?:json)?\s*(.+?)\s*```', text, re.DOTALL)
         if json_match:
             return json_match.group(1)
-            
+
         # If no JSON found, raise error
         raise ResponseParseError("Could not extract JSON from response")
 

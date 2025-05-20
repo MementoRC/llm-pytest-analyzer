@@ -67,15 +67,15 @@ def sample_pytest_output():
 def test_extractor_with_valid_output(sample_pytest_output):
     # Arrange
     extractor = PytestExtractor()
-    
+
     # Act
     result = extractor.extract(sample_pytest_output)
-    
+
     # Assert
     assert 'failures' in result
     assert isinstance(result['failures'], list)
     assert len(result['failures']) > 0
-    
+
     # Check first failure structure
     failure = result['failures'][0]
     assert 'file_path' in failure
@@ -87,10 +87,10 @@ def test_extractor_with_valid_output(sample_pytest_output):
 def test_extractor_with_empty_output():
     # Arrange
     extractor = PytestExtractor()
-    
+
     # Act
     result = extractor.extract('')
-    
+
     # Assert
     assert 'failures' in result
     assert len(result['failures']) == 0
@@ -100,7 +100,7 @@ def test_extractor_with_empty_output():
 def test_extractor_error_handling():
     # Arrange
     extractor = PytestExtractor()
-    
+
     # Act & Assert
     with pytest.raises(ExtractionError):
         extractor.extract(None)  # Should raise for None input
@@ -125,7 +125,7 @@ def mock_llm_service(monkeypatch):
             if 'analyze_failure' in prompt:
                 return '{"root_cause": "Test error", "explanation": "This is a test"}'
             return '{}'
-    
+
     return MockLLMService()
 
 @pytest.fixture
@@ -145,16 +145,16 @@ def test_analysis_workflow(di_container, sample_pytest_output):
     # Arrange
     extractor = di_container.resolve(Extractor)
     analyzer = di_container.resolve(Analyzer)
-    
+
     # Act
     extraction_results = extractor.extract(sample_pytest_output)
     analysis_results = analyzer.analyze(extraction_results)
-    
+
     # Assert
     assert 'analyses' in analysis_results
     assert isinstance(analysis_results['analyses'], list)
     assert len(analysis_results['analyses']) > 0
-    
+
     # Check first analysis structure
     analysis = analysis_results['analyses'][0]
     assert 'failure' in analysis

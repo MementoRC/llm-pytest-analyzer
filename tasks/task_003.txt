@@ -16,22 +16,22 @@ class DIContainer:
     def __init__(self):
         self._services: Dict[Type, Any] = {}
         self._factories: Dict[Type, callable] = {}
-    
+
     def register(self, interface_type: Type[T], implementation: T) -> None:
         self._services[interface_type] = implementation
-    
+
     def register_factory(self, interface_type: Type[T], factory: callable) -> None:
         self._factories[interface_type] = factory
-    
+
     def resolve(self, interface_type: Type[T]) -> T:
         if interface_type in self._services:
             return cast(T, self._services[interface_type])
-        
+
         if interface_type in self._factories:
             implementation = self._factories[interface_type]()
             self._services[interface_type] = implementation
             return cast(T, implementation)
-            
+
         raise KeyError(f"No registration found for {interface_type.__name__}")
 ```
 
@@ -64,4 +64,3 @@ Implement automatic constructor injection by analyzing parameter types. Add supp
 ### Description: Develop comprehensive documentation and example code demonstrating container usage patterns.
 ### Details:
 Write detailed API documentation with type information. Create usage examples for common scenarios. Document best practices and anti-patterns. Implement a sample application demonstrating real-world usage. Create integration tests that verify the examples work as documented.
-

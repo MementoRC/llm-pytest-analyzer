@@ -18,7 +18,7 @@ class PromptBuilder:
         self.template_dir = template_dir or os.path.join(os.path.dirname(__file__), "templates")
         self.templates: Dict[str, Template] = {}
         self._load_templates()
-    
+
     def _load_templates(self) -> None:
         # Load templates from files
         if os.path.exists(self.template_dir):
@@ -27,18 +27,18 @@ class PromptBuilder:
                     template_name = os.path.splitext(filename)[0]
                     with open(os.path.join(self.template_dir, filename), "r") as f:
                         self.templates[template_name] = Template(f.read())
-    
+
     def build_prompt(self, template_name: str, **kwargs) -> str:
         if template_name not in self.templates:
             raise ValueError(f"Template '{template_name}' not found")
-        
+
         # Handle special cases like code formatting
         for key, value in kwargs.items():
             if isinstance(value, dict):
                 kwargs[key] = json.dumps(value, indent=2)
-        
+
         return self.templates[template_name].substitute(**kwargs)
-    
+
     def register_template(self, name: str, template_string: str) -> None:
         self.templates[name] = Template(template_string)
 ```

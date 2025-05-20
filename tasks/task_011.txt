@@ -15,23 +15,23 @@ class FixSuggester:
         self.llm_service = llm_service
         self.prompt_builder = prompt_builder
         self.response_parser = response_parser
-    
+
     def suggest(self, analysis_results: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Suggest fixes for analyzed test failures."""
         analyses = analysis_results.get('analyses', [])
         if not analyses:
             return []
-        
+
         suggestions = []
         for analysis_item in analyses:
             failure = analysis_item.get('failure', {})
             analysis = analysis_item.get('analysis', {})
-            
+
             suggestion = self._generate_suggestion(failure, analysis)
             suggestions.append(suggestion)
-        
+
         return suggestions
-    
+
     def _generate_suggestion(self, failure: Dict[str, Any], analysis: Dict[str, Any]) -> Dict[str, Any]:
         # Build prompt for the LLM
         prompt = self.prompt_builder.build_prompt(
@@ -44,15 +44,15 @@ class FixSuggester:
             root_cause=analysis.get('root_cause', ''),
             explanation=analysis.get('explanation', '')
         )
-        
+
         # Get suggestion from LLM
         response = self.llm_service.generate(prompt)
-        
+
         try:
             # Parse the response
             suggestion_model = self.response_parser.parse_json(response)
             suggestion_dict = suggestion_model.dict()
-            
+
             # Add metadata
             return {
                 **suggestion_dict,
@@ -72,25 +72,25 @@ class FixSuggester:
                 'error': str(e),
                 'raw_response': response
             }
-    
+
     def _calculate_confidence(self, suggestion: Dict[str, Any]) -> float:
         # Simple confidence calculation based on suggestion properties
         confidence = 0.5  # Base confidence
-        
+
         # Adjust based on fix type
         fix_type = suggestion.get('fix_type', '').lower()
         if fix_type in ['simple', 'straightforward', 'obvious']:
             confidence += 0.3
         elif fix_type in ['complex', 'uncertain']:
             confidence -= 0.2
-        
+
         # Adjust based on code changes
         code_changes = suggestion.get('code_changes', [])
         if len(code_changes) == 0:
             confidence -= 0.3
         elif len(code_changes) > 5:
             confidence -= 0.1  # More changes = more uncertainty
-        
+
         # Ensure confidence is between 0 and 1
         return max(0.0, min(1.0, confidence))
 ```

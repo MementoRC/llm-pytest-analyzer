@@ -24,7 +24,7 @@ class AnalyzerStateMachine(StateMachine[AnalyzerState]):
     def __init__(self, di_container: DIContainer):
         super().__init__(AnalyzerState.INITIALIZE)
         self.di_container = di_container
-        
+
         # Register states
         self.add_state(AnalyzerState.INITIALIZE, self._initialize)
         self.add_state(AnalyzerState.EXTRACT_TEST_RESULTS, self._extract_test_results)
@@ -33,39 +33,39 @@ class AnalyzerStateMachine(StateMachine[AnalyzerState]):
         self.add_state(AnalyzerState.APPLY_FIXES, self._apply_fixes)
         self.add_state(AnalyzerState.COMPLETE, self._complete)
         self.add_state(AnalyzerState.ERROR, self._handle_error)
-        
+
         # Register transitions
         self.add_transition(
-            AnalyzerState.INITIALIZE, 
+            AnalyzerState.INITIALIZE,
             AnalyzerState.EXTRACT_TEST_RESULTS,
             lambda ctx, **kwargs: ctx.get('initialized', False)
         )
         self.add_transition(
-            AnalyzerState.EXTRACT_TEST_RESULTS, 
+            AnalyzerState.EXTRACT_TEST_RESULTS,
             AnalyzerState.ANALYZE_FAILURES,
             lambda ctx, **kwargs: ctx.get('extraction_results') is not None
         )
         self.add_transition(
-            AnalyzerState.ANALYZE_FAILURES, 
+            AnalyzerState.ANALYZE_FAILURES,
             AnalyzerState.GENERATE_SUGGESTIONS,
             lambda ctx, **kwargs: ctx.get('analysis_results') is not None
         )
         self.add_transition(
-            AnalyzerState.GENERATE_SUGGESTIONS, 
+            AnalyzerState.GENERATE_SUGGESTIONS,
             AnalyzerState.APPLY_FIXES,
             lambda ctx, **kwargs: ctx.get('suggestions') is not None and kwargs.get('apply_fixes', False)
         )
         self.add_transition(
-            AnalyzerState.GENERATE_SUGGESTIONS, 
+            AnalyzerState.GENERATE_SUGGESTIONS,
             AnalyzerState.COMPLETE,
             lambda ctx, **kwargs: ctx.get('suggestions') is not None and not kwargs.get('apply_fixes', False)
         )
         self.add_transition(
-            AnalyzerState.APPLY_FIXES, 
+            AnalyzerState.APPLY_FIXES,
             AnalyzerState.COMPLETE,
             lambda ctx, **kwargs: ctx.get('fixes_applied', False)
         )
-        
+
         # Error transitions from any state
         for state in AnalyzerState:
             if state not in [AnalyzerState.COMPLETE, AnalyzerState.ERROR]:
@@ -74,7 +74,7 @@ class AnalyzerStateMachine(StateMachine[AnalyzerState]):
                     AnalyzerState.ERROR,
                     lambda ctx, **kwargs: ctx.get('error') is not None
                 )
-    
+
     def _initialize(self, context: Dict[str, Any], **kwargs) -> None:
         try:
             # Initialize components
@@ -85,18 +85,18 @@ class AnalyzerStateMachine(StateMachine[AnalyzerState]):
             context['initialized'] = True
         except Exception as e:
             context['error'] = str(e)
-    
+
     def _extract_test_results(self, context: Dict[str, Any], **kwargs) -> None:
         try:
             extractor = context['extractor']
             test_results = kwargs.get('test_results')
             if not test_results:
                 raise ValueError("No test results provided")
-                
+
             context['extraction_results'] = extractor.extract(test_results)
         except Exception as e:
             context['error'] = str(e)
-    
+
     def _analyze_failures(self, context: Dict[str, Any], **kwargs) -> None:
         try:
             analyzer = context['analyzer']
@@ -104,7 +104,7 @@ class AnalyzerStateMachine(StateMachine[AnalyzerState]):
             context['analysis_results'] = analyzer.analyze(extraction_results)
         except Exception as e:
             context['error'] = str(e)
-    
+
     def _generate_suggestions(self, context: Dict[str, Any], **kwargs) -> None:
         try:
             suggester = context['suggester']
@@ -112,7 +112,7 @@ class AnalyzerStateMachine(StateMachine[AnalyzerState]):
             context['suggestions'] = suggester.suggest(analysis_results)
         except Exception as e:
             context['error'] = str(e)
-    
+
     def _apply_fixes(self, context: Dict[str, Any], **kwargs) -> None:
         try:
             applier = context['applier']
@@ -121,7 +121,7 @@ class AnalyzerStateMachine(StateMachine[AnalyzerState]):
             context['fixes_applied'] = applier.apply(suggestions, target_files)
         except Exception as e:
             context['error'] = str(e)
-    
+
     def _complete(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Return the final results
         return {
@@ -130,7 +130,7 @@ class AnalyzerStateMachine(StateMachine[AnalyzerState]):
             'suggestions': context.get('suggestions'),
             'fixes_applied': context.get('fixes_applied', False)
         }
-    
+
     def _handle_error(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Return error information
         return {

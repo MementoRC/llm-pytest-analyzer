@@ -49,7 +49,7 @@ class LLMServiceError(PytestAnalyzerError):
 class ErrorHandler:
     def __init__(self, logger: Optional[logging.Logger] = None):
         self.logger = logger or logging.getLogger('pytest-analyzer')
-    
+
     @contextmanager
     def handle_errors(self, error_type: Type[PytestAnalyzerError], operation: str, reraise: bool = True):
         """Context manager for handling errors in a consistent way."""
@@ -75,17 +75,17 @@ class ResultWithError(Generic[T]):
     def __init__(self, value: Optional[T] = None, error: Optional[PytestAnalyzerError] = None):
         self.value = value
         self.error = error
-    
+
     @property
     def success(self) -> bool:
         return self.error is None
-    
+
     def unwrap(self) -> T:
         """Get the value or raise the error if present."""
         if self.error:
             raise self.error
         return self.value
-    
+
     def map(self, func):
         """Apply a function to the value if no error, otherwise return self."""
         if self.error:
@@ -105,7 +105,7 @@ class LLMService:
     def __init__(self, config: LLMConfig, error_handler: Optional[ErrorHandler] = None):
         self.config = config
         self.error_handler = error_handler or ErrorHandler()
-    
+
     def generate(self, prompt: str, **kwargs) -> ResultWithError[str]:
         with self.error_handler.handle_errors(LLMServiceError, "LLM generation", reraise=False) as result:
             # Implementation for synchronous API call
@@ -117,10 +117,10 @@ class LLMService:
             )
             response.raise_for_status()
             return ResultWithError(response.json()["choices"][0]["text"])
-        
+
         # If we get here, there was an error
         return result
-    
+
     async def generate_async(self, prompt: str, **kwargs) -> ResultWithError[str]:
         with self.error_handler.handle_errors(LLMServiceError, "Async LLM generation", reraise=False) as result:
             # Implementation for asynchronous API call
@@ -136,7 +136,7 @@ class LLMService:
                         raise LLMServiceError(f"API error: {response.status}, {text}")
                     data = await response.json()
                     return ResultWithError(data["choices"][0]["text"])
-        
+
         # If we get here, there was an error
         return result
 ```

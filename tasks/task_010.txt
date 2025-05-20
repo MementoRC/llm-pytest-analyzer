@@ -15,13 +15,13 @@ class TestFailureAnalyzer:
         self.llm_service = llm_service
         self.prompt_builder = prompt_builder
         self.response_parser = response_parser
-    
+
     def analyze(self, extraction_results: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze test failures and determine root causes."""
         failures = extraction_results.get('failures', [])
         if not failures:
             return {'analyses': [], 'summary': 'No failures to analyze'}
-        
+
         analyses = []
         for failure in failures:
             analysis = self._analyze_failure(failure)
@@ -29,16 +29,16 @@ class TestFailureAnalyzer:
                 'failure': failure,
                 'analysis': analysis
             })
-        
+
         # Generate overall summary
         summary = self._generate_summary(analyses)
-        
+
         return {
             'analyses': analyses,
             'summary': summary,
             'extraction_results': extraction_results
         }
-    
+
     def _analyze_failure(self, failure: Dict[str, Any]) -> Dict[str, Any]:
         # Build prompt for the LLM
         prompt = self.prompt_builder.build_prompt(
@@ -49,10 +49,10 @@ class TestFailureAnalyzer:
             traceback=failure.get('traceback', ''),
             code_context=failure.get('code_context', {}).get('source_code', '')
         )
-        
+
         # Get analysis from LLM
         response = self.llm_service.generate(prompt)
-        
+
         try:
             # Parse the response
             analysis = self.response_parser.parse_json(response)
@@ -64,19 +64,19 @@ class TestFailureAnalyzer:
                 'explanation': str(e),
                 'raw_response': response
             }
-    
+
     def _generate_summary(self, analyses: List[Dict[str, Any]]) -> str:
         # Count common root causes
         root_causes = {}
         for item in analyses:
             cause = item.get('analysis', {}).get('root_cause', 'Unknown')
             root_causes[cause] = root_causes.get(cause, 0) + 1
-        
+
         # Generate summary text
         summary_lines = [f"Analyzed {len(analyses)} test failures:"]
         for cause, count in sorted(root_causes.items(), key=lambda x: x[1], reverse=True):
             summary_lines.append(f"- {cause}: {count} occurrences")
-        
+
         return '\n'.join(summary_lines)
 ```
 

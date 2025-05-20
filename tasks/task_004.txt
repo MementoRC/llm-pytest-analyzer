@@ -23,7 +23,7 @@ class LLMConfig(Protocol):
 class LLMService:
     def __init__(self, config: LLMConfig):
         self.config = config
-        
+
     @contextmanager
     def _error_context(self, operation: str):
         try:
@@ -31,7 +31,7 @@ class LLMService:
         except Exception as e:
             # Log the error with context
             raise LLMServiceError(f"Error during {operation}: {str(e)}") from e
-    
+
     def generate(self, prompt: str, **kwargs) -> str:
         with self._error_context("synchronous generation"):
             # Implementation for synchronous API call
@@ -43,7 +43,7 @@ class LLMService:
             )
             response.raise_for_status()
             return response.json()["choices"][0]["text"]
-    
+
     async def generate_async(self, prompt: str, **kwargs) -> str:
         with self._error_context("asynchronous generation"):
             # Implementation for asynchronous API call

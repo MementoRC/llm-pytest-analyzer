@@ -17,15 +17,15 @@ class PytestExtractor:
         """Extract relevant information from pytest test results."""
         failures = []
         test_files = set()
-        
+
         # Extract test failures using regex patterns
         failure_pattern = r'(FAILED|ERROR) (.+?)::(.+?)\s'
         for match in re.finditer(failure_pattern, test_results):
             status, file_path, test_name = match.groups()
-            
+
             # Find the error message and traceback
             error_section = self._extract_error_section(test_results, file_path, test_name)
-            
+
             failures.append({
                 'status': status,
                 'file_path': file_path,
@@ -34,28 +34,28 @@ class PytestExtractor:
                 'traceback': error_section.get('traceback', ''),
                 'code_context': self._extract_code_context(file_path, error_section)
             })
-            
+
             test_files.add(file_path)
-        
+
         return {
             'failures': failures,
             'test_files': list(test_files),
             'raw_output': test_results
         }
-    
+
     def _extract_error_section(self, test_results: str, file_path: str, test_name: str) -> Dict[str, str]:
         # Find the section containing the error for this specific test
         pattern = f"{file_path}::{test_name}[\s\S]+?(?=\n\n|$)"
         match = re.search(pattern, test_results)
         if not match:
             return {'error': '', 'traceback': ''}
-            
+
         section = match.group(0)
-        
+
         # Extract traceback and error message
         traceback_lines = []
         error_message = ''
-        
+
         in_traceback = False
         for line in section.split('\n'):
             if line.strip().startswith('E '):
@@ -67,30 +67,30 @@ class PytestExtractor:
                 in_traceback = True
             elif in_traceback and line.strip():
                 traceback_lines.append(line.strip())
-        
+
         return {
             'error': error_message,
             'traceback': '\n'.join(traceback_lines)
         }
-    
+
     def _extract_code_context(self, file_path: str, error_section: Dict[str, str]) -> Dict[str, Any]:
         # Extract line numbers from traceback
         line_pattern = f"{file_path}:(\d+)"
         line_matches = re.findall(line_pattern, error_section.get('traceback', ''))
-        
+
         if not line_matches or not os.path.exists(file_path):
             return {'source_code': '', 'line_number': 0}
-        
+
         try:
             line_number = int(line_matches[0])
             with open(file_path, 'r') as f:
                 lines = f.readlines()
-            
+
             # Get context (5 lines before and after)
             start = max(0, line_number - 6)
             end = min(len(lines), line_number + 5)
             context_lines = lines[start:end]
-            
+
             return {
                 'source_code': ''.join(context_lines),
                 'line_number': line_number,
