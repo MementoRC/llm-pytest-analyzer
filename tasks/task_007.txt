@@ -1,0 +1,79 @@
+# Task ID: 7
+# Title: Implement State Machine Base Class
+# Status: done
+# Dependencies: 2
+# Priority: high
+# Description: Create a reusable state machine framework for managing complex processes.
+# Details:
+Implement a state machine base class that can be extended for specific workflows:
+
+```python
+from typing import Dict, Any, List, Optional, Set, Callable, TypeVar, Generic
+from enum import Enum, auto
+import logging
+
+T = TypeVar('T', bound=Enum)
+
+class StateMachine(Generic[T]):
+    def __init__(self, initial_state: T):
+        self.current_state = initial_state
+        self.states: Set[T] = {initial_state}
+        self.transitions: Dict[T, Dict[T, Callable[..., bool]]] = {}
+        self.state_handlers: Dict[T, Callable[..., Any]] = {}
+        self.context: Dict[str, Any] = {}
+        self.logger = logging.getLogger(self.__class__.__name__)
+    
+    def add_state(self, state: T, handler: Callable[..., Any]) -> None:
+        self.states.add(state)
+        self.state_handlers[state] = handler
+        if state not in self.transitions:
+            self.transitions[state] = {}
+    
+    def add_transition(self, from_state: T, to_state: T, condition: Callable[..., bool]) -> None:
+        if from_state not in self.states or to_state not in self.states:
+            raise ValueError("Both states must be added before defining a transition")
+        
+        if from_state not in self.transitions:
+            self.transitions[from_state] = {}
+        
+        self.transitions[from_state][to_state] = condition
+    
+    def run(self, **kwargs) -> Any:
+        result = None
+        while True:
+            self.logger.info(f"Executing state: {self.current_state.name}")
+            
+            # Execute current state handler
+            handler = self.state_handlers.get(self.current_state)
+            if handler:
+                try:
+                    result = handler(self.context, **kwargs)
+                except Exception as e:
+                    self.logger.error(f"Error in state {self.current_state.name}: {str(e)}")
+                    raise
+            
+            # Check for transitions
+            next_state = self._get_next_state(**kwargs)
+            if next_state is None:
+                break  # No valid transition, we're done
+                
+            self.logger.info(f"Transitioning from {self.current_state.name} to {next_state.name}")
+            self.current_state = next_state
+        
+        return result
+    
+    def _get_next_state(self, **kwargs) -> Optional[T]:
+        if self.current_state not in self.transitions:
+            return None
+            
+        for next_state, condition in self.transitions[self.current_state].items():
+            if condition(self.context, **kwargs):
+                return next_state
+                
+        return None
+```
+
+This base class should be flexible enough to handle different types of workflows while providing consistent logging and error handling.
+
+# Test Strategy:
+Create unit tests with a simple test state machine to verify state transitions, handler execution, and error handling. Test both successful workflows and error cases.

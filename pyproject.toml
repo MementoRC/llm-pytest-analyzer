@@ -89,6 +89,12 @@ markers = [
 mypy_path = ["src"]
 namespace_packages = true
 explicit_package_bases = true
+exclude = ["examples/*", "demo_script.py"]
+python_version = "3.9"
+
+[[tool.mypy.overrides]]
+module = ["anthropic.*", "openai.*"]
+ignore_missing_imports = true
 
 [tool.pixi.project]
 channels = ["conda-forge"]
