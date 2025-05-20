@@ -35,6 +35,7 @@ from ...utils.path_resolver import PathResolver
 from ...utils.settings import Settings
 from ..analysis.failure_analyzer import FailureAnalyzer
 from ..analysis.fix_applier import FixApplier
+from ..analysis.fix_applier_adapter import FixApplierAdapter
 from ..analysis.fix_suggester import FixSuggester
 from ..analysis.llm_suggester import LLMSuggester
 
@@ -42,6 +43,7 @@ from ..analysis.llm_suggester import LLMSuggester
 from ..analyzer_state_machine import AnalyzerContext, AnalyzerStateMachine
 from ..llm.backward_compat import LLMService
 from ..llm.llm_service_protocol import LLMServiceProtocol
+from ..protocols import Applier
 from .container import Container, RegistrationMode
 
 # Type variable for generic type annotations
@@ -331,7 +333,13 @@ def configure_services(
     # Register analysis components
     container.register_singleton(FailureAnalyzer, FailureAnalyzer)
     container.register_singleton(FixSuggester, FixSuggester)
+
+    # Register FixApplier for direct use and FixApplierAdapter for the Applier protocol
     container.register_singleton(FixApplier, FixApplier)
+    container.register_factory(
+        Applier, lambda: FixApplierAdapter(fix_applier=container.resolve(FixApplier))
+    )
+
     container.register_factory(LLMSuggester, lambda: _create_llm_suggester(container))
 
     # Register state machine
@@ -424,11 +432,11 @@ def _create_analyzer_context(container: Container = None) -> AnalyzerContext:
             logger.debug(f"Could not resolve FixSuggester for AnalyzerContext: {e}")
             context.suggester = None
 
-    if FixApplier in container._registrations:
+    if Applier in container._registrations:
         try:
-            context.fix_applier = container.resolve(FixApplier)
+            context.fix_applier = container.resolve(Applier)
         except Exception as e:
-            logger.debug(f"Could not resolve FixApplier for AnalyzerContext: {e}")
+            logger.debug(f"Could not resolve Applier for AnalyzerContext: {e}")
             context.fix_applier = None
 
     # Add LLM suggester if enabled
