@@ -1,14 +1,16 @@
 import logging
 import re
-from typing import List
+from typing import Any, Dict, List, Optional
 
 from ...utils.resource_manager import with_timeout
+from ..models.failure_analysis import FailureAnalysis
 from ..models.pytest_failure import FixSuggestion, PytestFailure
+from ..protocols import Suggester
 
 logger = logging.getLogger(__name__)
 
 
-class FixSuggester:
+class FixSuggester(Suggester):
     """
     Suggests fixes for test failures.
 
@@ -24,6 +26,93 @@ class FixSuggester:
             min_confidence: Minimum confidence threshold for suggestions
         """
         self.min_confidence = min_confidence
+
+    def suggest(self, analysis_results: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Suggest fixes for analyzed test failures.
+
+        Args:
+            analysis_results: Results from an Analyzer
+
+        Returns:
+            A list of suggested fixes as dictionaries
+
+        Raises:
+            SuggestionError: If suggestion generation fails
+        """
+        suggestions = []
+
+        # Extract analyses from the results
+        analyses = analysis_results.get("analyses", [])
+
+        for analysis_item in analyses:
+            failure = analysis_item.get("failure")
+            analysis = analysis_item.get("analysis")
+
+            if not failure:
+                continue
+
+            # Convert dictionary to PytestFailure if needed
+            if isinstance(failure, dict):
+                failure = PytestFailure(
+                    test_name=failure.get("test_name", ""),
+                    test_file=failure.get("test_file", ""),
+                    error_type=failure.get("error_type", ""),
+                    error_message=failure.get("error_message", ""),
+                    traceback=failure.get("traceback", ""),
+                    line_number=failure.get("line_number"),
+                    relevant_code=failure.get("relevant_code", ""),
+                )
+
+            # Convert analysis dictionary to FailureAnalysis if needed
+            failure_analysis = None
+            if analysis and isinstance(analysis, dict):
+                failure_analysis = FailureAnalysis(
+                    failure=failure,
+                    root_cause=analysis.get("root_cause", ""),
+                    error_type=analysis.get("error_type", ""),
+                    suggested_fixes=[analysis.get("explanation", "")],
+                )
+
+            # Generate suggestions for this failure
+            fix_suggestions = self.suggest_fix(failure, failure_analysis)
+
+            # Convert FixSuggestion objects to dictionaries
+            for suggestion in fix_suggestions:
+                suggestions.append(
+                    {
+                        "suggestion": suggestion.suggestion,
+                        "confidence": suggestion.confidence,
+                        "explanation": suggestion.explanation,
+                        "code_changes": suggestion.code_changes,
+                        "failure": {
+                            "test_name": suggestion.failure.test_name,
+                            "test_file": suggestion.failure.test_file,
+                            "error_type": suggestion.failure.error_type,
+                            "error_message": suggestion.failure.error_message,
+                        },
+                    }
+                )
+
+        return suggestions
+
+    def suggest_fix(
+        self, failure: PytestFailure, analysis: Optional[FailureAnalysis] = None
+    ) -> List[FixSuggestion]:
+        """
+        Suggest fixes for a specific test failure.
+
+        Args:
+            failure: The test failure to suggest fixes for
+            analysis: Optional pre-computed analysis
+
+        Returns:
+            A list of suggested fixes
+
+        Raises:
+            SuggestionError: If suggestion generation fails
+        """
+        return self.suggest_fixes(failure)
 
     @with_timeout(60)
     def suggest_fixes(self, failure: PytestFailure) -> List[FixSuggestion]:
