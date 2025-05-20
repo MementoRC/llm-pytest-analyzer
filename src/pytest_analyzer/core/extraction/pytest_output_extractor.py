@@ -9,16 +9,18 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import List, Optional, Pattern, Tuple
+from typing import Any, Dict, List, Optional, Pattern, Tuple, Union
 
 from ...utils.path_resolver import PathResolver
 from ...utils.resource_manager import ResourceMonitor, with_timeout
+from ..errors import ExtractionError
 from ..models.pytest_failure import PytestFailure
+from ..protocols import Extractor
 
 logger = logging.getLogger(__name__)
 
 
-class PytestOutputExtractor:
+class PytestOutputExtractor(Extractor):
     """
     Extracts test failures from raw pytest output.
 
@@ -49,6 +51,88 @@ class PytestOutputExtractor:
         )
         self.line_number_pattern: Pattern = re.compile(r"(?:.*?\.py|.*?\.pyx):(\d+)")
 
+    def extract(self, test_results: Union[str, Path]) -> Dict[str, Any]:
+        """
+        Extract test failures from pytest output.
+
+        Args:
+            test_results: The pytest output to extract from (string or path)
+
+        Returns:
+            A dictionary containing extracted failures and metadata
+
+        Raises:
+            ExtractionError: If extraction fails
+        """
+        try:
+            # Handle different input types
+            if isinstance(test_results, str):
+                # Direct text content
+                if os.path.exists(test_results):
+                    # It might be a path string, try treating it as a path first
+                    try:
+                        path = Path(test_results)
+                        return self._extract_from_path(path)
+                    except ExtractionError:
+                        # If that fails, treat it as text content
+                        failures = self.extract_failures_from_text(test_results)
+                        return {
+                            "failures": failures,
+                            "count": len(failures),
+                            "source": "text",
+                        }
+                else:
+                    # Direct text input
+                    failures = self.extract_failures_from_text(test_results)
+                    return {
+                        "failures": failures,
+                        "count": len(failures),
+                        "source": "text",
+                    }
+
+            # Handle Path objects
+            if isinstance(test_results, Path):
+                return self._extract_from_path(test_results)
+
+            raise ExtractionError(
+                f"Unsupported test_results type: {type(test_results)}"
+            )
+        except Exception as e:
+            logger.error(f"Error extracting from pytest output: {e}")
+            raise ExtractionError(f"Failed to extract from pytest output: {e}") from e
+
+    @with_timeout(30)
+    def _extract_from_path(self, input_path: Path) -> Dict[str, Any]:
+        """
+        Extract test failures from a pytest output file.
+
+        Args:
+            input_path: Path to the pytest output file (text format)
+
+        Returns:
+            Dictionary containing extracted failures and metadata
+
+        Raises:
+            ExtractionError: If extraction fails
+        """
+        if not input_path.exists():
+            logger.error(f"Pytest output file not found: {input_path}")
+            raise ExtractionError(f"Pytest output file not found: {input_path}")
+
+        try:
+            with ResourceMonitor(max_time_seconds=self.timeout):
+                with open(input_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                failures = self.extract_failures_from_text(content)
+                return {
+                    "failures": failures,
+                    "count": len(failures),
+                    "source": str(input_path),
+                }
+        except Exception as e:
+            logger.error(f"Error extracting failures from pytest output: {e}")
+            raise ExtractionError(f"Failed to extract failures: {e}") from e
+
     @with_timeout(30)
     def extract_failures(self, input_path: Path) -> List[PytestFailure]:
         """
@@ -59,6 +143,10 @@ class PytestOutputExtractor:
 
         Returns:
             List of PytestFailure objects
+
+        Note:
+            This method is maintained for backward compatibility.
+            New code should use the extract() method instead.
         """
         if not input_path.exists():
             logger.error(f"Pytest output file not found: {input_path}")

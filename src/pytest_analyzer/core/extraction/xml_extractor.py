@@ -1,16 +1,18 @@
 import logging
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from ...utils.path_resolver import PathResolver
 from ...utils.resource_manager import ResourceMonitor, with_timeout
+from ..errors import ExtractionError
 from ..models.pytest_failure import PytestFailure
+from ..protocols import Extractor
 
 logger = logging.getLogger(__name__)
 
 
-class XmlResultExtractor:
+class XmlResultExtractor(Extractor):
     """
     Extracts test failures from pytest JUnit XML output.
 
@@ -29,6 +31,155 @@ class XmlResultExtractor:
         self.path_resolver = path_resolver or PathResolver()
         self.timeout = timeout
 
+    def extract(self, test_results: Union[str, Path, ET.Element]) -> Dict[str, Any]:
+        """
+        Extract test failures from pytest output.
+
+        Args:
+            test_results: The pytest output to extract from (string, path, or XML element)
+
+        Returns:
+            A dictionary containing extracted failures and metadata
+
+        Raises:
+            ExtractionError: If extraction fails
+        """
+        try:
+            # Handle different input types
+            if isinstance(test_results, ET.Element):
+                # Already parsed XML element
+                failures = self._extract_from_element(test_results)
+                return {"failures": failures, "count": len(failures)}
+
+            # Convert string paths to Path objects
+            if isinstance(test_results, str):
+                test_results = Path(test_results)
+
+            # Handle Path objects
+            if isinstance(test_results, Path):
+                return self._extract_from_path(test_results)
+
+            raise ExtractionError(
+                f"Unsupported test_results type: {type(test_results)}"
+            )
+        except Exception as e:
+            logger.error(f"Error extracting from XML: {e}")
+            raise ExtractionError(f"Failed to extract from XML: {e}") from e
+
+    @with_timeout(30)
+    def _extract_from_path(self, xml_path: Path) -> Dict[str, Any]:
+        """
+        Extract test failures from a pytest XML report file.
+
+        Args:
+            xml_path: Path to the XML report file
+
+        Returns:
+            Dictionary containing extracted failures and metadata
+
+        Raises:
+            ExtractionError: If extraction fails
+        """
+        if not xml_path.exists():
+            logger.error(f"XML report file not found: {xml_path}")
+            raise ExtractionError(f"XML report file not found: {xml_path}")
+
+        try:
+            with ResourceMonitor(max_time_seconds=self.timeout):
+                failures = self._parse_xml_report(xml_path)
+                return {
+                    "failures": failures,
+                    "count": len(failures),
+                    "source": str(xml_path),
+                }
+        except Exception as e:
+            logger.error(f"Error extracting failures from XML report: {e}")
+            raise ExtractionError(f"Failed to extract failures: {e}") from e
+
+    def _extract_from_element(self, root: ET.Element) -> List[PytestFailure]:
+        """
+        Extract test failures from a parsed XML element.
+
+        Args:
+            root: Root XML element
+
+        Returns:
+            List of PytestFailure objects
+        """
+        failures = []
+
+        # Find all testcase elements
+        for testcase in root.findall(".//testcase"):
+            # Check if the testcase has failure or error elements
+            failure_elements = testcase.findall("failure")
+            error_elements = testcase.findall("error")
+
+            if failure_elements or error_elements:
+                # Get failure information
+                if failure_elements:
+                    failure_element = failure_elements[0]
+                    error_type = failure_element.get("type", "Failure")
+                    error_message = failure_element.get("message", "")
+                    traceback = failure_element.text or ""
+                elif error_elements:
+                    error_element = error_elements[0]
+                    error_type = error_element.get("type", "Error")
+                    error_message = error_element.get("message", "")
+                    traceback = error_element.text or ""
+                else:
+                    continue  # Should not happen, but just in case
+
+                # Extract more specific error type from message or traceback
+                import re
+
+                if error_type in ("Failure", "Error"):  # Only if generic type
+                    match = re.search(
+                        r"(?:^|\n)([A-Za-z_][\w.]*Error|[\w.]*Exception):",
+                        error_message,
+                    )
+                    if not match:
+                        match = re.search(
+                            r"(?:^|\n)([A-Za-z_][\w.]*Error|[\w.]*Exception):",
+                            traceback,
+                        )
+                    if match:
+                        error_type = match.group(1)
+
+                # Extract test information
+                test_name = testcase.get("name", "")
+                classname = testcase.get("classname", "")
+
+                # Create a full test name
+                full_test_name = f"{classname}.{test_name}" if classname else test_name
+
+                # Extract file path and line number
+                file_path = ""
+                line_number = None
+
+                # Try to extract file path from classname
+                if classname and "." in classname:
+                    file_part = classname.replace(".", "/") + ".py"
+                    file_path = str(self.path_resolver.resolve_path(file_part))
+
+                # Extract line number from traceback if available
+                if traceback:
+                    line_number = self._extract_line_number_from_traceback(traceback)
+
+                # Create PytestFailure object
+                failure = PytestFailure(
+                    test_name=full_test_name,
+                    test_file=file_path,
+                    line_number=line_number,
+                    error_type=error_type,
+                    error_message=error_message,
+                    traceback=traceback,
+                    raw_output_section=ET.tostring(testcase, encoding="unicode"),
+                )
+
+                failures.append(failure)
+
+        return failures
+
     @with_timeout(30)
     def extract_failures(self, xml_path: Path) -> List[PytestFailure]:
         """
@@ -39,6 +190,10 @@ class XmlResultExtractor:
 
         Returns:
             List of PytestFailure objects
+
+        Note:
+            This method is maintained for backward compatibility.
+            New code should use the extract() method instead.
         """
         if not xml_path.exists():
             logger.error(f"XML report file not found: {xml_path}")

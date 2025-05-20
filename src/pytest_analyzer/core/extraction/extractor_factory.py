@@ -1,9 +1,10 @@
 import logging
 from pathlib import Path
-from typing import Dict, Optional, Type, Union
+from typing import Dict, Optional, Type
 
 from ...utils.path_resolver import PathResolver
 from ...utils.settings import Settings
+from ..protocols import Extractor
 from .json_extractor import JsonResultExtractor
 from .pytest_output_extractor import PytestOutputExtractor
 from .xml_extractor import XmlResultExtractor
@@ -11,18 +12,8 @@ from .xml_extractor import XmlResultExtractor
 logger = logging.getLogger(__name__)
 
 
-class BaseExtractor:
-    """Base class for all extractors with a common interface."""
-
-    def extract_failures(self, input_path: Path):
-        """Extract failures from the input path."""
-        raise NotImplementedError("Subclasses must implement extract_failures")
-
-
 # Type alias for extractor classes
-ExtractorClass = Type[
-    Union[JsonResultExtractor, XmlResultExtractor, PytestOutputExtractor]
-]
+ExtractorClass = Type[Extractor]
 
 
 class ExtractorFactory:
@@ -51,9 +42,7 @@ class ExtractorFactory:
             ".log": PytestOutputExtractor,
         }
 
-    def get_extractor(
-        self, input_path: Path
-    ) -> Union[JsonResultExtractor, XmlResultExtractor, PytestOutputExtractor]:
+    def get_extractor(self, input_path: Path) -> Extractor:
         """
         Get the appropriate extractor for the input path.
 
@@ -178,7 +167,7 @@ def get_extractor(
     input_path: Path,
     settings: Optional[Settings] = None,
     path_resolver: Optional[PathResolver] = None,
-) -> Union[JsonResultExtractor, XmlResultExtractor, PytestOutputExtractor]:
+) -> Extractor:
     """
     Convenience function to get an extractor for the input path.
 
