@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
+from src.pytest_analyzer.core.errors import ExtractionError
 from src.pytest_analyzer.core.extraction.json_extractor import JsonResultExtractor
 from src.pytest_analyzer.utils.path_resolver import PathResolver
 from src.pytest_analyzer.utils.resource_manager import TimeoutError
@@ -109,14 +110,14 @@ def test_extract_failures_no_tests(tmp_path, json_extractor):
 
 
 @patch(
-    "src.pytest_analyzer.core.extraction.json_extractor.JsonResultExtractor._parse_json_report"
+    "src.pytest_analyzer.core.extraction.json_extractor.JsonResultExtractor._do_extract"
 )
 def test_extract_failures_timeout(
-    mock_parse_json, tmp_path, json_extractor, sample_json_data
+    mock_do_extract, tmp_path, json_extractor, sample_json_data
 ):
     """Test handling of timeout during extraction (simulating @with_timeout triggering)."""
-    # Configure the mock _parse_json_report to raise TimeoutError
-    mock_parse_json.side_effect = TimeoutError("Simulated Timeout")
+    # Configure the mock _do_extract to raise TimeoutError
+    mock_do_extract.side_effect = TimeoutError("Simulated Timeout")
 
     # Create a temporary JSON file
     json_path = tmp_path / "report.json"
@@ -129,8 +130,8 @@ def test_extract_failures_timeout(
     # Verify results - should return empty list when an exception occurs
     assert failures == []
 
-    # Verify _parse_json_report was called with the correct path
-    mock_parse_json.assert_called_once_with(json_path)
+    # Verify _do_extract was called with the correct path
+    mock_do_extract.assert_called_once_with(json_path)
 
 
 @patch("src.pytest_analyzer.utils.path_resolver.PathResolver.resolve_path")
@@ -198,3 +199,92 @@ def test_path_resolver_integration(tmp_path):
 
     # Verify the mock directory was created
     assert (tmp_path / "mocked").exists()
+
+
+def test_extract_method_with_file(tmp_path, json_extractor, sample_json_data):
+    """Test extract method with a file path."""
+    # Create a temporary JSON file
+    json_path = tmp_path / "report.json"
+    with open(json_path, "w") as f:
+        json.dump(sample_json_data, f)
+
+    # Extract failures using extract method
+    result = json_extractor.extract(json_path)
+
+    # Verify results
+    assert "failures" in result
+    assert "count" in result
+    assert "source" in result
+    assert result["source"] == str(json_path)
+    assert result["count"] == 1
+    assert len(result["failures"]) == 1
+    assert result["failures"][0].test_name == "test_file.py::test_function"
+    assert result["failures"][0].error_type == "AssertionError"
+
+
+def test_extract_method_with_string_path(tmp_path, json_extractor, sample_json_data):
+    """Test extract method with a string path."""
+    # Create a temporary JSON file
+    json_path = tmp_path / "report.json"
+    with open(json_path, "w") as f:
+        json.dump(sample_json_data, f)
+
+    # Extract failures using extract method with string path
+    result = json_extractor.extract(str(json_path))
+
+    # Verify results
+    assert "failures" in result
+    assert "count" in result
+    assert "source" in result
+    assert result["source"] == str(json_path)
+    assert result["count"] == 1
+    assert len(result["failures"]) == 1
+
+
+def test_extract_method_with_dict(json_extractor, sample_json_data):
+    """Test extract method with a dictionary."""
+    # Extract failures using extract method with dictionary
+    result = json_extractor.extract(sample_json_data)
+
+    # Verify results
+    assert "failures" in result
+    assert "count" in result
+    assert result["count"] == 1
+    assert len(result["failures"]) == 1
+    assert result["failures"][0].test_name == "test_file.py::test_function"
+    assert result["failures"][0].error_type == "AssertionError"
+
+
+def test_extract_method_nonexistent_file(json_extractor):
+    """Test extract method with a nonexistent file."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        nonexistent_path = Path(temp_dir) / "nonexistent.json"
+
+        # Verify the function raises ExtractionError
+        with pytest.raises(ExtractionError) as exc_info:
+            json_extractor.extract(nonexistent_path)
+
+        assert "Results file not found" in str(exc_info.value)
+
+
+def test_extract_method_invalid_input(json_extractor):
+    """Test extract method with invalid input type."""
+    # Pass an invalid input type
+    with pytest.raises(ExtractionError) as exc_info:
+        json_extractor.extract(123)  # Integer is not a valid input type
+
+    assert "Unsupported test_results type" in str(exc_info.value)
+
+
+def test_extract_method_invalid_json(tmp_path, json_extractor):
+    """Test extract method with invalid JSON file."""
+    # Create an invalid JSON file
+    json_path = tmp_path / "invalid.json"
+    with open(json_path, "w") as f:
+        f.write("This is not valid JSON")
+
+    # Verify the function raises ExtractionError
+    with pytest.raises(ExtractionError) as exc_info:
+        json_extractor.extract(json_path)
+
+    assert "Invalid JSON format" in str(exc_info.value)
