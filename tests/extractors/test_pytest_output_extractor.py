@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from src.pytest_analyzer.core.errors import ExtractionError
 from src.pytest_analyzer.core.extraction.pytest_output_extractor import (
     PytestOutputExtractor,
 )
@@ -280,3 +281,96 @@ test_module.py::test_failing FAILED                                    [100%]
     assert len(failures) == 1
     assert failures[0].test_name == "test_failing"
     assert failures[0].error_type == "Unknown"
+
+
+def test_extract_method_with_text(extractor, sample_pytest_output, monkeypatch):
+    """Test extract method with text input."""
+    # Mock the path resolver to return our temp file for any input
+    from tempfile import NamedTemporaryFile
+
+    # Create temporary files to stand in for the test files
+    with NamedTemporaryFile(suffix=".py", delete=False, mode="w") as tmp_file:
+        tmp_file.write("""
+def test_passing():
+    assert True
+
+def test_failing():
+    assert 1 == 2
+
+def test_error():
+    raise ValueError("This is an error")
+""")
+        test_file_path = tmp_file.name
+
+    # Patch the path resolver to return our temp file
+    def mock_resolve_path(path):
+        return test_file_path
+
+    monkeypatch.setattr(extractor.path_resolver, "resolve_path", mock_resolve_path)
+
+    # Extract failures using extract method with text input
+    result = extractor.extract(sample_pytest_output)
+
+    # Verify results
+    assert "failures" in result
+    assert "count" in result
+    assert "source" in result
+    assert result["source"] == "text"
+    assert result["count"] > 0
+
+    # Clean up
+    os.unlink(test_file_path)
+
+
+def test_extract_method_with_file(extractor, sample_pytest_output, tmp_path):
+    """Test extract method with a file path."""
+    # Create a file with sample output
+    output_file = tmp_path / "pytest_output.txt"
+    output_file.write_text(sample_pytest_output)
+
+    # Extract failures using extract method with file path
+    result = extractor.extract(output_file)
+
+    # Verify results
+    assert "failures" in result
+    assert "count" in result
+    assert "source" in result
+    assert result["source"] == str(output_file)
+    assert result["count"] > 0
+
+
+def test_extract_method_with_string_path(extractor, sample_pytest_output, tmp_path):
+    """Test extract method with a string path."""
+    # Create a file with sample output
+    output_file = tmp_path / "pytest_output.txt"
+    output_file.write_text(sample_pytest_output)
+
+    # Extract failures using extract method with string path
+    result = extractor.extract(str(output_file))
+
+    # Verify results
+    assert "failures" in result
+    assert "count" in result
+    assert "source" in result
+    assert result["source"] == str(output_file)
+    assert result["count"] > 0
+
+
+def test_extract_method_nonexistent_file(extractor):
+    """Test extract method with a nonexistent file."""
+    # For a nonexistent file, the extract method tries to treat it as direct content
+    # Since this is just a path string that doesn't exist, it will try to parse it as pytest output
+    # It should return an empty result, not raise an exception
+    result = extractor.extract("/nonexistent/path.txt")
+    assert result["count"] == 0
+    assert result["failures"] == []
+    assert result["source"] == "text"
+
+
+def test_extract_method_invalid_input(extractor):
+    """Test extract method with invalid input type."""
+    # Pass an invalid input type
+    with pytest.raises(ExtractionError) as exc_info:
+        extractor.extract(123)  # Integer is not a valid input type
+
+    assert "Unsupported test_results type" in str(exc_info.value)

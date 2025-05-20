@@ -1,3 +1,10 @@
+"""
+Extractor factory module for pytest_analyzer.
+
+This module provides the ExtractorFactory class that creates the appropriate
+extractor for a given input file type.
+"""
+
 import logging
 from pathlib import Path
 from typing import Dict, Optional, Type
@@ -5,6 +12,7 @@ from typing import Dict, Optional, Type
 from ...utils.path_resolver import PathResolver
 from ...utils.settings import Settings
 from ..protocols import Extractor
+from .base import BaseExtractor
 from .json_extractor import JsonResultExtractor
 from .pytest_output_extractor import PytestOutputExtractor
 from .xml_extractor import XmlResultExtractor
@@ -13,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 # Type alias for extractor classes
-ExtractorClass = Type[Extractor]
+ExtractorClass = Type[BaseExtractor]
 
 
 class ExtractorFactory:

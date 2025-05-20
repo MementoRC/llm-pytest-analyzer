@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
+from src.pytest_analyzer.core.errors import ExtractionError
 from src.pytest_analyzer.core.extraction.xml_extractor import XmlResultExtractor
 from src.pytest_analyzer.utils.path_resolver import PathResolver
 from src.pytest_analyzer.utils.resource_manager import TimeoutError
@@ -203,3 +204,79 @@ def test_path_resolver_integration(tmp_path):
 
     # Verify the mock directory was created
     assert (tmp_path / "mocked").exists()
+
+
+def test_extract_method_with_file(tmp_path, xml_extractor, sample_xml_content):
+    """Test extract method with a file path."""
+    # Create a temporary XML file
+    xml_path = tmp_path / "report.xml"
+    with open(xml_path, "w") as f:
+        f.write(sample_xml_content)
+
+    # Extract failures using extract method
+    result = xml_extractor.extract(xml_path)
+
+    # Verify results
+    assert "failures" in result
+    assert "count" in result
+    assert "source" in result
+    assert result["count"] == 1
+    assert len(result["failures"]) == 1
+    assert result["failures"][0].test_name == "test_module.test_function"
+    assert result["failures"][0].error_type == "AssertionError"
+
+
+def test_extract_method_with_element(xml_extractor, sample_xml_content):
+    """Test extract method with an XML element."""
+    # Parse XML to create an element
+    root = ET.fromstring(sample_xml_content)
+
+    # Extract failures using extract method
+    result = xml_extractor.extract(root)
+
+    # Verify results
+    assert "failures" in result
+    assert "count" in result
+    assert result["count"] == 1
+    assert len(result["failures"]) == 1
+    assert result["failures"][0].test_name == "test_module.test_function"
+    assert result["failures"][0].error_type == "AssertionError"
+
+
+def test_extract_method_with_string(tmp_path, xml_extractor, sample_xml_content):
+    """Test extract method with a string path."""
+    # Create a temporary XML file
+    xml_path = tmp_path / "report.xml"
+    with open(xml_path, "w") as f:
+        f.write(sample_xml_content)
+
+    # Extract failures using extract method with string path
+    result = xml_extractor.extract(str(xml_path))
+
+    # Verify results
+    assert "failures" in result
+    assert "count" in result
+    assert "source" in result
+    assert result["count"] == 1
+    assert len(result["failures"]) == 1
+
+
+def test_extract_method_nonexistent_file(xml_extractor):
+    """Test extract method with a nonexistent file."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        nonexistent_path = Path(temp_dir) / "nonexistent.xml"
+
+        # Verify the function raises ExtractionError
+        with pytest.raises(ExtractionError) as exc_info:
+            xml_extractor.extract(nonexistent_path)
+
+        assert "XML report file not found" in str(exc_info.value)
+
+
+def test_extract_method_invalid_input(xml_extractor):
+    """Test extract method with invalid input type."""
+    # Pass an invalid input type
+    with pytest.raises(ExtractionError) as exc_info:
+        xml_extractor.extract(123)  # Integer is not a valid input type
+
+    assert "Unsupported test_results type" in str(exc_info.value)

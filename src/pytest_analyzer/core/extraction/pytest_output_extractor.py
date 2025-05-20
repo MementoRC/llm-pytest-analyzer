@@ -67,7 +67,7 @@ class PytestOutputExtractor(Extractor):
         try:
             # Handle different input types
             if isinstance(test_results, str):
-                # Direct text content
+                # Check if it's a file path or direct text content
                 if os.path.exists(test_results):
                     # It might be a path string, try treating it as a path first
                     try:
@@ -75,20 +75,10 @@ class PytestOutputExtractor(Extractor):
                         return self._extract_from_path(path)
                     except ExtractionError:
                         # If that fails, treat it as text content
-                        failures = self.extract_failures_from_text(test_results)
-                        return {
-                            "failures": failures,
-                            "count": len(failures),
-                            "source": "text",
-                        }
+                        return self._extract_from_text(test_results)
                 else:
                     # Direct text input
-                    failures = self.extract_failures_from_text(test_results)
-                    return {
-                        "failures": failures,
-                        "count": len(failures),
-                        "source": "text",
-                    }
+                    return self._extract_from_text(test_results)
 
             # Handle Path objects
             if isinstance(test_results, Path):
@@ -100,6 +90,30 @@ class PytestOutputExtractor(Extractor):
         except Exception as e:
             logger.error(f"Error extracting from pytest output: {e}")
             raise ExtractionError(f"Failed to extract from pytest output: {e}") from e
+
+    def _extract_from_text(self, text: str) -> Dict[str, Any]:
+        """
+        Extract test failures from raw pytest output text.
+
+        Args:
+            text: Raw pytest output text
+
+        Returns:
+            Dictionary containing extracted failures and metadata
+
+        Raises:
+            ExtractionError: If extraction fails
+        """
+        try:
+            failures = self.extract_failures_from_text(text)
+            return {
+                "failures": failures,
+                "count": len(failures),
+                "source": "text",
+            }
+        except Exception as e:
+            logger.error(f"Error extracting failures from pytest text output: {e}")
+            raise ExtractionError(f"Failed to extract failures from text: {e}") from e
 
     @with_timeout(30)
     def _extract_from_path(self, input_path: Path) -> Dict[str, Any]:

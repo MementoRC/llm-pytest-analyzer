@@ -106,6 +106,8 @@ class XmlResultExtractor(Extractor):
         Returns:
             List of PytestFailure objects
         """
+        import re
+
         failures = []
 
         # Find all testcase elements
@@ -130,8 +132,6 @@ class XmlResultExtractor(Extractor):
                     continue  # Should not happen, but just in case
 
                 # Extract more specific error type from message or traceback
-                import re
-
                 if error_type in ("Failure", "Error"):  # Only if generic type
                     match = re.search(
                         r"(?:^|\n)([A-Za-z_][\w.]*Error|[\w.]*Exception):",
@@ -219,83 +219,10 @@ class XmlResultExtractor(Extractor):
         try:
             tree = ET.parse(xml_path)
             root = tree.getroot()
+            return self._extract_from_element(root)
         except ET.ParseError as e:
             logger.error(f"Invalid XML in report file: {e}")
             return []
-
-        failures = []
-
-        # Find all testcase elements
-        for testcase in root.findall(".//testcase"):
-            # Check if the testcase has failure or error elements
-            failure_elements = testcase.findall("failure")
-            error_elements = testcase.findall("error")
-
-            if failure_elements or error_elements:
-                # Get failure information
-                if failure_elements:
-                    failure_element = failure_elements[0]
-                    error_type = failure_element.get("type", "Failure")
-                    error_message = failure_element.get("message", "")
-                    traceback = failure_element.text or ""
-                elif error_elements:
-                    error_element = error_elements[0]
-                    error_type = error_element.get("type", "Error")
-                    error_message = error_element.get("message", "")
-                    traceback = error_element.text or ""
-                else:
-                    continue  # Should not happen, but just in case
-
-                # Extract more specific error type from message or traceback
-                import re
-
-                if error_type in ("Failure", "Error"):  # Only if generic type
-                    match = re.search(
-                        r"(?:^|\n)([A-Za-z_][\w.]*Error|[\w.]*Exception):",
-                        error_message,
-                    )
-                    if not match:
-                        match = re.search(
-                            r"(?:^|\n)([A-Za-z_][\w.]*Error|[\w.]*Exception):",
-                            traceback,
-                        )
-                    if match:
-                        error_type = match.group(1)
-
-                # Extract test information
-                test_name = testcase.get("name", "")
-                classname = testcase.get("classname", "")
-
-                # Create a full test name
-                full_test_name = f"{classname}.{test_name}" if classname else test_name
-
-                # Extract file path and line number
-                file_path = ""
-                line_number = None
-
-                # Try to extract file path from classname
-                if classname and "." in classname:
-                    file_part = classname.replace(".", "/") + ".py"
-                    file_path = str(self.path_resolver.resolve_path(file_part))
-
-                # Extract line number from traceback if available
-                if traceback:
-                    line_number = self._extract_line_number_from_traceback(traceback)
-
-                # Create PytestFailure object
-                failure = PytestFailure(
-                    test_name=full_test_name,
-                    test_file=file_path,
-                    line_number=line_number,
-                    error_type=error_type,
-                    error_message=error_message,
-                    traceback=traceback,
-                    raw_output_section=ET.tostring(testcase, encoding="unicode"),
-                )
-
-                failures.append(failure)
-
-        return failures
 
     def _extract_line_number_from_traceback(self, traceback: str) -> Optional[int]:
         """
