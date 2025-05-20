@@ -48,6 +48,10 @@ pytest-analyzer path/to/tests -k "test_specific_function"
 
 ### Python API
 
+There are multiple ways to use the pytest-analyzer API, depending on your needs and preferred level of abstraction:
+
+#### Option 1: Legacy API (Backward Compatible)
+
 ```python
 from pytest_analyzer import PytestAnalyzerService, Settings
 
@@ -59,7 +63,7 @@ settings = Settings(
     preferred_format="json"
 )
 
-# Initialize the analyzer service
+# Initialize the analyzer service (uses the facade internally)
 analyzer = PytestAnalyzerService(settings=settings)
 
 # Run tests and analyze failures
@@ -74,6 +78,64 @@ for suggestion in suggestions:
     print(f"Error: {suggestion.failure.error_type}: {suggestion.failure.error_message}")
     print(f"Suggestion: {suggestion.suggestion}")
     print(f"Confidence: {suggestion.confidence}")
+```
+
+#### Option 2: Direct Facade API (Recommended)
+
+```python
+from pytest_analyzer.core.analyzer_facade import PytestAnalyzerFacade
+from pytest_analyzer.utils.settings import Settings
+
+# Configure settings
+settings = Settings(
+    max_failures=10,
+    max_suggestions=3,
+    min_confidence=0.7,
+    preferred_format="json"
+)
+
+# Initialize the facade directly
+facade = PytestAnalyzerFacade(settings=settings)
+
+# Run tests and analyze failures
+suggestions = facade.run_and_analyze("tests/", ["--verbose"])
+
+# Analyze existing output file
+suggestions = facade.analyze_pytest_output("pytest_output.json")
+
+# Apply fix suggestions
+for suggestion in suggestions:
+    result = facade.apply_suggestion(suggestion)
+    if result["success"]:
+        print(f"Applied fix to: {', '.join(result['applied_files'])}")
+```
+
+#### Option 3: DI-Based API (Advanced)
+
+```python
+from pytest_analyzer.core.analyzer_service_di import DIPytestAnalyzerService
+from pytest_analyzer.core.di import initialize_container
+from pytest_analyzer.utils.settings import Settings
+
+# Configure settings
+settings = Settings(
+    max_failures=10,
+    max_suggestions=3,
+    min_confidence=0.7,
+    preferred_format="json"
+)
+
+# Initialize container with settings
+container = initialize_container(settings)
+
+# Resolve service from container
+analyzer = container.resolve(DIPytestAnalyzerService)
+
+# Run tests and analyze failures
+suggestions = analyzer.run_and_analyze("tests/", ["--verbose"])
+
+# Analyze existing output file
+suggestions = analyzer.analyze_results("pytest_output.json")
 ```
 
 ## Features
@@ -161,21 +223,37 @@ The CLI interface provides well-formatted, color-coded output:
 
 ## Architecture
 
-The package is organized into several modules:
+The package is organized into several modules with a clear separation of concerns:
 
 - **Core**:
-  - `analyzer_service.py`: Main service coordinating extraction and analysis
+  - `analyzer_facade.py`: Facade providing backward compatibility with original API
+  - `backward_compat.py`: Compatibility layer for legacy API access
+  - `analyzer_service.py`: Original service (now facade-based)
+  - `analyzer_service_di.py`: DI-based service implementation
+  - `analyzer_state_machine.py`: State machine for managing analysis workflow
+  - **Dependency Injection**:
+    - `di/container.py`: DI container with dependency registration and resolution
+    - `di/service_collection.py`: Service registration utilities
   - **Extraction**:
-    - `extractor_factory.py`: Factory for creating the appropriate extractor
-    - `json_extractor.py`: Extracts failures from JSON output
-    - `xml_extractor.py`: Extracts failures from XML output
-    - `pytest_plugin.py`: Direct pytest plugin for failure extraction
+    - `extraction/base.py`: Base abstract class for extractors
+    - `extraction/extractor_factory.py`: Factory for creating the appropriate extractor
+    - `extraction/json_extractor.py`: Extracts failures from JSON output
+    - `extraction/xml_extractor.py`: Extracts failures from XML output
+    - `extraction/pytest_plugin.py`: Direct pytest plugin for failure extraction
   - **Analysis**:
-    - `failure_analyzer.py`: Analyzes failures and identifies patterns
-    - `fix_suggester.py`: Generates rule-based fix suggestions
-    - `llm_suggester.py`: Generates AI-powered fix suggestions using language models
+    - `analysis/failure_analyzer.py`: Analyzes failures and identifies patterns
+    - `analysis/fix_suggester.py`: Generates rule-based fix suggestions
+    - `analysis/llm_suggester.py`: Generates AI-powered fix suggestions using language models
+    - `analysis/fix_applier.py`: Applies suggested fixes to code
+    - `analysis/fix_applier_adapter.py`: Adapter for applier protocol
+  - **State Machine**:
+    - `state_machine/base.py`: Base state machine implementation
+    - `state_machine/protocols.py`: State machine protocol definitions
+  - **Protocol Interfaces**:
+    - `protocols.py`: Core protocol interfaces for components
   - **Models**:
-    - `pytest_failure.py`: Data models for failures and suggestions
+    - `models/pytest_failure.py`: Data models for failures and suggestions
+    - `models/failure_analysis.py`: Data models for failure analysis
 
 - **Utils**:
   - `settings.py`: Configuration settings
@@ -183,7 +261,10 @@ The package is organized into several modules:
   - `resource_manager.py`: Resource management and monitoring
 
 - **CLI**:
-  - `analyzer_cli.py`: Command-line interface implementation
+  - `cli/analyzer_cli.py`: Original CLI implementation
+  - `cli/analyzer_cli_di.py`: DI-based CLI implementation
+
+See [docs/architecture.md](docs/architecture.md) and [docs/facade_architecture.md](docs/facade_architecture.md) for more details on the design.
 
 ## Demo
 

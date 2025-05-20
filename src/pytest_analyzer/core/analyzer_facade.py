@@ -2,7 +2,20 @@
 Facade pattern implementation for backward compatibility with the original API.
 
 This module provides a facade that maintains backward compatibility with the
-existing API while using the new architecture internally.
+existing API while using the new architecture internally. The facade pattern
+is used to provide a simpler interface to a complex subsystem. In this case,
+the complex subsystem is the new architecture that uses dependency injection,
+protocol-based interfaces, and a state machine.
+
+Key features of this facade implementation:
+- Presents the same interface as the original PytestAnalyzerService
+- Uses the new architecture's DI container and components internally
+- Delegates work to the AnalyzerStateMachine
+- Handles error conditions and maintains expected return formats
+- Manages resources like temporary files
+- Provides a bridge between the old and new architectures
+
+See docs/facade_architecture.md for more detailed documentation.
 """
 
 import logging
@@ -12,7 +25,10 @@ from typing import Any, Dict, List, Optional, Union
 from pytest_analyzer.core import analyzer_state_machine
 
 # Use absolute import for AnalyzerStateMachine to align with typical patch targets
-from pytest_analyzer.core.analyzer_state_machine import AnalyzerContext
+from pytest_analyzer.core.analyzer_state_machine import (
+    AnalyzerContext,
+    AnalyzerStateMachine,
+)
 
 from ..utils.path_resolver import PathResolver
 from ..utils.settings import Settings
@@ -33,6 +49,21 @@ class PytestAnalyzerFacade:
     """
     Facade that provides the same interface as the original PytestAnalyzerService
     but uses the new architecture components internally.
+
+    This facade implements the Facade design pattern to simplify interaction with
+    the complex subsystem consisting of DI container, state machine, and various
+    protocol implementations. It presents a unified interface that matches the
+    original service while delegating work to specialized components.
+
+    Key responsibilities:
+    - Initialize and configure the DI container
+    - Create and manage the analyzer context
+    - Delegate test extraction, analysis, and fix application to the state machine
+    - Handle errors and maintain consistent return formats
+    - Manage resources like temporary files
+
+    This facade allows existing code to continue working while benefiting from
+    the improved architecture internally.
     """
 
     def __init__(
@@ -261,6 +292,139 @@ class PytestAnalyzerFacade:
         except Exception as e:
             logger.error(f"Error analyzing tests: {e}")
             return []
+
+    def analyze_test_results(self, test_output: str) -> Dict[str, Any]:
+        """
+        Analyze pytest test results from raw output string and return analysis.
+
+        Args:
+            test_output: Raw pytest test output as a string
+
+        Returns:
+            Dictionary with analysis results including success status, analyses, and suggestions
+        """
+        try:
+            # Write the test output to a temporary file
+            import tempfile
+
+            with tempfile.NamedTemporaryFile(
+                mode="w+", suffix=".txt", delete=False
+            ) as tmp:
+                tmp.write(test_output)
+                tmp_path = tmp.name
+
+            # Create AnalyzerContext and then the state machine
+            analyzer_context = self._create_analyzer_context_from_container(
+                self.settings, self.di_container
+            )
+            state_machine = AnalyzerStateMachine(analyzer_context)
+            result = state_machine.run(test_results_path=tmp_path, apply_fixes=False)
+
+            # Clean up the temporary file
+            import os
+
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+            if isinstance(result, dict) and "error" in result:
+                logger.error(f"Error analyzing pytest output: {result['error']}")
+                return {
+                    "success": False,
+                    "error": result["error"],
+                    "analyses": [],
+                    "suggestions": [],
+                }
+
+            return {
+                "success": True,
+                "analyses": result.get("analysis_results", {}).get("analyses", []),
+                "suggestions": result.get("suggestions", []),
+            }
+
+        except Exception as e:
+            logger.error(f"Error analyzing pytest output: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "analyses": [],
+                "suggestions": [],
+            }
+
+    def suggest_fixes(self, test_output: str) -> List[Dict[str, Any]]:
+        """
+        Analyze test results and suggest fixes.
+
+        Args:
+            test_output: Raw pytest test output as a string
+
+        Returns:
+            List of suggested fixes
+        """
+        result = self.analyze_test_results(test_output)
+        return result.get("suggestions", [])
+
+    def apply_fixes(
+        self, test_output: str, target_files: List[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Analyze test results, suggest and apply fixes.
+
+        Args:
+            test_output: Raw pytest test output as a string
+            target_files: Optional list of files to which fixes should be applied
+
+        Returns:
+            Dictionary with results of fix application
+        """
+        try:
+            # Write the test output to a temporary file
+            import tempfile
+
+            with tempfile.NamedTemporaryFile(
+                mode="w+", suffix=".txt", delete=False
+            ) as tmp:
+                tmp.write(test_output)
+                tmp_path = tmp.name
+
+            # Create AnalyzerContext and then the state machine
+            analyzer_context = self._create_analyzer_context_from_container(
+                self.settings, self.di_container
+            )
+            state_machine = AnalyzerStateMachine(analyzer_context)
+
+            # Set target files if provided
+            if target_files:
+                analyzer_context.target_files = target_files
+
+            result = state_machine.run(test_results_path=tmp_path, apply_fixes=True)
+
+            # Clean up the temporary file
+            import os
+
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+            if isinstance(result, dict) and "error" in result:
+                logger.error(f"Error applying fixes: {result['error']}")
+                return {
+                    "success": False,
+                    "error": result["error"],
+                    "fixes_applied": False,
+                }
+
+            return {
+                "success": True,
+                "fixes_applied": result.get("fixes_applied", False),
+                "suggestions": result.get("suggestions", []),
+            }
+
+        except Exception as e:
+            logger.error(f"Error applying fixes: {e}")
+            return {"success": False, "error": str(e), "fixes_applied": False}
 
     def apply_suggestion(self, suggestion: FixSuggestion) -> Dict[str, Any]:
         """
