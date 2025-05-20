@@ -21,6 +21,7 @@ except ImportError:
     openai = None  # type: ignore
 
 from ...utils.resource_manager import ResourceMonitor, TimeoutError
+from ...utils.settings import Settings
 from ..errors import LLMServiceError, ParsingError
 from ..models.failure_analysis import FailureAnalysis
 from ..models.pytest_failure import FixSuggestion, PytestFailure
@@ -65,6 +66,8 @@ class LLMService(LLMServiceProtocol):
         response_parser: ResponseParser,
         resource_monitor: Optional[ResourceMonitor] = None,
         llm_client: Optional[Any] = None,
+        disable_auto_detection: bool = False,
+        settings: Optional[Settings] = None,
         timeout_seconds: int = 60,
         max_tokens: int = 1500,
         model_name: Optional[Dict[str, str]] = None,
@@ -77,6 +80,9 @@ class LLMService(LLMServiceProtocol):
             response_parser: Component for parsing responses
             resource_monitor: Optional resource usage monitor
             llm_client: Optional pre-configured LLM client
+            disable_auto_detection: If True, disables auto-detection of LLM clients
+                                      when llm_client is None.
+            settings: Optional application settings.
             timeout_seconds: Timeout for LLM API requests
             max_tokens: Maximum tokens in the response
             model_name: Model names for different providers (e.g., {"openai": "gpt-3.5-turbo", "anthropic": "claude-3-haiku-20240307"})
@@ -88,6 +94,8 @@ class LLMService(LLMServiceProtocol):
             max_time_seconds=timeout_seconds,
         )
         self.llm_client = llm_client
+        self.disable_auto_detection = disable_auto_detection
+        self.settings = settings
         self.timeout_seconds = timeout_seconds
         self.max_tokens = max_tokens
         self.model_name = model_name or {
@@ -239,6 +247,11 @@ class LLMService(LLMServiceProtocol):
                         )
                     )
                 return None
+
+        # If llm_client is None and auto-detection is disabled, return None
+        if self.disable_auto_detection:
+            logger.info("LLM client auto-detection is disabled.")
+            return None
 
         # Auto-detect available clients
         if Anthropic:

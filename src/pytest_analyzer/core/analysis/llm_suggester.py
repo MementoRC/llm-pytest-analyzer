@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 from ...utils.resource_manager import with_timeout
 from ..llm.llm_service_protocol import LLMServiceProtocol
 from ..models.pytest_failure import FixSuggestion, PytestFailure
+from ..prompts.prompt_builder import PromptBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -32,21 +33,23 @@ class LLMSuggester:
     def __init__(
         self,
         llm_service: LLMServiceProtocol,
+        prompt_builder: Optional[PromptBuilder] = None,
         min_confidence: float = 0.7,
         max_prompt_length: int = 4000,
         max_context_lines: int = 20,
         timeout_seconds: int = 60,  # Overall timeout for suggest_fixes
-        custom_prompt_template: Optional[str] = None,
+        custom_prompt_template: Optional[str] = None,  # For backward compatibility
     ):
         """
         Initialize the LLM suggester.
 
         :param llm_service: Service for interacting with the language model.
+        :param prompt_builder: Optional custom prompt builder for advanced prompt handling.
         :param min_confidence: Minimum confidence threshold for suggestions.
         :param max_prompt_length: Maximum length of prompts sent to the LLM.
         :param max_context_lines: Maximum code context lines to include.
         :param timeout_seconds: Timeout for the entire suggestion process.
-        :param custom_prompt_template: Optional custom prompt template.
+        :param custom_prompt_template: Optional custom prompt template (deprecated).
         """
         self.llm_service = llm_service
         self.min_confidence = min_confidence
@@ -55,7 +58,18 @@ class LLMSuggester:
         self.timeout_seconds = (
             timeout_seconds  # Used by with_timeout decorator if configured
         )
-        self.prompt_template = custom_prompt_template or self._default_prompt_template()
+
+        # Use provided prompt builder or create a default one
+        if prompt_builder:
+            self.prompt_builder = prompt_builder
+        else:
+            # Create a default prompt builder with appropriate max size
+            self.prompt_builder = PromptBuilder(max_prompt_size=max_prompt_length)
+
+        # Handle backward compatibility with custom prompt template
+        if custom_prompt_template:
+            # Override the llm_suggestion template if custom template is provided
+            self.prompt_builder.templates["llm_suggestion"] = custom_prompt_template
 
     @with_timeout(60)  # This timeout is for the entire suggest_fixes operation
     def suggest_fixes(self, failure: PytestFailure) -> List[FixSuggestion]:
@@ -70,8 +84,8 @@ class LLMSuggester:
                 logger.warning("No LLM service available for generating suggestions.")
                 return []
 
-            # Build the prompt
-            prompt = self._build_prompt(failure)
+            # Build the prompt using the prompt builder
+            prompt = self.prompt_builder.build_llm_suggestion_prompt(failure)
 
             # Get LLM response via the service
             llm_response = self.llm_service.send_prompt(prompt)
@@ -90,117 +104,13 @@ class LLMSuggester:
             logger.error(f"Error generating LLM suggestions: {e}")
             return []
 
-    def _build_prompt(self, failure: PytestFailure) -> str:
-        """
-        Build the prompt for the language model.
+    # The _build_prompt method is now replaced by prompt_builder.build_llm_suggestion_prompt
 
-        :param failure: PytestFailure object to analyze
-        :return: Formatted prompt string
-        """
-        # Extract code context if available
-        code_context = self._extract_code_context(failure)
+    # Code context extraction is now handled by the prompt builder
 
-        # Format the prompt using the template
-        prompt = self.prompt_template.format(
-            test_name=failure.test_name,
-            test_file=failure.test_file,
-            error_type=failure.error_type,
-            error_message=failure.error_message,
-            traceback=self._truncate_text(failure.traceback, 1000),
-            line_number=failure.line_number or "unknown",
-            code_context=code_context or "Not available",
-        )
+    # Text truncation is now handled by the prompt builder
 
-        # Ensure prompt doesn't exceed max length
-        if len(prompt) > self.max_prompt_length:
-            # Truncate in a way that preserves critical information
-            prompt = self._truncate_prompt(prompt, self.max_prompt_length)
-
-        return prompt
-
-    def _extract_code_context(self, failure: PytestFailure) -> Optional[str]:
-        """
-        Extract relevant code context from the failure.
-
-        :param failure: PytestFailure object
-        :return: Formatted code context or None
-        """
-        # First try to use the relevant_code if available
-        if failure.relevant_code:
-            return failure.relevant_code
-
-        # If we have a file path and line number, try to read the file
-        if (
-            failure.test_file
-            and failure.line_number
-            and os.path.exists(failure.test_file)
-        ):
-            try:
-                with open(failure.test_file, "r") as f:
-                    lines = f.readlines()
-
-                # Calculate the range of lines to include
-                start_line = max(0, failure.line_number - 10)
-                end_line = min(len(lines), failure.line_number + 10)
-
-                # Extract the relevant lines
-                context_lines = lines[start_line:end_line]
-                context = "".join(context_lines)
-
-                return f"# Code context around line {failure.line_number}:\n{context}"
-            except Exception as e:
-                logger.debug(f"Error extracting code context: {e}")
-
-        # If we couldn't get context from the file, try to extract from traceback
-        if failure.traceback:
-            # Look for code snippets in the traceback (often included by pytest)
-            code_pattern = r">\s+(.+)\nE\s+"
-            matches = re.findall(code_pattern, failure.traceback)
-            if matches:
-                return "\n".join(matches)
-
-        return None
-
-    def _truncate_text(self, text: str, max_length: int) -> str:
-        """
-        Truncate text to maximum length while preserving readability.
-
-        :param text: Text to truncate
-        :param max_length: Maximum length
-        :return: Truncated text
-        """
-        if not text or len(text) <= max_length:
-            return text
-
-        # Keep the first and last parts of the text
-        first_part = text[: max_length // 2]
-        last_part = text[-(max_length // 2) :]
-
-        return f"{first_part}\n...[truncated]...\n{last_part}"
-
-    def _truncate_prompt(self, prompt: str, max_length: int) -> str:
-        """
-        Truncate the prompt intelligently to stay within length limits.
-
-        :param prompt: Full prompt
-        :param max_length: Maximum length
-        :return: Truncated prompt
-        """
-        # Split the prompt into sections
-        sections = prompt.split("===")
-
-        # Always keep the first and last sections (instructions and code context)
-        essential_sections = sections[0] + "===" + sections[-1]
-        remaining_length = max_length - len(essential_sections) - 50  # Buffer
-
-        # Truncate the middle sections if needed
-        if remaining_length > 0 and len(sections) > 2:
-            middle_sections = "===".join(sections[1:-1])
-            middle_sections = self._truncate_text(middle_sections, remaining_length)
-            return sections[0] + "===" + middle_sections + "===" + sections[-1]
-
-        # If we can't fit middle sections, just return the essential parts
-        return essential_sections
+    # Prompt truncation is now handled by the prompt builder
 
     def _parse_llm_response(
         self, response: str, failure: PytestFailure
@@ -372,61 +282,7 @@ class LLMSuggester:
 
         return suggestions
 
-    def _default_prompt_template(self) -> str:
-        """
-        Get the default prompt template for LLM requests.
-
-        :return: Prompt template string
-        """
-        return """
-You are an expert Python developer specializing in pytest. Your task is to analyze a failing test and suggest how to fix it.
-
-=== Test Failure Information ===
-Test: {test_name}
-File: {test_file}
-Line: {line_number}
-Error Type: {error_type}
-Error Message: {error_message}
-
-=== Traceback ===
-{traceback}
-
-=== Code Context ===
-{code_context}
-
-=== Instructions ===
-1. Analyze the test failure and determine the root cause
-2. Provide specific suggestions to fix the issue
-3. Include code snippets where appropriate
-4. Format your response as follows:
-
-```json
-[
-  {{
-    "suggestion": "Your first suggestion here",
-    "confidence": 0.9,
-    "explanation": "Detailed explanation of the issue and the fix",
-    "code_changes": {{
-      "file": "path/to/file.py",
-      "original_code": "def problematic_function():\\n    return 1",
-      "fixed_code": "def problematic_function():\\n    return 2"
-    }}
-  }},
-  {{
-    "suggestion": "Your second suggestion here (if applicable)",
-    "confidence": 0.7,
-    "explanation": "Alternative explanation and fix",
-    "code_changes": {{
-      "file": "path/to/file.py",
-      "original_code": "...",
-      "fixed_code": "..."
-    }}
-  }}
-]
-```
-
-Provide your analysis:
-"""
+    # The default prompt template is now handled by the prompt builder
 
     def _generate_suggestion_fingerprint(
         self, suggestion_text: str, explanation: str, code_changes: Dict

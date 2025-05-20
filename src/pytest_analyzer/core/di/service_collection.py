@@ -201,6 +201,9 @@ class ServiceCollection:
             else Settings()
         )
 
+        # Create the LLM service components
+        # Note: PromptBuilder and ResponseParser will be created inside the LLMService if needed
+
         # If a specific LLM client was provided, use it to create the service
         if llm_client is not None:
             try:
@@ -250,10 +253,26 @@ class ServiceCollection:
                     )
                 else:
                     logger.warning(
-                        f"No LLM client could be detected for provider '{preferred_provider}'"
+                        f"No LLM client could be detected for provider '{preferred_provider}'. Registering LLMService with no client."
                     )
+                    # Register LLMService with no client if none detected
+                    llm_service = LLMService(
+                        llm_client=None,
+                        timeout_seconds=settings.llm_timeout,
+                        disable_auto_detection=True,
+                    )
+                    self.container.register_instance(LLMServiceProtocol, llm_service)
             except Exception as e:
-                logger.warning(f"Error detecting or creating LLM service: {e}")
+                logger.warning(
+                    f"Error detecting or creating LLM service: {e}. Registering LLMService with no client."
+                )
+                # Register LLMService with no client on error
+                llm_service = LLMService(
+                    llm_client=None,
+                    timeout_seconds=settings.llm_timeout,  # Use settings timeout if possible
+                    disable_auto_detection=True,
+                )
+                self.container.register_instance(LLMServiceProtocol, llm_service)
 
         return self
 
@@ -392,33 +411,33 @@ def _create_analyzer_context(container: Container = None) -> AnalyzerContext:
 
     # Add analysis components if they're registered
     if FailureAnalyzer in container._registrations:
-        resolver = (
-            container._registrations[FailureAnalyzer].instance
-            or container._registrations[FailureAnalyzer].factory
-        )
-        context.analyzer = resolver() if callable(resolver) else resolver
+        try:
+            context.analyzer = container.resolve(FailureAnalyzer)
+        except Exception as e:
+            logger.debug(f"Could not resolve FailureAnalyzer for AnalyzerContext: {e}")
+            context.analyzer = None
 
     if FixSuggester in container._registrations:
-        resolver = (
-            container._registrations[FixSuggester].instance
-            or container._registrations[FixSuggester].factory
-        )
-        context.suggester = resolver() if callable(resolver) else resolver
+        try:
+            context.suggester = container.resolve(FixSuggester)
+        except Exception as e:
+            logger.debug(f"Could not resolve FixSuggester for AnalyzerContext: {e}")
+            context.suggester = None
 
     if FixApplier in container._registrations:
-        resolver = (
-            container._registrations[FixApplier].instance
-            or container._registrations[FixApplier].factory
-        )
-        context.fix_applier = resolver() if callable(resolver) else resolver
+        try:
+            context.fix_applier = container.resolve(FixApplier)
+        except Exception as e:
+            logger.debug(f"Could not resolve FixApplier for AnalyzerContext: {e}")
+            context.fix_applier = None
 
     # Add LLM suggester if enabled
     if settings.use_llm and LLMSuggester in container._registrations:
-        resolver = (
-            container._registrations[LLMSuggester].instance
-            or container._registrations[LLMSuggester].factory
-        )
-        context.llm_suggester = resolver() if callable(resolver) else resolver
+        try:
+            context.llm_suggester = container.resolve(LLMSuggester)
+        except Exception as e:
+            logger.debug(f"Could not resolve LLMSuggester for AnalyzerContext: {e}")
+            context.llm_suggester = None
 
     return context
 
@@ -470,7 +489,8 @@ def _create_llm_service(container: Container = None) -> Optional[LLMServiceProto
     # DIPytestAnalyzerService factory to decide whether to include it based on settings.use_llm
     # This ensures the LLMServiceProtocol is always resolvable when tests explicitly enable use_llm=True
 
-    # The backward-compatible interface will auto-create PromptBuilder and ResponseParser
+    # Create the LLM service components as needed in the LLMService constructor
+
     try:
         # Attempt to detect LLM clients and configure them
         from ..llm.llm_service_factory import detect_llm_client
@@ -493,6 +513,7 @@ def _create_llm_service(container: Container = None) -> Optional[LLMServiceProto
         return LLMService(
             llm_client=llm_client,
             timeout_seconds=settings.llm_timeout,
+            disable_auto_detection=(llm_client is None),
         )
     except ImportError:
         # If the factory module isn't available, continue with None client
@@ -502,13 +523,18 @@ def _create_llm_service(container: Container = None) -> Optional[LLMServiceProto
         return LLMService(
             llm_client=None,
             timeout_seconds=settings.llm_timeout,
+            disable_auto_detection=True,
         )
     except Exception as e:
         logger.warning(
-            f"Error creating LLM service: {e}. Creating with default values."
+            f"Error creating LLM service: {e}. Creating service with no client."
         )
-        # Fallback to creating with bare minimum default values
-        return LLMService()
+        # Fallback to creating with no client, respecting settings timeout
+        return LLMService(
+            llm_client=None,
+            timeout_seconds=settings.llm_timeout,
+            disable_auto_detection=True,
+        )
 
 
 def _create_llm_suggester(container: Container = None) -> Optional[LLMSuggester]:

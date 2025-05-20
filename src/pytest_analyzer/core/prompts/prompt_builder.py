@@ -7,7 +7,7 @@ for LLM interactions based on pytest failures and configuration.
 
 import logging
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 from ..models.pytest_failure import PytestFailure
 
@@ -24,7 +24,8 @@ class PromptBuilder:
     """
 
     # Default prompt templates
-    _DEFAULT_ANALYSIS_TEMPLATE = """
+    _DEFAULT_TEMPLATES = {
+        "analysis": """
     Analyze the following pytest test failure and help identify the root cause:
 
     Test name: {test_name}
@@ -43,9 +44,8 @@ class PromptBuilder:
     3. Fixes: Specific suggestions to fix the issue
 
     Format your response with these headers.
-    """
-
-    _DEFAULT_SUGGESTION_TEMPLATE = """
+    """,
+        "suggestion": """
     Based on the following pytest test failure and root cause analysis,
     suggest specific fixes:
 
@@ -82,12 +82,75 @@ class PromptBuilder:
       }}
     ]
     ```
-    """
+    """,
+        "batch_analysis": """
+    Analyze the following group of related pytest test failures and identify the common root cause:
+
+    {failure_details}
+
+    Please provide:
+    1. Common Root Cause: What is causing all these tests to fail
+    2. Error Pattern: The pattern of errors across these failures
+    3. Suggested Fix: A single approach that could address all failures
+
+    Format your response with these headers.
+    """,
+        "llm_suggestion": """
+    You are an expert Python developer specializing in pytest. Your task is to analyze a failing test and suggest how to fix it.
+
+    === Test Failure Information ===
+    Test: {test_name}
+    File: {test_file}
+    Line: {line_number}
+    Error Type: {error_type}
+    Error Message: {error_message}
+
+    === Traceback ===
+    {traceback}
+
+    === Code Context ===
+    {code_context}
+
+    === Instructions ===
+    1. Analyze the test failure and determine the root cause
+    2. Provide specific suggestions to fix the issue
+    3. Include code snippets where appropriate
+    4. Format your response as follows:
+
+    ```json
+    [
+      {{
+        "suggestion": "Your first suggestion here",
+        "confidence": 0.9,
+        "explanation": "Detailed explanation of the issue and the fix",
+        "code_changes": {{
+          "file": "path/to/file.py",
+          "original_code": "def problematic_function():\n    return 1",
+          "fixed_code": "def problematic_function():\n    return 2"
+        }}
+      }},
+      {{
+        "suggestion": "Your second suggestion here (if applicable)",
+        "confidence": 0.7,
+        "explanation": "Alternative explanation and fix",
+        "code_changes": {{
+          "file": "path/to/file.py",
+          "original_code": "...",
+          "fixed_code": "..."
+        }}
+      }}
+    ]
+    ```
+
+    Provide your analysis:
+    """,
+    }
 
     def __init__(
         self,
-        analysis_template: Optional[str] = None,
-        suggestion_template: Optional[str] = None,
+        templates: Optional[Dict[str, str]] = None,
+        analysis_template: Optional[str] = None,  # For backward compatibility
+        suggestion_template: Optional[str] = None,  # For backward compatibility
         templates_dir: Optional[Union[str, Path]] = None,
         max_prompt_size: int = 4000,
     ):
@@ -95,15 +158,25 @@ class PromptBuilder:
         Initialize the PromptBuilder.
 
         Args:
-            analysis_template: Custom template for analysis prompts
-            suggestion_template: Custom template for suggestion prompts
+            templates: Custom templates dictionary (overrides default templates)
+            analysis_template: Custom template for analysis prompts (deprecated, use templates)
+            suggestion_template: Custom template for suggestion prompts (deprecated, use templates)
             templates_dir: Directory containing template files
             max_prompt_size: Maximum size (in chars) of generated prompts
         """
-        self.analysis_template = analysis_template or self._DEFAULT_ANALYSIS_TEMPLATE
-        self.suggestion_template = (
-            suggestion_template or self._DEFAULT_SUGGESTION_TEMPLATE
-        )
+        # Start with default templates
+        self.templates = self._DEFAULT_TEMPLATES.copy()
+
+        # Override with any provided custom templates
+        if templates:
+            self.templates.update(templates)
+
+        # Handle backward compatibility
+        if analysis_template:
+            self.templates["analysis"] = analysis_template
+        if suggestion_template:
+            self.templates["suggestion"] = suggestion_template
+
         # Handle templates_dir carefully to avoid file not found errors
         if templates_dir:
             try:
@@ -131,15 +204,14 @@ class PromptBuilder:
     def _load_templates_from_dir(self) -> None:
         """Load templates from the templates directory if available."""
         try:
-            analysis_file = self.templates_dir / "analysis_template.txt"
-            if analysis_file.exists():
-                self.analysis_template = analysis_file.read_text()
-                logger.debug("Loaded analysis template from %s", analysis_file)
-
-            suggestion_file = self.templates_dir / "suggestion_template.txt"
-            if suggestion_file.exists():
-                self.suggestion_template = suggestion_file.read_text()
-                logger.debug("Loaded suggestion template from %s", suggestion_file)
+            # Look for each template type in the directory
+            for template_name in self.templates.keys():
+                template_file = self.templates_dir / f"{template_name}_template.txt"
+                if template_file.exists():
+                    self.templates[template_name] = template_file.read_text()
+                    logger.debug(
+                        "Loaded %s template from %s", template_name, template_file
+                    )
         except Exception as e:
             logger.warning("Failed to load templates from directory: %s", e)
 
@@ -162,10 +234,17 @@ class PromptBuilder:
             "traceback": failure.traceback or "Not available",
             "relevant_code": failure.relevant_code or "Not available",
             "line_number": failure.line_number or "Unknown",
+            "code_context": failure.relevant_code
+            or "Not available",  # Alias for compatibility
         }
 
         # Format the template with the failure details
-        prompt = self.analysis_template.format(**context)
+        template = self.templates.get("analysis")
+        if not template:
+            logger.warning("Analysis template not found, using default")
+            template = self._DEFAULT_TEMPLATES["analysis"]
+
+        prompt = template.format(**context)
 
         # Truncate if necessary to stay within limits
         return self._truncate_prompt_if_needed(prompt)
@@ -193,10 +272,17 @@ class PromptBuilder:
             "relevant_code": failure.relevant_code or "Not available",
             "line_number": failure.line_number or "Unknown",
             "root_cause": root_cause or "Unknown",
+            "code_context": failure.relevant_code
+            or "Not available",  # Alias for compatibility
         }
 
         # Format the template with the failure details
-        prompt = self.suggestion_template.format(**context)
+        template = self.templates.get("suggestion")
+        if not template:
+            logger.warning("Suggestion template not found, using default")
+            template = self._DEFAULT_TEMPLATES["suggestion"]
+
+        prompt = template.format(**context)
 
         # Truncate if necessary to stay within limits
         return self._truncate_prompt_if_needed(prompt)
@@ -214,34 +300,65 @@ class PromptBuilder:
         if not failures:
             return ""
 
-        # Start with a header explaining the batch analysis
-        prompt = """
-        Analyze the following group of related pytest test failures and
-        identify the common root cause:
-
-        """
-
-        # Add details for each failure
+        # Generate the failure details section
+        failure_details = ""
         for i, failure in enumerate(failures, 1):
-            failure_section = f"""
+            failure_details += f"""
             --- Failure {i} ---
             Test name: {failure.test_name}
             Error type: {failure.error_type}
             Error message: {failure.error_message}
 
             """
-            prompt += failure_section
 
-        # Add instructions
-        prompt += """
-        Please provide:
-        1. Common Root Cause: What is causing all these tests to fail
-        2. Error Pattern: The pattern of errors across these failures
-        3. Suggested Fix: A single approach that could address all failures
+        # Get the batch analysis template
+        template = self.templates.get("batch_analysis")
+        if not template:
+            logger.warning("Batch analysis template not found, using default")
+            template = self._DEFAULT_TEMPLATES["batch_analysis"]
 
-        Format your response with these headers.
+        # Format the template with the failure details
+        prompt = template.format(failure_details=failure_details)
+
+        return self._truncate_prompt_if_needed(prompt)
+
+    def build_llm_suggestion_prompt(self, failure: PytestFailure) -> str:
         """
+        Build a prompt for generating LLM-based fix suggestions.
 
+        This is specifically designed to integrate with the LLMSuggester.
+
+        Args:
+            failure: The test failure to generate fix suggestions for
+
+        Returns:
+            Formatted prompt string for the LLM
+        """
+        # Extract context from the failure
+        context = {
+            "test_name": failure.test_name,
+            "test_file": failure.test_file,
+            "error_type": failure.error_type,
+            "error_message": failure.error_message,
+            "traceback": failure.traceback or "Not available",
+            "line_number": str(failure.line_number)
+            if failure.line_number
+            else "Unknown",
+            "code_context": failure.relevant_code or "Not available",
+            "relevant_code": failure.relevant_code
+            or "Not available",  # Alias for backward compatibility
+        }
+
+        # Get the LLM suggestion template
+        template = self.templates.get("llm_suggestion")
+        if not template:
+            logger.warning("LLM suggestion template not found, using default")
+            template = self._DEFAULT_TEMPLATES["llm_suggestion"]
+
+        # Format the template with the context
+        prompt = template.format(**context)
+
+        # Truncate if necessary to stay within limits
         return self._truncate_prompt_if_needed(prompt)
 
     def _truncate_prompt_if_needed(self, prompt: str) -> str:

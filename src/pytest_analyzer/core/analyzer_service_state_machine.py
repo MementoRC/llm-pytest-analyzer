@@ -10,7 +10,7 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import List, Optional, Union
 
 from rich.progress import (
     BarColumn,
@@ -22,9 +22,7 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
-from ..utils.path_resolver import PathResolver
 from ..utils.resource_manager import ResourceMonitor, limit_memory, with_timeout
-from ..utils.settings import Settings
 from .analyzer_state_machine import (
     AnalyzerContext,
     AnalyzerEvent,
@@ -32,7 +30,6 @@ from .analyzer_state_machine import (
     AnalyzerStateMachine,
 )
 from .extraction.extractor_factory import get_extractor
-from .llm.backward_compat import LLMService
 from .models.pytest_failure import FixSuggestion, PytestFailure
 
 logger = logging.getLogger(__name__)
@@ -46,34 +43,18 @@ class StateMachinePytestAnalyzerService:
     extraction, analysis, and fix suggestion processes.
     """
 
-    def __init__(
-        self, settings: Optional[Settings] = None, llm_client: Optional[Any] = None
-    ):
+    def __init__(self, context: AnalyzerContext):
         """
         Initialize the test analyzer service.
 
         Args:
-            settings: Settings object
-            llm_client: Optional client for language model API
+            context: The analyzer context containing settings, path_resolver, etc.
         """
-        self.settings = settings or Settings()
-        self.path_resolver = PathResolver(self.settings.project_root)
+        self.context = context
 
-        # Initialize LLM service if enabled
-        self.llm_service = None
-        if self.settings.use_llm:
-            self.llm_service = LLMService(
-                llm_client=llm_client, timeout_seconds=self.settings.llm_timeout
-            )
-
-        # Create the analyzer context
-        self.context = AnalyzerContext(
-            settings=self.settings,
-            path_resolver=self.path_resolver,
-            llm_service=self.llm_service,
-        )
-
-        # Create the analyzer state machine
+        # Create the analyzer state machine using the provided context
+        # Note: AnalyzerStateMachine here refers to the core state machine
+        # from .analyzer_state_machine import AnalyzerStateMachine
         self.state_machine = AnalyzerStateMachine(self.context)
 
     @with_timeout(300)
@@ -90,7 +71,7 @@ class StateMachinePytestAnalyzerService:
             List of suggested fixes
         """
         # Set memory limits
-        limit_memory(self.settings.max_memory_mb)
+        limit_memory(self.context.settings.max_memory_mb)
 
         # Resolve the output path
         path = Path(output_path)
@@ -145,7 +126,7 @@ class StateMachinePytestAnalyzerService:
             List of test failures
         """
         # Set memory limits
-        limit_memory(self.settings.max_memory_mb)
+        limit_memory(self.context.settings.max_memory_mb)
 
         # Add a pytest task if progress is active
         pytest_task_id: Optional[TaskID] = None
@@ -397,7 +378,9 @@ class StateMachinePytestAnalyzerService:
         """
         try:
             # Get the appropriate extractor for the file type
-            extractor = get_extractor(output_path, self.settings, self.path_resolver)
+            extractor = get_extractor(
+                output_path, self.context.settings, self.context.path_resolver
+            )
 
             # Extract failures
             failures = extractor.extract_failures(output_path)
@@ -431,7 +414,7 @@ class StateMachinePytestAnalyzerService:
         """
         # Choose extraction strategy based on settings
         try:
-            if self.settings.preferred_format == "plugin":
+            if self.context.settings.preferred_format == "plugin":
                 # Use direct pytest plugin integration
                 all_args = [test_path]
                 all_args.extend(pytest_args)
@@ -440,11 +423,11 @@ class StateMachinePytestAnalyzerService:
 
                 failures = collect_failures_with_plugin(all_args)
 
-            elif self.settings.preferred_format == "json":
+            elif self.context.settings.preferred_format == "json":
                 # Generate JSON output and parse it
                 failures = self._run_and_extract_json(test_path, pytest_args)
 
-            elif self.settings.preferred_format == "xml":
+            elif self.context.settings.preferred_format == "xml":
                 # Generate XML output and parse it
                 failures = self._run_and_extract_xml(test_path, pytest_args)
 
@@ -490,7 +473,7 @@ class StateMachinePytestAnalyzerService:
                     ):
                         if self.context.suggestions:
                             # If we have suggestions and want to apply them, continue to applying state
-                            if self.settings.auto_apply:
+                            if self.context.settings.auto_apply:
                                 self.state_machine.trigger(
                                     AnalyzerEvent.START_APPLICATION
                                 )
@@ -516,7 +499,7 @@ class StateMachinePytestAnalyzerService:
             for failure in self.context.failures:
                 try:
                     with ResourceMonitor(
-                        max_time_seconds=self.settings.analyzer_timeout
+                        max_time_seconds=self.context.settings.analyzer_timeout
                     ):
                         rule_based_suggestions = self.context.suggester.suggest_fixes(
                             failure
@@ -528,7 +511,7 @@ class StateMachinePytestAnalyzerService:
         # Generate LLM-based suggestions if enabled
         if (
             self.context.llm_suggester
-            and self.settings.use_llm
+            and self.context.settings.use_llm
             and self.context.failures
         ):
             try:
@@ -546,7 +529,7 @@ class StateMachinePytestAnalyzerService:
                     # Generate suggestions for the representative failure
                     try:
                         with ResourceMonitor(
-                            max_time_seconds=self.settings.llm_timeout
+                            max_time_seconds=self.context.settings.llm_timeout
                         ):
                             llm_suggestions = self.context.llm_suggester.suggest_fixes(
                                 representative
@@ -588,7 +571,7 @@ class StateMachinePytestAnalyzerService:
         all_suggestions.sort(key=lambda s: s.confidence, reverse=True)
 
         # Limit to max_suggestions per failure if specified
-        if self.settings.max_suggestions_per_failure > 0:
+        if self.context.settings.max_suggestions_per_failure > 0:
             # Group suggestions by failure
             suggestions_by_failure = {}
             for suggestion in all_suggestions:
@@ -601,7 +584,7 @@ class StateMachinePytestAnalyzerService:
             limited_suggestions = []
             for failure_id, suggestions in suggestions_by_failure.items():
                 limited_suggestions.extend(
-                    suggestions[: self.settings.max_suggestions_per_failure]
+                    suggestions[: self.context.settings.max_suggestions_per_failure]
                 )
             self.context.suggestions = limited_suggestions
         else:
@@ -665,7 +648,7 @@ class StateMachinePytestAnalyzerService:
                         # Run pytest with a timeout, redirecting output to devnull
                         subprocess.run(
                             cmd,
-                            timeout=self.settings.pytest_timeout,
+                            timeout=self.context.settings.pytest_timeout,
                             check=False,
                             stdout=devnull,
                             stderr=devnull,
@@ -677,7 +660,7 @@ class StateMachinePytestAnalyzerService:
 
                     # Run pytest with normal output, needed for rich progress display
                     result = subprocess.run(
-                        cmd, timeout=self.settings.pytest_timeout, check=False
+                        cmd, timeout=self.context.settings.pytest_timeout, check=False
                     )
 
                     if result.returncode != 0 and not quiet_mode:
@@ -687,18 +670,18 @@ class StateMachinePytestAnalyzerService:
                 else:
                     # Run pytest with a timeout, normal output but no special progress display
                     subprocess.run(
-                        cmd, timeout=self.settings.pytest_timeout, check=False
+                        cmd, timeout=self.context.settings.pytest_timeout, check=False
                     )
 
                 # Extract failures from JSON output
                 extractor = get_extractor(
-                    Path(tmp.name), self.settings, self.path_resolver
+                    Path(tmp.name), self.context.settings, self.context.path_resolver
                 )
                 return extractor.extract_failures(Path(tmp.name))
 
             except subprocess.TimeoutExpired:
                 logger.error(
-                    f"Pytest execution timed out after {self.settings.pytest_timeout} seconds"
+                    f"Pytest execution timed out after {self.context.settings.pytest_timeout} seconds"
                 )
                 return []
 
@@ -737,7 +720,7 @@ class StateMachinePytestAnalyzerService:
                         # Run pytest with a timeout, redirecting output to devnull
                         subprocess.run(
                             cmd,
-                            timeout=self.settings.pytest_timeout,
+                            timeout=self.context.settings.pytest_timeout,
                             check=False,
                             stdout=devnull,
                             stderr=devnull,
@@ -749,7 +732,7 @@ class StateMachinePytestAnalyzerService:
 
                     # Run pytest with normal output, needed for rich progress display
                     result = subprocess.run(
-                        cmd, timeout=self.settings.pytest_timeout, check=False
+                        cmd, timeout=self.context.settings.pytest_timeout, check=False
                     )
 
                     if result.returncode != 0 and not quiet_mode:
@@ -759,17 +742,17 @@ class StateMachinePytestAnalyzerService:
                 else:
                     # Run pytest with a timeout, normal output but no special progress display
                     subprocess.run(
-                        cmd, timeout=self.settings.pytest_timeout, check=False
+                        cmd, timeout=self.context.settings.pytest_timeout, check=False
                     )
 
                 # Extract failures from XML output
                 extractor = get_extractor(
-                    Path(tmp.name), self.settings, self.path_resolver
+                    Path(tmp.name), self.context.settings, self.context.path_resolver
                 )
                 return extractor.extract_failures(Path(tmp.name))
 
             except subprocess.TimeoutExpired:
                 logger.error(
-                    f"Pytest execution timed out after {self.settings.pytest_timeout} seconds"
+                    f"Pytest execution timed out after {self.context.settings.pytest_timeout} seconds"
                 )
                 return []

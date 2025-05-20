@@ -7,6 +7,7 @@ import pytest
 from src.pytest_analyzer.core.analysis.llm_suggester import LLMSuggester
 from src.pytest_analyzer.core.llm.llm_service_protocol import LLMServiceProtocol
 from src.pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
+from src.pytest_analyzer.core.prompts.prompt_builder import PromptBuilder
 from src.pytest_analyzer.utils.resource_manager import TimeoutError
 
 
@@ -76,7 +77,8 @@ class TestLLMSuggester:
         assert suggester.max_prompt_length == 4000
         assert suggester.max_context_lines == 20
         assert suggester.timeout_seconds == 60
-        assert suggester.prompt_template is not None
+        assert suggester.prompt_builder is not None
+        assert isinstance(suggester.prompt_builder, PromptBuilder)
 
     def test_init_custom_params(self, mock_llm_service):
         """Test initialization with custom parameters."""
@@ -94,7 +96,26 @@ class TestLLMSuggester:
         assert suggester.max_prompt_length == 2000
         assert suggester.max_context_lines == 5
         assert suggester.timeout_seconds == 30
-        assert suggester.prompt_template == custom_template
+        assert suggester.prompt_builder.templates["llm_suggestion"] == custom_template
+
+    def test_init_with_custom_prompt_builder(self, mock_llm_service):
+        """Test initialization with a custom PromptBuilder."""
+        custom_prompt_builder = PromptBuilder(
+            max_prompt_size=3000,
+            templates={"llm_suggestion": "Custom template: {test_name}"},
+        )
+
+        suggester = LLMSuggester(
+            llm_service=mock_llm_service,
+            prompt_builder=custom_prompt_builder,
+        )
+
+        assert suggester.prompt_builder is custom_prompt_builder
+        assert suggester.prompt_builder.max_prompt_size == 3000
+        assert (
+            suggester.prompt_builder.templates["llm_suggestion"]
+            == "Custom template: {test_name}"
+        )
 
     def test_suggest_fixes_no_llm_service(self, test_failure):
         """Test suggest_fixes when no LLM service is available."""
@@ -104,12 +125,12 @@ class TestLLMSuggester:
 
         assert suggestions == []
 
-    @patch.object(LLMSuggester, "_build_prompt")
+    @patch.object(PromptBuilder, "build_llm_suggestion_prompt")
     def test_suggest_fixes_exception(
         self, mock_build_prompt, llm_suggester, test_failure
     ):
         """Test error handling during fix suggestion."""
-        # Cause an exception in _build_prompt
+        # Cause an exception in build_llm_suggestion_prompt
         mock_build_prompt.side_effect = Exception("Test error")
 
         # Call suggest_fixes
@@ -119,7 +140,9 @@ class TestLLMSuggester:
         assert suggestions == []  # Empty list on error
         mock_build_prompt.assert_called_once_with(test_failure)
 
-    @patch.object(LLMSuggester, "_build_prompt", return_value="Test prompt")
+    @patch.object(
+        PromptBuilder, "build_llm_suggestion_prompt", return_value="Test prompt"
+    )
     @patch.object(LLMSuggester, "_parse_llm_response")
     def test_suggest_fixes_success(
         self,
@@ -149,134 +172,28 @@ class TestLLMSuggester:
         assert mock_llm_service.last_prompt == "Test prompt"
         mock_parse.assert_called_once_with("Test response", test_failure)
 
-    def test_build_prompt(self, llm_suggester, test_failure):
-        """Test building prompts for the language model."""
-        # Patch _extract_code_context to return a known value
+    def test_integration_with_prompt_builder(self, llm_suggester, test_failure):
+        """Test integration between LLMSuggester and PromptBuilder."""
+        # Create a custom prompt builder for testing
+        prompt_builder = PromptBuilder(
+            templates={
+                "llm_suggestion": "Test template with {test_name} and {error_type}"
+            }
+        )
+
+        # Replace the suggester's prompt builder
+        llm_suggester.prompt_builder = prompt_builder
+
+        # Patch the send_prompt method to capture what would be sent
         with patch.object(
-            llm_suggester,
-            "_extract_code_context",
-            return_value="def test_function():\n    assert 1 == 2",
-        ):
-            prompt = llm_suggester._build_prompt(test_failure)
+            llm_suggester.llm_service, "send_prompt", return_value="Test response"
+        ) as mock_send_prompt:
+            # Call suggest_fixes
+            llm_suggester.suggest_fixes(test_failure)
 
-            # Check if prompt contains key information
-            assert test_failure.test_name in prompt
-            assert test_failure.error_type in prompt
-            assert test_failure.error_message in prompt
-            assert "def test_function()" in prompt
-            assert str(test_failure.line_number) in prompt
-
-    @patch.object(LLMSuggester, "_truncate_text")
-    def test_build_prompt_long_prompt(self, mock_truncate, llm_suggester, test_failure):
-        """Test prompt truncation for long prompts."""
-        # Mock the truncate_text method
-        mock_truncate.return_value = "truncated text"
-
-        # Create a long traceback and code context
-        test_failure.traceback = "E       " + ("x" * 2000)
-
-        # Patch _extract_code_context to return a long value
-        with patch.object(
-            llm_suggester,
-            "_extract_code_context",
-            return_value="def test_function():\n" + ("x" * 3000),
-        ):
-            # Set a small max_prompt_length
-            llm_suggester.max_prompt_length = 500
-
-            # Build the prompt but we don't need to capture it
-            _ = llm_suggester._build_prompt(test_failure)
-
-            # Verify truncate_text was called
-            assert mock_truncate.called
-
-    def test_extract_code_context_file_not_found(self, llm_suggester, test_failure):
-        """Test extracting code context when the file doesn't exist."""
-        # Set test_file to a non-existent path
-        test_failure.test_file = "/nonexistent/path.py"
-
-        context = llm_suggester._extract_code_context(test_failure)
-
-        # Should use relevant_code if available when file not found
-        assert context == test_failure.relevant_code
-
-    @patch("os.path.exists", return_value=True)
-    @patch("builtins.open")
-    def test_extract_code_context_io_error(
-        self, mock_open, mock_exists, llm_suggester, test_failure
-    ):
-        """Test extracting code context when there's an IO error."""
-        # Simulate an IO error when opening the file
-        mock_open.side_effect = IOError("Test IO error")
-
-        # Remove relevant_code to force file reading attempt
-        test_failure.relevant_code = None
-
-        # Set up test_failure.traceback to contain code snippets
-        test_failure.traceback = "E  >  assert 1 == 2\nE      where 1 = func()"
-
-        context = llm_suggester._extract_code_context(test_failure)
-
-        # Log the actual return value for debugging
-        if context is not None:
-            print(f"Context returned: {context}")
-
-        # Should return None or extract from traceback
-        # If code pattern extraction is implemented, we might get a value
-        # Otherwise, we should get None
-        assert context is None or isinstance(context, str)
-
-    def test_extract_code_context_from_traceback(self, llm_suggester, test_failure):
-        """Test extracting code context from the traceback."""
-        # Remove relevant_code to force traceback extraction
-        test_failure.relevant_code = None
-        # Set test_file to a non-existent path
-        test_failure.test_file = "/nonexistent/path.py"
-        # Set up a traceback with code patterns
-        test_failure.traceback = ">       assert 1 == 2\nE       where 1 = func()"
-
-        context = llm_suggester._extract_code_context(test_failure)
-
-        # Should extract code lines or return None if pattern doesn't match
-        if context is not None:
-            assert "assert 1 == 2" in context
-        else:
-            # This is also valid if the implementation doesn't extract from traceback
-            pass
-
-    def test_truncate_text(self, llm_suggester):
-        """Test the text truncation method."""
-        # Test with text shorter than max_length
-        short_text = "This is a short text"
-        assert llm_suggester._truncate_text(short_text, 100) == short_text
-
-        # Test with text longer than max_length
-        long_text = "x" * 1000
-        truncated = llm_suggester._truncate_text(long_text, 100)
-
-        assert len(truncated) <= 120  # Allow for truncation markers
-        assert "..." in truncated
-        assert "[truncated]" in truncated
-
-        # Test with None or empty text
-        assert llm_suggester._truncate_text(None, 100) is None
-        assert llm_suggester._truncate_text("", 100) == ""
-
-    def test_truncate_prompt(self, llm_suggester):
-        """Test the prompt truncation method."""
-        # Create a prompt with multiple sections
-        sections = ["Section 1", "Section 2", "Section 3", "Section 4"]
-        prompt = "===".join(sections)
-
-        # Truncate to a length that requires dropping middle sections
-        truncated = llm_suggester._truncate_prompt(prompt, 20)
-
-        # First and last sections should be preserved
-        assert "Section 1" in truncated
-        assert "Section 4" in truncated
-
-        # Should not exceed max length (plus some buffer)
-        assert len(truncated) <= 30
+            # Check that the prompt was correctly generated and sent
+            expected_prompt = f"Test template with {test_failure.test_name} and {test_failure.error_type}"
+            mock_send_prompt.assert_called_once_with(expected_prompt)
 
     def test_parse_llm_response_json(self, llm_suggester, test_failure):
         """Test parsing a JSON response from the LLM."""

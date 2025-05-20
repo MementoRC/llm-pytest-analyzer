@@ -9,10 +9,20 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+from pytest_analyzer.core import analyzer_state_machine
+
+# Use absolute import for AnalyzerStateMachine to align with typical patch targets
+from pytest_analyzer.core.analyzer_state_machine import AnalyzerContext
+
+from ..utils.path_resolver import PathResolver
 from ..utils.settings import Settings
-from .analyzer_service_state_machine import AnalyzerStateMachine
+from .analysis.failure_analyzer import FailureAnalyzer
+from .analysis.fix_suggester import FixSuggester
+from .analysis.llm_suggester import LLMSuggester
 from .di.container import Container
 from .di.service_collection import ServiceCollection
+from .errors import DependencyResolutionError
+from .llm.llm_service_protocol import LLMServiceProtocol
 from .models.pytest_failure import FixSuggestion
 from .protocols import Applier
 
@@ -66,6 +76,67 @@ class PytestAnalyzerFacade:
         # Build the container
         return services.build_container()
 
+    def _create_analyzer_context_from_container(
+        self, settings: Settings, container: Container
+    ) -> AnalyzerContext:
+        """Helper to create AnalyzerContext from DI container and settings."""
+        path_resolver = container.resolve(PathResolver)
+
+        llm_service: Optional[LLMServiceProtocol] = None
+        if settings.use_llm:
+            try:
+                llm_service = container.resolve(LLMServiceProtocol)
+            except DependencyResolutionError:
+                logger.warning(
+                    "LLMServiceProtocol not resolved. LLM features might be affected."
+                )
+
+        analyzer: Optional[FailureAnalyzer] = None
+        try:
+            analyzer = container.resolve(FailureAnalyzer)
+        except DependencyResolutionError:
+            logger.debug(
+                "FailureAnalyzer not resolved from container for AnalyzerContext."
+            )
+
+        suggester: Optional[FixSuggester] = None
+        try:
+            suggester = container.resolve(FixSuggester)
+        except DependencyResolutionError:
+            logger.debug(
+                "FixSuggester not resolved from container for AnalyzerContext."
+            )
+
+        llm_suggester: Optional[LLMSuggester] = None
+        if settings.use_llm and llm_service:
+            try:
+                llm_suggester = container.resolve(LLMSuggester)
+            except DependencyResolutionError:
+                logger.debug(
+                    "LLMSuggester not resolved from container for AnalyzerContext."
+                )
+
+        fix_applier: Optional[Applier] = (
+            None  # Type Applier, as resolved, instance is FixApplier
+        )
+        try:
+            fix_applier = container.resolve(Applier)
+        except DependencyResolutionError:
+            logger.debug(
+                "FixApplier (via Applier protocol) not resolved from container for AnalyzerContext."
+            )
+
+        context = AnalyzerContext(
+            settings=settings,
+            path_resolver=path_resolver,
+            llm_service=llm_service,
+            analyzer=analyzer,
+            suggester=suggester,
+            llm_suggester=llm_suggester,
+            fix_applier=fix_applier,  # type: ignore[assignment] # FixApplier is an Applier
+        )
+        return context
+
     def analyze_pytest_output(
         self, output_path: Union[str, Path]
     ) -> List[FixSuggestion]:
@@ -84,8 +155,13 @@ class PytestAnalyzerFacade:
             return []
 
         try:
-            # Create and run the state machine
-            state_machine = AnalyzerStateMachine(self.di_container)
+            # Create AnalyzerContext and then the state machine
+            analyzer_context = self._create_analyzer_context_from_container(
+                self.settings, self.di_container
+            )
+            state_machine = analyzer_state_machine.AnalyzerStateMachine(
+                analyzer_context
+            )
             result = state_machine.run(test_results_path=str(path), apply_fixes=False)
 
             if isinstance(result, dict) and "error" in result:
@@ -120,8 +196,13 @@ class PytestAnalyzerFacade:
             List of test failures
         """
         try:
-            # Create and run the state machine - extraction phase only
-            state_machine = AnalyzerStateMachine(self.di_container)
+            # Create AnalyzerContext and then the state machine
+            analyzer_context = self._create_analyzer_context_from_container(
+                self.settings, self.di_container
+            )
+            state_machine = analyzer_state_machine.AnalyzerStateMachine(
+                analyzer_context
+            )
             result = state_machine.run(
                 test_path=test_path,
                 pytest_args=pytest_args or [],
@@ -157,8 +238,13 @@ class PytestAnalyzerFacade:
             List of suggested fixes
         """
         try:
-            # Create and run the state machine
-            state_machine = AnalyzerStateMachine(self.di_container)
+            # Create AnalyzerContext and then the state machine
+            analyzer_context = self._create_analyzer_context_from_container(
+                self.settings, self.di_container
+            )
+            state_machine = analyzer_state_machine.AnalyzerStateMachine(
+                analyzer_context
+            )
             result = state_machine.run(
                 test_path=test_path,
                 pytest_args=pytest_args or [],

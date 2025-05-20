@@ -27,8 +27,12 @@ def test_prompt_builder_initialization():
     builder = PromptBuilder()
     assert builder.max_prompt_size == 4000
     assert builder.templates_dir is None
-    assert builder.analysis_template == PromptBuilder._DEFAULT_ANALYSIS_TEMPLATE
-    assert builder.suggestion_template == PromptBuilder._DEFAULT_SUGGESTION_TEMPLATE
+    assert builder.templates["analysis"] == PromptBuilder._DEFAULT_TEMPLATES["analysis"]
+    assert (
+        builder.templates["suggestion"]
+        == PromptBuilder._DEFAULT_TEMPLATES["suggestion"]
+    )
+    assert "llm_suggestion" in builder.templates
 
 
 def test_prompt_builder_custom_initialization():
@@ -37,6 +41,7 @@ def test_prompt_builder_custom_initialization():
     custom_suggestion = "Custom suggestion template"
     custom_max_size = 2000
 
+    # Test backward compatibility approach
     builder = PromptBuilder(
         analysis_template=custom_analysis,
         suggestion_template=custom_suggestion,
@@ -44,8 +49,23 @@ def test_prompt_builder_custom_initialization():
     )
 
     assert builder.max_prompt_size == custom_max_size
-    assert builder.analysis_template == custom_analysis
-    assert builder.suggestion_template == custom_suggestion
+    assert builder.templates["analysis"] == custom_analysis
+    assert builder.templates["suggestion"] == custom_suggestion
+
+    # Test with custom templates dictionary
+    custom_templates = {
+        "analysis": "New analysis template",
+        "custom_template": "A totally custom template",
+    }
+
+    builder2 = PromptBuilder(
+        templates=custom_templates,
+        max_prompt_size=custom_max_size,
+    )
+
+    assert builder2.templates["analysis"] == custom_templates["analysis"]
+    assert builder2.templates["custom_template"] == custom_templates["custom_template"]
+    assert "suggestion" in builder2.templates  # Default templates are still present
 
 
 def test_build_analysis_prompt(sample_failure):
@@ -124,19 +144,23 @@ def test_load_templates_from_dir(tmp_path):
 
     analysis_file = template_dir / "analysis_template.txt"
     suggestion_file = template_dir / "suggestion_template.txt"
+    llm_suggestion_file = template_dir / "llm_suggestion_template.txt"
 
     analysis_content = "CUSTOM ANALYSIS TEMPLATE"
     suggestion_content = "CUSTOM SUGGESTION TEMPLATE"
+    llm_suggestion_content = "CUSTOM LLM SUGGESTION TEMPLATE"
 
     analysis_file.write_text(analysis_content)
     suggestion_file.write_text(suggestion_content)
+    llm_suggestion_file.write_text(llm_suggestion_content)
 
     # Create prompt builder with template directory
     builder = PromptBuilder(templates_dir=str(template_dir))
 
     # Check that templates were loaded
-    assert builder.analysis_template == analysis_content
-    assert builder.suggestion_template == suggestion_content
+    assert builder.templates["analysis"] == analysis_content
+    assert builder.templates["suggestion"] == suggestion_content
+    assert builder.templates["llm_suggestion"] == llm_suggestion_content
 
 
 def test_empty_batch_prompt():
@@ -144,3 +168,25 @@ def test_empty_batch_prompt():
     builder = PromptBuilder()
     prompt = builder.build_batch_analysis_prompt([])
     assert prompt == ""
+
+
+def test_build_llm_suggestion_prompt(sample_failure):
+    """Test building an LLM suggestion prompt from a failure."""
+    builder = PromptBuilder()
+    prompt = builder.build_llm_suggestion_prompt(sample_failure)
+
+    # Check that the prompt contains key information from the failure
+    assert sample_failure.test_name in prompt
+    assert sample_failure.error_type in prompt
+    assert sample_failure.error_message in prompt
+    assert sample_failure.traceback in prompt
+    assert sample_failure.relevant_code in prompt
+    assert "Instructions" in prompt
+    assert "json" in prompt  # Should include the JSON format instructions
+
+    # Check with custom template
+    custom_template = "Custom LLM template for {test_name}"
+    builder.templates["llm_suggestion"] = custom_template
+    prompt = builder.build_llm_suggestion_prompt(sample_failure)
+
+    assert prompt == f"Custom LLM template for {sample_failure.test_name}"

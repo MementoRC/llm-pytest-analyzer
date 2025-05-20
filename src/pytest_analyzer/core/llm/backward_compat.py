@@ -27,13 +27,19 @@ class LLMService(LLMServiceProtocol):
     the new dependency-injected implementation internally.
     """
 
-    def __init__(self, llm_client: Optional[Any] = None, timeout_seconds: int = 60):
+    def __init__(
+        self,
+        llm_client: Optional[Any] = None,
+        timeout_seconds: int = 60,
+        disable_auto_detection: bool = False,
+    ):
         """
         Initialize the backward-compatible LLMService.
 
         Args:
             llm_client: Optional pre-configured LLM client
             timeout_seconds: Timeout for LLM API requests in seconds
+            disable_auto_detection: If True, prevents auto-detection of LLM clients
         """
         # Create the required dependencies
         self.prompt_builder = PromptBuilder()
@@ -45,6 +51,7 @@ class LLMService(LLMServiceProtocol):
             response_parser=self.response_parser,
             llm_client=llm_client,
             timeout_seconds=timeout_seconds,
+            disable_auto_detection=disable_auto_detection,
         )
 
         # Expose the same public interface as the original service

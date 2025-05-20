@@ -30,10 +30,32 @@ class Settings:
     use_llm: bool = True  # Whether to use LLM-based suggestions
     llm_timeout: int = 60  # Timeout for LLM requests in seconds
     llm_api_key: Optional[str] = None  # Generic API key for LLM service (deprecated)
+    llm_provider: Optional[str] = (
+        None  # Provider to use (e.g. anthropic, openai, azure, together, ollama)
+    )
+    llm_model: str = "auto"  # Model to use (auto selects available models)
+
+    # Provider-specific API keys and settings
     openai_api_key: Optional[str] = None  # API key for OpenAI
     anthropic_api_key: Optional[str] = None  # API key for Anthropic
-    llm_model: str = "auto"  # Model to use (auto selects available models)
-    llm_provider: Optional[str] = None  # Provider to use (e.g. anthropic, openai)
+
+    # Azure OpenAI settings
+    azure_api_key: Optional[str] = None  # API key for Azure OpenAI
+    azure_endpoint: Optional[str] = None  # Endpoint URL for Azure OpenAI
+    azure_api_version: Optional[str] = None  # API version for Azure OpenAI
+    azure_deployment: Optional[str] = None  # Deployment name for Azure OpenAI
+
+    # Together.ai settings
+    together_api_key: Optional[str] = None  # API key for Together.ai
+
+    # Ollama settings
+    ollama_host: Optional[str] = None  # Host for Ollama (default: localhost)
+    ollama_port: int = 11434  # Port for Ollama (default: 11434)
+    ollama_model: str = "llama2"  # Default model for Ollama
+
+    # Fallback settings
+    use_fallback: bool = True  # Whether to try fallback providers if primary fails
+    fallback_providers: Optional[List[str]] = None  # Ordered list of fallback providers
 
     # Prompt settings
     max_prompt_size: int = 4000  # Maximum size of prompt in characters
