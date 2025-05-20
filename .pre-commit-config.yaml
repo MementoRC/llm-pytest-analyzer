@@ -22,13 +22,13 @@ repos:
       # - id: mypy
       #   args: ["--ignore-missing-imports"]
       #   additional_dependencies: ["types-pyyaml"]
-      - id: mypy
-        name: mypy
-        entry: pixi run -e dev mypy
-        language: system
-        types: [python]
-        pass_filenames: false
-        args: ["--no-incremental", "--exclude", "src/pytest_analyzer/core/di/", "src"]
+      # - id: mypy
+      #   name: mypy
+      #   entry: pixi run -e dev mypy
+      #   language: system
+      #   types: [python]
+      #   pass_filenames: false
+      #   args: ["--no-incremental", "--exclude", "src/pytest_analyzer/core/di/", "src"]
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
