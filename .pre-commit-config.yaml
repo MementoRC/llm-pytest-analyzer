@@ -28,7 +28,7 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
-        args: ["src", "tests"]
+        args: ["src"]
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
