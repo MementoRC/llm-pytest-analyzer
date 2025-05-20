@@ -60,3 +60,18 @@ htmlcov/
 .roomodes
 .taskmasterconfig
 .windsurfrules
+
+# Backup files
+*.bak
+*.backup
+*.swp
+*.old
+*.orig
+*~
+
+# Temporary directories
+tmp/
+temp/
+
+# The refactor directory itself (shouldn't be versioned)
+refactor:architecture/
