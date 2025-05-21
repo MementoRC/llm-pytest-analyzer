@@ -66,9 +66,7 @@ class PytestAnalyzerFacade:
     the improved architecture internally.
     """
 
-    def __init__(
-        self, settings: Optional[Settings] = None, llm_client: Optional[Any] = None
-    ):
+    def __init__(self, settings: Optional[Settings] = None, llm_client: Optional[Any] = None):
         """
         Initialize the facade with optional settings and LLM client.
 
@@ -118,38 +116,28 @@ class PytestAnalyzerFacade:
             try:
                 llm_service = container.resolve(LLMServiceProtocol)
             except DependencyResolutionError:
-                logger.warning(
-                    "LLMServiceProtocol not resolved. LLM features might be affected."
-                )
+                logger.warning("LLMServiceProtocol not resolved. LLM features might be affected.")
 
         analyzer: Optional[FailureAnalyzer] = None
         try:
             analyzer = container.resolve(FailureAnalyzer)
         except DependencyResolutionError:
-            logger.debug(
-                "FailureAnalyzer not resolved from container for AnalyzerContext."
-            )
+            logger.debug("FailureAnalyzer not resolved from container for AnalyzerContext.")
 
         suggester: Optional[FixSuggester] = None
         try:
             suggester = container.resolve(FixSuggester)
         except DependencyResolutionError:
-            logger.debug(
-                "FixSuggester not resolved from container for AnalyzerContext."
-            )
+            logger.debug("FixSuggester not resolved from container for AnalyzerContext.")
 
         llm_suggester: Optional[LLMSuggester] = None
         if settings.use_llm and llm_service:
             try:
                 llm_suggester = container.resolve(LLMSuggester)
             except DependencyResolutionError:
-                logger.debug(
-                    "LLMSuggester not resolved from container for AnalyzerContext."
-                )
+                logger.debug("LLMSuggester not resolved from container for AnalyzerContext.")
 
-        fix_applier: Optional[Applier] = (
-            None  # Type Applier, as resolved, instance is FixApplier
-        )
+        fix_applier: Optional[Applier] = None  # Type Applier, as resolved, instance is FixApplier
         try:
             fix_applier = container.resolve(Applier)
         except DependencyResolutionError:
@@ -168,9 +156,7 @@ class PytestAnalyzerFacade:
         )
         return context
 
-    def analyze_pytest_output(
-        self, output_path: Union[str, Path]
-    ) -> List[FixSuggestion]:
+    def analyze_pytest_output(self, output_path: Union[str, Path]) -> List[FixSuggestion]:
         """
         Analyze pytest output from a file and generate fix suggestions.
 
@@ -190,9 +176,7 @@ class PytestAnalyzerFacade:
             analyzer_context = self._create_analyzer_context_from_container(
                 self.settings, self.di_container
             )
-            state_machine = analyzer_state_machine.AnalyzerStateMachine(
-                analyzer_context
-            )
+            state_machine = analyzer_state_machine.AnalyzerStateMachine(analyzer_context)
             result = state_machine.run(test_results_path=str(path), apply_fixes=False)
 
             if isinstance(result, dict) and "error" in result:
@@ -231,9 +215,7 @@ class PytestAnalyzerFacade:
             analyzer_context = self._create_analyzer_context_from_container(
                 self.settings, self.di_container
             )
-            state_machine = analyzer_state_machine.AnalyzerStateMachine(
-                analyzer_context
-            )
+            state_machine = analyzer_state_machine.AnalyzerStateMachine(analyzer_context)
             result = state_machine.run(
                 test_path=test_path,
                 pytest_args=pytest_args or [],
@@ -273,9 +255,7 @@ class PytestAnalyzerFacade:
             analyzer_context = self._create_analyzer_context_from_container(
                 self.settings, self.di_container
             )
-            state_machine = analyzer_state_machine.AnalyzerStateMachine(
-                analyzer_context
-            )
+            state_machine = analyzer_state_machine.AnalyzerStateMachine(analyzer_context)
             result = state_machine.run(
                 test_path=test_path,
                 pytest_args=pytest_args or [],
@@ -307,9 +287,7 @@ class PytestAnalyzerFacade:
             # Write the test output to a temporary file
             import tempfile
 
-            with tempfile.NamedTemporaryFile(
-                mode="w+", suffix=".txt", delete=False
-            ) as tmp:
+            with tempfile.NamedTemporaryFile(mode="w+", suffix=".txt", delete=False) as tmp:
                 tmp.write(test_output)
                 tmp_path = tmp.name
 
@@ -365,9 +343,7 @@ class PytestAnalyzerFacade:
         result = self.analyze_test_results(test_output)
         return result.get("suggestions", [])
 
-    def apply_fixes(
-        self, test_output: str, target_files: List[str] = None
-    ) -> Dict[str, Any]:
+    def apply_fixes(self, test_output: str, target_files: List[str] = None) -> Dict[str, Any]:
         """
         Analyze test results, suggest and apply fixes.
 
@@ -382,9 +358,7 @@ class PytestAnalyzerFacade:
             # Write the test output to a temporary file
             import tempfile
 
-            with tempfile.NamedTemporaryFile(
-                mode="w+", suffix=".txt", delete=False
-            ) as tmp:
+            with tempfile.NamedTemporaryFile(mode="w+", suffix=".txt", delete=False) as tmp:
                 tmp.write(test_output)
                 tmp_path = tmp.name
 
@@ -472,10 +446,7 @@ class PytestAnalyzerFacade:
             tests_to_validate = []
             if hasattr(suggestion, "validation_tests") and suggestion.validation_tests:
                 tests_to_validate = suggestion.validation_tests
-            elif (
-                hasattr(suggestion.failure, "test_name")
-                and suggestion.failure.test_name
-            ):
+            elif hasattr(suggestion.failure, "test_name") and suggestion.failure.test_name:
                 # Use the original failing test for validation
                 tests_to_validate = [suggestion.failure.test_name]
 

@@ -51,12 +51,10 @@ def test_cli_direct_execution_help():
 @pytest.mark.xfail(
     reason="Known failure with assertion file handling - difficult to mock subprocess correctly"
 )
-def test_cli_with_assertion_file(
-    sample_assertion_file, sample_json_report, patch_subprocess
-):
+def test_cli_with_assertion_file(sample_assertion_file, sample_json_report, patch_subprocess):
     """Test the CLI with a file containing an assertion error."""
     # Read the sample JSON content
-    with open(sample_json_report, "r") as f:
+    with open(sample_json_report) as f:
         json_content = f.read()
 
     # Create a mock subprocess result that writes to a temporary file
@@ -119,10 +117,7 @@ def test_cli_with_report_file(sample_json_report):
 
     # Verify header, test details, and suggestion are present
     assert "Analyzing output file:" in output
-    assert (
-        "test_assertion.py::test_assertion_error" in output
-        or "AssertionError" in output
-    )
+    assert "test_assertion.py::test_assertion_error" in output or "AssertionError" in output
     assert "Suggested fix" in output
 
 
@@ -136,7 +131,7 @@ def test_cli_with_llm_integration(sample_json_report):
     os.environ["PYTEST_ANALYZER_LLM_API_KEY"] = "mock-api-key"
 
     # Read the report file
-    with open(sample_json_report, "r") as f:
+    with open(sample_json_report) as f:
         json_content = f.read()
 
     # Patch the LLM class

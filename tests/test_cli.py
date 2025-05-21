@@ -165,9 +165,7 @@ def test_cli_main_with_debug(mock_display, mock_logging, mock_service):
         line_number=42,
     )
 
-    suggestion = FixSuggestion(
-        failure=test_failure, suggestion="Fix the assertion", confidence=0.8
-    )
+    suggestion = FixSuggestion(failure=test_failure, suggestion="Fix the assertion", confidence=0.8)
 
     mock_analyzer.run_and_analyze.return_value = [suggestion]
 
@@ -282,9 +280,7 @@ def test_display_suggestions_empty(mock_console):
     display_suggestions([], argparse.Namespace(verbosity=1))
 
     # Verify that the appropriate message is displayed
-    mock_console.print.assert_called_with(
-        "\n[bold red]No fix suggestions found.[/bold red]"
-    )
+    mock_console.print.assert_called_with("\n[bold red]No fix suggestions found.[/bold red]")
 
 
 def test_display_suggestions_with_rule_based(mock_console, test_suggestion, mock_args):
@@ -293,12 +289,8 @@ def test_display_suggestions_with_rule_based(mock_console, test_suggestion, mock
     display_suggestions([test_suggestion], mock_args)
 
     # Verify key calls
-    mock_console.print.assert_any_call(
-        "\n[bold green]Found 1 fix suggestions:[/bold green]"
-    )
-    mock_console.print.assert_any_call(
-        "\n[bold green]Suggested fix (Rule-based):[/bold green]"
-    )
+    mock_console.print.assert_any_call("\n[bold green]Found 1 fix suggestions:[/bold green]")
+    mock_console.print.assert_any_call("\n[bold green]Suggested fix (Rule-based):[/bold green]")
     mock_console.print.assert_any_call(test_suggestion.suggestion)
 
 
@@ -308,12 +300,8 @@ def test_display_suggestions_with_llm(mock_console, llm_suggestion, mock_args):
     display_suggestions([llm_suggestion], mock_args)
 
     # Verify key calls
-    mock_console.print.assert_any_call(
-        "\n[bold green]Found 1 fix suggestions:[/bold green]"
-    )
-    mock_console.print.assert_any_call(
-        "\n[bold yellow]Suggested fix (LLM):[/bold yellow]"
-    )
+    mock_console.print.assert_any_call("\n[bold green]Found 1 fix suggestions:[/bold green]")
+    mock_console.print.assert_any_call("\n[bold yellow]Suggested fix (LLM):[/bold yellow]")
     mock_console.print.assert_any_call(llm_suggestion.suggestion)
 
 
@@ -323,9 +311,7 @@ def test_display_suggestions_with_code_changes(
 ):
     """Test displaying suggestions with code changes."""
     # Add code changes to the suggestion
-    test_suggestion.code_changes = {
-        "test_file.py": "def fixed_test():\n    assert 1 == 1"
-    }
+    test_suggestion.code_changes = {"test_file.py": "def fixed_test():\n    assert 1 == 1"}
 
     # Call the function
     display_suggestions([test_suggestion], mock_args)

@@ -52,14 +52,10 @@ def test_debug_integration():
     service.llm_suggester.llm_client = mock_llm_service
 
     # Now check again
-    print(
-        f"After update - service.llm_suggester.llm_client: {service.llm_suggester.llm_client}"
-    )
+    print(f"After update - service.llm_suggester.llm_client: {service.llm_suggester.llm_client}")
 
     # Create a sample failure
-    sample_json_path = (
-        Path(__file__).parent / "sample_reports" / "assertion_fail_report.json"
-    )
+    sample_json_path = Path(__file__).parent / "sample_reports" / "assertion_fail_report.json"
 
     # Analyze the report
     suggestions = service.analyze_pytest_output(sample_json_path)
@@ -70,9 +66,7 @@ def test_debug_integration():
 
     if suggestions:
         llm_suggestions = [
-            s
-            for s in suggestions
-            if s.code_changes and s.code_changes.get("source") == "llm"
+            s for s in suggestions if s.code_changes and s.code_changes.get("source") == "llm"
         ]
         print(f"LLM suggestions count: {len(llm_suggestions)}")
         if llm_suggestions:

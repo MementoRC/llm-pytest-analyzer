@@ -96,19 +96,13 @@ class FixApplier:
         """
         # Determine whether to use verbose test output
         use_verbose = (
-            self.verbose_test_output
-            if verbose_test_output is None
-            else verbose_test_output
+            self.verbose_test_output if verbose_test_output is None else verbose_test_output
         )
         # Extract valid file paths from code changes
         target_files = []
-        for path_str in code_changes.keys():
+        for path_str in code_changes:
             # Skip metadata keys like 'source' or 'fingerprint'
-            if (
-                not isinstance(path_str, str)
-                or "/" not in path_str
-                and "\\" not in path_str
-            ):
+            if not isinstance(path_str, str) or "/" not in path_str and "\\" not in path_str:
                 continue
             target_files.append(Path(path_str))
 
@@ -136,14 +130,9 @@ class FixApplier:
         # Use appropriate mode
         if effective_use_safe_mode:
             logger.info("Using safe mode with temporary environment validation")
-            return self._apply_fix_safe(
-                code_changes, tests_to_validate, target_files, use_verbose
-            )
-        else:
-            logger.info("Using direct mode with backup/rollback")
-            return self._apply_fix_direct(
-                code_changes, tests_to_validate, target_files, use_verbose
-            )
+            return self._apply_fix_safe(code_changes, tests_to_validate, target_files, use_verbose)
+        logger.info("Using direct mode with backup/rollback")
+        return self._apply_fix_direct(code_changes, tests_to_validate, target_files, use_verbose)
 
     def _should_use_safe_mode(self, target_files: List[Path]) -> bool:
         """
@@ -258,9 +247,7 @@ class FixApplier:
                 # 1. Create backups for all existing files
                 for file_path in target_files:
                     if file_path.exists():
-                        backup_path = file_path.with_suffix(
-                            file_path.suffix + self.backup_suffix
-                        )
+                        backup_path = file_path.with_suffix(file_path.suffix + self.backup_suffix)
                         shutil.copy2(file_path, backup_path)  # Preserves metadata
                         backup_paths[file_path] = backup_path
                         logger.info(f"Backed up '{file_path}' to '{backup_path}'")
@@ -276,9 +263,7 @@ class FixApplier:
                         continue
 
                     file_path = Path(file_path_str)
-                    orig_path = self.project_root / file_path.relative_to(
-                        self.project_root
-                    )
+                    orig_path = self.project_root / file_path.relative_to(self.project_root)
                     orig_path.parent.mkdir(parents=True, exist_ok=True)
                     orig_path.write_text(new_content, encoding="utf-8")
                     applied_files.append(orig_path)
@@ -303,13 +288,12 @@ class FixApplier:
                         applied_files=[],
                         rolled_back_files=applied_files,
                     )
-                else:
-                    return FixApplicationResult(
-                        success=False,
-                        message=f"Error creating backups before applying changes: {e}",
-                        applied_files=[],
-                        rolled_back_files=[],
-                    )
+                return FixApplicationResult(
+                    success=False,
+                    message=f"Error creating backups before applying changes: {e}",
+                    applied_files=[],
+                    rolled_back_files=[],
+                )
 
         except Exception as e:
             error_message = f"Unexpected error during safe apply: {e}"
@@ -332,9 +316,7 @@ class FixApplier:
                     shutil.rmtree(temp_dir, ignore_errors=True)
                     logger.info(f"Cleaned up temporary environment: {temp_dir}")
                 except Exception as e:
-                    logger.warning(
-                        f"Failed to clean up temporary directory {temp_dir}: {e}"
-                    )
+                    logger.warning(f"Failed to clean up temporary directory {temp_dir}: {e}")
 
     def _apply_fix_direct(
         self,
@@ -395,9 +377,7 @@ class FixApplier:
             # 4. Validate by running tests
             validation_passed = True
             if tests_to_validate:
-                validation_passed = self._run_validation_tests(
-                    tests_to_validate, verbose=verbose
-                )
+                validation_passed = self._run_validation_tests(tests_to_validate, verbose=verbose)
 
             # 5. Handle validation result
             if validation_passed:
@@ -408,19 +388,20 @@ class FixApplier:
                     applied_files=applied_files,
                     rolled_back_files=[],
                 )
-            else:
-                error_message = f"Validation failed for tests: {tests_to_validate}. Rolling back changes."
-                logger.warning(error_message)
+            error_message = (
+                f"Validation failed for tests: {tests_to_validate}. Rolling back changes."
+            )
+            logger.warning(error_message)
 
-                # Rollback the changes
-                rolled_back = self._rollback_changes(applied_files, backup_paths)
+            # Rollback the changes
+            rolled_back = self._rollback_changes(applied_files, backup_paths)
 
-                return FixApplicationResult(
-                    success=False,
-                    message=error_message,
-                    applied_files=[],
-                    rolled_back_files=rolled_back,
-                )
+            return FixApplicationResult(
+                success=False,
+                message=error_message,
+                applied_files=[],
+                rolled_back_files=rolled_back,
+            )
 
         except Exception as e:
             error_message = f"Unexpected error during direct apply: {e}"
@@ -444,9 +425,7 @@ class FixApplier:
                     shutil.rmtree(backup_dir, ignore_errors=True)
                     logger.info(f"Cleaned up backup directory: {backup_dir}")
                 except Exception as e:
-                    logger.warning(
-                        f"Failed to clean up backup directory {backup_dir}: {e}"
-                    )
+                    logger.warning(f"Failed to clean up backup directory {backup_dir}: {e}")
 
     def _copy_project_to_temp(self, temp_dir: Path) -> None:
         """
@@ -538,9 +517,7 @@ class FixApplier:
             logger.warning("No tests provided for validation. Skipping validation.")
             return True  # No tests to run means no failures
 
-        logger.info(
-            f"Running validation tests in temporary environment: {tests_to_run}"
-        )
+        logger.info(f"Running validation tests in temporary environment: {tests_to_run}")
 
         # Use the same Python interpreter
         command = [
@@ -582,29 +559,22 @@ class FixApplier:
                 logger.debug(f"Pytest stderr:\n{result.stderr}")
 
             if result.returncode == 0:
-                logger.info(
-                    "Validation successful: All tests passed in temporary environment"
-                )
+                logger.info("Validation successful: All tests passed in temporary environment")
                 return True
-            else:
-                logger.warning(
-                    f"Validation failed: Tests returned code {result.returncode} in temporary environment"
-                )
-                return False
+            logger.warning(
+                f"Validation failed: Tests returned code {result.returncode} in temporary environment"
+            )
+            return False
 
         except subprocess.TimeoutExpired:
             logger.error("Validation timed out in temporary environment")
             return False
 
         except Exception as e:
-            logger.error(
-                f"Error running validation tests in temporary environment: {e}"
-            )
+            logger.error(f"Error running validation tests in temporary environment: {e}")
             return False
 
-    def _run_validation_tests(
-        self, tests_to_run: List[str], verbose: bool = False
-    ) -> bool:
+    def _run_validation_tests(self, tests_to_run: List[str], verbose: bool = False) -> bool:
         """
         Run pytest tests directly on the modified files.
 
@@ -662,11 +632,8 @@ class FixApplier:
             if result.returncode == 0:
                 logger.info("Validation successful: All tests passed")
                 return True
-            else:
-                logger.warning(
-                    f"Validation failed: Tests returned code {result.returncode}"
-                )
-                return False
+            logger.warning(f"Validation failed: Tests returned code {result.returncode}")
+            return False
 
         except subprocess.TimeoutExpired:
             logger.error("Validation timed out")
@@ -697,26 +664,18 @@ class FixApplier:
             backup_path = backup_paths.get(file_path)
             if backup_path and backup_path.exists():
                 try:
-                    shutil.copy2(
-                        backup_path, file_path
-                    )  # Use copy2 for metadata preservation
+                    shutil.copy2(backup_path, file_path)  # Use copy2 for metadata preservation
                     rolled_back_files.append(file_path)
                     logger.info(f"Rolled back '{file_path}' from '{backup_path}'")
                 except Exception as e:
-                    logger.error(
-                        f"Failed to roll back '{file_path}' from '{backup_path}': {e}"
-                    )
-                    logger.error(
-                        f"Manual recovery needed: copy '{backup_path}' to '{file_path}'"
-                    )
+                    logger.error(f"Failed to roll back '{file_path}' from '{backup_path}': {e}")
+                    logger.error(f"Manual recovery needed: copy '{backup_path}' to '{file_path}'")
             elif backup_path:
                 logger.error(
                     f"Backup file '{backup_path}' not found for '{file_path}'. Cannot roll back."
                 )
             else:
-                logger.error(
-                    f"No backup path recorded for '{file_path}'. Cannot roll back."
-                )
+                logger.error(f"No backup path recorded for '{file_path}'. Cannot roll back.")
 
         return rolled_back_files
 

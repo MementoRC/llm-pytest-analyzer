@@ -119,14 +119,10 @@ class AsyncLLMService(AsyncLLMServiceProtocol):
             LLMServiceError: If there's an error communicating with the LLM
         """
         if not self._async_llm_request_func:
-            logger.error(
-                "AsyncLLMService cannot send prompt: No LLM request function configured."
-            )
+            logger.error("AsyncLLMService cannot send prompt: No LLM request function configured.")
             raise LLMServiceError("No LLM request function configured")
 
-        async with error_context(
-            LLMServiceError, "Failed to send prompt to language model"
-        ):
+        async with error_context(LLMServiceError, "Failed to send prompt to language model"):
             # Start the resource monitor
             with self.resource_monitor:
                 result = await asyncio.wait_for(
@@ -219,20 +215,17 @@ class AsyncLLMService(AsyncLLMServiceProtocol):
         if self.llm_client:
             client_module_name = self.llm_client.__class__.__module__.lower()
 
-            if "anthropic" in client_module_name and hasattr(
-                self.llm_client, "messages"
-            ):
+            if "anthropic" in client_module_name and hasattr(self.llm_client, "messages"):
                 # For Anthropic client
                 return self._make_anthropic_async_request
-            elif "openai" in client_module_name and hasattr(self.llm_client, "chat"):
+            if "openai" in client_module_name and hasattr(self.llm_client, "chat"):
                 # For OpenAI client
                 return self._make_openai_async_request
-            else:
-                logger.warning(
-                    f"Provided LLM client type ({client_module_name}) is not explicitly supported for async. "
-                    "Using a generic approach."
-                )
-                return None
+            logger.warning(
+                f"Provided LLM client type ({client_module_name}) is not explicitly supported for async. "
+                "Using a generic approach."
+            )
+            return None
 
         # Auto-detect available clients
         if AsyncAnthropic:
@@ -253,9 +246,7 @@ class AsyncLLMService(AsyncLLMServiceProtocol):
             except Exception as e:
                 logger.debug(f"Failed to initialize OpenAI async client: {e}")
 
-        logger.warning(
-            "No suitable async language model clients found or auto-detected."
-        )
+        logger.warning("No suitable async language model clients found or auto-detected.")
         return None
 
     async def _make_anthropic_async_request(self, prompt: str) -> str:
@@ -277,11 +268,7 @@ class AsyncLLMService(AsyncLLMServiceProtocol):
                 max_tokens=self.max_tokens,
                 messages=[{"role": "user", "content": prompt}],
             )
-            if (
-                message.content
-                and isinstance(message.content, list)
-                and message.content[0].text
-            ):
+            if message.content and isinstance(message.content, list) and message.content[0].text:
                 return message.content[0].text
             return ""
         except Exception as e:

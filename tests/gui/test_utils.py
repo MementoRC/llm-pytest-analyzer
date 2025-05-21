@@ -14,9 +14,7 @@ from pytestqt.plugin import QtBot
 T = TypeVar("T", bound=QObject)
 
 
-def find_widget(
-    parent: QObject, widget_type: Type[T], name: Optional[str] = None
-) -> Optional[T]:
+def find_widget(parent: QObject, widget_type: Type[T], name: Optional[str] = None) -> Optional[T]:
     """
     Find a widget of a specific type and name among the descendants of parent.
 
@@ -34,9 +32,7 @@ def find_widget(
     return None
 
 
-def wait_until(
-    predicate: Callable[[], bool], timeout: int = 1000, interval: int = 50
-) -> bool:
+def wait_until(predicate: Callable[[], bool], timeout: int = 1000, interval: int = 50) -> bool:
     """
     Wait until the predicate becomes true or timeout is reached.
 

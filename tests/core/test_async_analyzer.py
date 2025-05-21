@@ -141,9 +141,7 @@ def test_async_generate_suggestions(analyzer_service_async, sample_failures):
         # Run the async generation method through the public interface
         loop = asyncio.get_event_loop()
         suggestions = loop.run_until_complete(
-            analyzer_service_async._async_generate_suggestions(
-                failures=test_failures, quiet=True
-            )
+            analyzer_service_async._async_generate_suggestions(failures=test_failures, quiet=True)
         )
 
     # Verify the mock was called correctly (once per failure, assuming no grouping)
@@ -176,9 +174,7 @@ def test_async_generate_suggestions(analyzer_service_async, sample_failures):
     assert metrics.get("calls", 0) == 1  # The outer method is called once
 
 
-def test_performance_comparison(
-    analyzer_service_sync, analyzer_service_async, sample_failures
-):
+def test_performance_comparison(analyzer_service_sync, analyzer_service_async, sample_failures):
     """Compare performance between sync and async processing."""
     # Setup for test
     mock_progress = MagicMock(spec=Progress)
@@ -188,21 +184,15 @@ def test_performance_comparison(
     # --- Mocking Setup ---
     # Create mocks for sync and async methods
     mock_sync_suggest = MagicMock(
-        return_value=[
-            FixSuggestion(failure=failures[0], suggestion="Sync Mock", confidence=0.8)
-        ]
+        return_value=[FixSuggestion(failure=failures[0], suggestion="Sync Mock", confidence=0.8)]
     )
     mock_async_suggest = AsyncMock(
-        return_value=[
-            FixSuggestion(failure=failures[0], suggestion="Async Mock", confidence=0.8)
-        ]
+        return_value=[FixSuggestion(failure=failures[0], suggestion="Async Mock", confidence=0.8)]
     )
 
     # --- Measure sync performance ---
     # Patch the method directly on the instance
-    with patch.object(
-        analyzer_service_sync.llm_suggester, "suggest_fixes", mock_sync_suggest
-    ):
+    with patch.object(analyzer_service_sync.llm_suggester, "suggest_fixes", mock_sync_suggest):
         with performance_tracker.track("sync_test"):
             sync_start = time.time()
             analyzer_service_sync._sync_generate_suggestions(

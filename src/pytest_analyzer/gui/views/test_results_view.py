@@ -101,10 +101,7 @@ class TestResultsTableModel(QAbstractTableModel):
         Returns:
             Header data
         """
-        if (
-            role == Qt.ItemDataRole.DisplayRole
-            and orientation == Qt.Orientation.Horizontal
-        ):
+        if role == Qt.ItemDataRole.DisplayRole and orientation == Qt.Orientation.Horizontal:
             return self.headers[section]
 
         return None
@@ -129,21 +126,21 @@ class TestResultsTableModel(QAbstractTableModel):
         if role == Qt.ItemDataRole.DisplayRole:
             if column == 0:
                 return result.status.name
-            elif column == 1:
+            if column == 1:
                 return result.name
-            elif column == 2:
+            if column == 2:
                 return f"{result.duration:.3f}s"
-            elif column == 3:
+            if column == 3:
                 return str(result.file_path) if result.file_path else ""
 
         elif role == Qt.ItemDataRole.BackgroundRole:
             if result.status == TestStatus.FAILED:
                 return QBrush(QColor(255, 200, 200))
-            elif result.status == TestStatus.ERROR:
+            if result.status == TestStatus.ERROR:
                 return QBrush(QColor(255, 150, 150))
-            elif result.status == TestStatus.PASSED:
+            if result.status == TestStatus.PASSED:
                 return QBrush(QColor(200, 255, 200))
-            elif result.status == TestStatus.SKIPPED:
+            if result.status == TestStatus.SKIPPED:
                 return QBrush(QColor(200, 200, 255))
 
         return None
@@ -234,15 +231,9 @@ class TestResultsView(QWidget):
         self.groups_tree.setModel(self.groups_model)
         self.groups_tree.setAlternatingRowColors(True)
         self.groups_tree.setHeaderHidden(False)
-        self.groups_tree.header().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.ResizeToContents
-        )
-        self.groups_tree.header().setSectionResizeMode(
-            1, QHeaderView.ResizeMode.ResizeToContents
-        )
-        self.groups_tree.header().setSectionResizeMode(
-            2, QHeaderView.ResizeMode.Stretch
-        )
+        self.groups_tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.groups_tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self.groups_tree.header().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
 
         # Add tabs
         self.tabs.addTab(self.results_table, "All Tests")
@@ -284,9 +275,7 @@ class TestResultsView(QWidget):
         self.results_table.selectionModel().selectionChanged.connect(
             self._on_test_selection_changed
         )
-        self.groups_tree.selectionModel().selectionChanged.connect(
-            self._on_group_selection_changed
-        )
+        self.groups_tree.selectionModel().selectionChanged.connect(self._on_group_selection_changed)
 
         # Add widgets to main layout
         main_layout.addLayout(summary_layout)
@@ -352,8 +341,7 @@ class TestResultsView(QWidget):
             )
         else:
             self.summary_label.setText(
-                f"Results: {total} tests, "
-                f"<span style='color:green'>{passed} passed</span>"
+                f"Results: {total} tests, <span style='color:green'>{passed} passed</span>"
             )
 
     def _update_details(self, test: Optional[TestResult] = None) -> None:
@@ -379,14 +367,10 @@ class TestResultsView(QWidget):
                     details_text += f"<p><b>Location:</b> {test.failure_details.file_path}:{test.failure_details.line_number}</p>"
 
                 if test.failure_details.expected is not None:
-                    details_text += (
-                        f"<p><b>Expected:</b> {test.failure_details.expected}</p>"
-                    )
+                    details_text += f"<p><b>Expected:</b> {test.failure_details.expected}</p>"
 
                 if test.failure_details.actual is not None:
-                    details_text += (
-                        f"<p><b>Actual:</b> {test.failure_details.actual}</p>"
-                    )
+                    details_text += f"<p><b>Actual:</b> {test.failure_details.actual}</p>"
 
         self.failure_details.setHtml(details_text)
 

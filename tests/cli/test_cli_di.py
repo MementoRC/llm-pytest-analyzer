@@ -99,9 +99,7 @@ class TestAnalyzerCLIDI:
         # Check result
         assert result == 0
 
-    def test_cli_run_and_analyze(
-        self, di_cli_invoke, mock_analyzer_service, sample_assertion_file
-    ):
+    def test_cli_run_and_analyze(self, di_cli_invoke, mock_analyzer_service, sample_assertion_file):
         """Test that the CLI correctly runs and analyzes tests."""
         # Mock the service response
         failure = PytestFailure(
@@ -131,10 +129,7 @@ class TestAnalyzerCLIDI:
 
         # Check that service was called
         mock_analyzer_service.run_and_analyze.assert_called_once()
-        assert (
-            sample_assertion_file.name
-            in mock_analyzer_service.run_and_analyze.call_args[0][0]
-        )
+        assert sample_assertion_file.name in mock_analyzer_service.run_and_analyze.call_args[0][0]
 
         # Check result
         assert result == 0

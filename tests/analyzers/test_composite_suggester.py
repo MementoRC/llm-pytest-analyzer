@@ -99,9 +99,7 @@ class TestCompositeSuggester(unittest.TestCase):
         self.suggester2.suggest_fix.assert_called_once_with(self.failure, self.analysis)
 
         # Verify results
-        self.assertEqual(
-            len(results), 2
-        )  # Suggestion 3 is a duplicate of 1, and 4 is filtered out
+        self.assertEqual(len(results), 2)  # Suggestion 3 is a duplicate of 1, and 4 is filtered out
 
         # Verify suggestions are sorted by confidence (descending)
         self.assertEqual(results[0].confidence, 0.8)
@@ -224,9 +222,7 @@ class TestCompositeSuggester(unittest.TestCase):
 
         # Configure mock suggesters
         self.suggester1.suggest_fix.return_value = [self.suggestion1]
-        self.suggester2.suggest_fix.return_value = [
-            self.suggestion3
-        ]  # Duplicate of suggestion1
+        self.suggester2.suggest_fix.return_value = [self.suggestion3]  # Duplicate of suggestion1
 
         # Call suggest_fix
         results = no_dedup_suggester.suggest_fix(self.failure, self.analysis)
@@ -249,9 +245,7 @@ class TestCompositeSuggester(unittest.TestCase):
         ]
 
         # Configure suggesters
-        self.suggester1.suggest_fix.return_value = suggestions[
-            :2
-        ]  # First 2 suggestions
+        self.suggester1.suggest_fix.return_value = suggestions[:2]  # First 2 suggestions
         self.suggester2.suggest_fix.return_value = suggestions[2:]  # Last 3 suggestions
 
         # Set max_suggestions_per_failure to 3

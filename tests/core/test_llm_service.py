@@ -5,9 +5,7 @@ import pytest
 
 from pytest_analyzer.core.llm.backward_compat import LLMService
 from pytest_analyzer.core.llm.llm_service_protocol import LLMServiceProtocol
-from pytest_analyzer.utils.resource_manager import (
-    TimeoutError as ResourceManagerTimeoutError,
-)
+from pytest_analyzer.utils.resource_manager import TimeoutError as ResourceManagerTimeoutError
 
 
 # Mock classes for external clients
@@ -113,15 +111,11 @@ class TestLLMService:
 
         # Patch the imports
         with (
-            patch(
-                "pytest_analyzer.core.llm.llm_service.Anthropic", mock_anthropic_class
-            ),
+            patch("pytest_analyzer.core.llm.llm_service.Anthropic", mock_anthropic_class),
             patch("pytest_analyzer.core.llm.llm_service.openai", None),
         ):
             # Set the logger level for the specific module
-            with caplog.at_level(
-                logging.INFO, logger="pytest_analyzer.core.llm.llm_service"
-            ):
+            with caplog.at_level(logging.INFO, logger="pytest_analyzer.core.llm.llm_service"):
                 service = LLMService()
 
         assert service._llm_request_func is not None
@@ -141,9 +135,7 @@ class TestLLMService:
             patch("pytest_analyzer.core.llm.llm_service.openai", mock_openai_module),
         ):
             # Set the logger level for the specific module
-            with caplog.at_level(
-                logging.INFO, logger="pytest_analyzer.core.llm.llm_service"
-            ):
+            with caplog.at_level(logging.INFO, logger="pytest_analyzer.core.llm.llm_service"):
                 service = LLMService()
 
         assert service._llm_request_func is not None
@@ -160,22 +152,16 @@ class TestLLMService:
         mock_openai_module.OpenAI = MagicMock(return_value=MockOpenAIClient())
 
         with (
-            patch(
-                "pytest_analyzer.core.llm.llm_service.Anthropic", mock_anthropic_class
-            ),
+            patch("pytest_analyzer.core.llm.llm_service.Anthropic", mock_anthropic_class),
             patch("pytest_analyzer.core.llm.llm_service.openai", mock_openai_module),
         ):
             # Set the logger level for the specific module
-            with caplog.at_level(
-                logging.INFO, logger="pytest_analyzer.core.llm.llm_service"
-            ):
+            with caplog.at_level(logging.INFO, logger="pytest_analyzer.core.llm.llm_service"):
                 # Create service but don't need to capture it
                 _ = LLMService()
 
         assert "Using Anthropic client for LLM requests." in caplog.text
-        assert (
-            "Using OpenAI client" not in caplog.text
-        )  # Ensure it didn't also try OpenAI
+        assert "Using OpenAI client" not in caplog.text  # Ensure it didn't also try OpenAI
 
     @patch("pytest_analyzer.core.llm.llm_service.Anthropic", None)
     @patch("pytest_analyzer.core.llm.llm_service.openai", None)
@@ -183,9 +169,7 @@ class TestLLMService:
         service = LLMService()
         assert service._llm_request_func is None
         assert "No LLM client available or configured" in caplog.text
-        assert (
-            "No suitable language model clients found or auto-detected" in caplog.text
-        )
+        assert "No suitable language model clients found or auto-detected" in caplog.text
 
     def test_send_prompt_with_anthropic_client(self):
         mock_client_instance = MockAnthropicClient()
@@ -214,10 +198,7 @@ class TestLLMService:
 
         response = service.send_prompt("test")
         assert response == ""
-        assert (
-            "LLMService cannot send prompt: No LLM request function configured."
-            in caplog.text
-        )
+        assert "LLMService cannot send prompt: No LLM request function configured." in caplog.text
 
     def test_send_prompt_timeout(self, caplog):
         mock_client = MockAnthropicClient()
@@ -246,9 +227,7 @@ class TestLLMService:
     def test_send_prompt_timeout_using_resource_manager_exception(self, caplog):
         mock_client = MockAnthropicClient()
         # Simulate the resource_manager's with_timeout raising the error directly
-        mock_client.messages.create.side_effect = ResourceManagerTimeoutError(
-            "Simulated timeout"
-        )
+        mock_client.messages.create.side_effect = ResourceManagerTimeoutError("Simulated timeout")
 
         service = LLMService(
             llm_client=mock_client, timeout_seconds=1
@@ -276,10 +255,7 @@ class TestLLMService:
             for msg in caplog.messages
         )
         # The high-level error is only logged when the exception bubbles up; in this case, it's caught and returns ""
-        assert (
-            "Error making request with Anthropic API: Anthropic API Error"
-            in caplog.text
-        )
+        assert "Error making request with Anthropic API: Anthropic API Error" in caplog.text
 
     def test_send_prompt_openai_api_error(self, caplog):
         mock_client = MockOpenAIClient()
@@ -321,18 +297,14 @@ class TestLLMService:
         assert service._request_with_anthropic("prompt", mock_anthropic_client) == ""
 
         mock_text_obj = MagicMock(text=None)
-        mock_anthropic_client.messages.create.return_value = MagicMock(
-            content=[mock_text_obj]
-        )
+        mock_anthropic_client.messages.create.return_value = MagicMock(content=[mock_text_obj])
         assert service._request_with_anthropic("prompt", mock_anthropic_client) == ""
 
     def test_internal_request_with_openai_empty_response(self, caplog):
         mock_openai_client = MagicMock()
         mock_openai_client.__class__.__module__ = "openai"
         # Simulate various empty/malformed responses
-        mock_openai_client.chat.completions.create.return_value = MagicMock(
-            choices=None
-        )
+        mock_openai_client.chat.completions.create.return_value = MagicMock(choices=None)
         service = LLMService(llm_client=mock_openai_client)
         assert service._request_with_openai("prompt", mock_openai_client) == ""
 
@@ -360,22 +332,15 @@ class TestLLMService:
         mock_openai_module.OpenAI = MagicMock(return_value=MockOpenAIClient())
 
         with (
-            patch(
-                "pytest_analyzer.core.llm.llm_service.Anthropic", anthropic_class_mock
-            ),
+            patch("pytest_analyzer.core.llm.llm_service.Anthropic", anthropic_class_mock),
             patch("pytest_analyzer.core.llm.llm_service.openai", mock_openai_module),
         ):
             # Need DEBUG level for initialization failures
-            with caplog.at_level(
-                logging.DEBUG, logger="pytest_analyzer.core.llm.llm_service"
-            ):
+            with caplog.at_level(logging.DEBUG, logger="pytest_analyzer.core.llm.llm_service"):
                 service = LLMService()  # Auto-detection
 
         # Check logs
-        assert (
-            "Failed to initialize Anthropic client: Anthropic init failed"
-            in caplog.text
-        )
+        assert "Failed to initialize Anthropic client: Anthropic init failed" in caplog.text
         # Should fall back to OpenAI if Anthropic init fails
         assert service._llm_request_func is not None
         assert "Using OpenAI client for LLM requests." in caplog.text
@@ -387,9 +352,7 @@ class TestLLMService:
 
         with patch("pytest_analyzer.core.llm.llm_service.Anthropic", anthropic_mock):
             # Set the logger level for the specific module
-            with caplog.at_level(
-                logging.INFO, logger="pytest_analyzer.core.llm.llm_service"
-            ):
+            with caplog.at_level(logging.INFO, logger="pytest_analyzer.core.llm.llm_service"):
                 # Make a fresh service with Anthropic available
                 service = LLMService()
 
@@ -409,14 +372,10 @@ class TestLLMService:
             patch("pytest_analyzer.core.llm.llm_service.openai", mock_openai_module),
         ):
             # Need DEBUG level to catch init failures
-            with caplog.at_level(
-                logging.DEBUG, logger="pytest_analyzer.core.llm.llm_service"
-            ):
+            with caplog.at_level(logging.DEBUG, logger="pytest_analyzer.core.llm.llm_service"):
                 service_openai_fails = LLMService()
 
         # Ensure the logs contain our messages
         assert "Failed to initialize OpenAI client: OpenAI init failed" in caplog.text
         assert service_openai_fails._llm_request_func is None
-        assert (
-            "No suitable language model clients found or auto-detected." in caplog.text
-        )
+        assert "No suitable language model clients found or auto-detected." in caplog.text

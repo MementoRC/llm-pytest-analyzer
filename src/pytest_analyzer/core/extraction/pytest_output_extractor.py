@@ -9,7 +9,8 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Pattern, Tuple, Union
+from re import Pattern
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from ...utils.path_resolver import PathResolver
 from ...utils.resource_manager import ResourceMonitor, with_timeout
@@ -40,9 +41,7 @@ class PytestOutputExtractor(Extractor):
         self.timeout = timeout
 
         # Patterns for extracting information from pytest output
-        self.failure_pattern: Pattern = re.compile(
-            r"(FAILED|ERROR)\s+(.+?)::(.+?)(?:\s|$)"
-        )
+        self.failure_pattern: Pattern = re.compile(r"(FAILED|ERROR)\s+(.+?)::(.+?)(?:\s|$)")
         self.test_section_pattern: Pattern = re.compile(
             r"_{3,}\s+(.+?)\s+_{3,}(.*?)(?=_{3,}|\Z)", re.DOTALL
         )
@@ -84,9 +83,7 @@ class PytestOutputExtractor(Extractor):
             if isinstance(test_results, Path):
                 return self._extract_from_path(test_results)
 
-            raise ExtractionError(
-                f"Unsupported test_results type: {type(test_results)}"
-            )
+            raise ExtractionError(f"Unsupported test_results type: {type(test_results)}")
         except Exception as e:
             logger.error(f"Error extracting from pytest output: {e}")
             raise ExtractionError(f"Failed to extract from pytest output: {e}") from e
@@ -135,7 +132,7 @@ class PytestOutputExtractor(Extractor):
 
         try:
             with ResourceMonitor(max_time_seconds=self.timeout):
-                with open(input_path, "r", encoding="utf-8") as f:
+                with open(input_path, encoding="utf-8") as f:
                     content = f.read()
                 failures = self.extract_failures_from_text(content)
                 return {
@@ -168,7 +165,7 @@ class PytestOutputExtractor(Extractor):
 
         try:
             with ResourceMonitor(max_time_seconds=self.timeout):
-                with open(input_path, "r", encoding="utf-8") as f:
+                with open(input_path, encoding="utf-8") as f:
                     content = f.read()
                 return self.extract_failures_from_text(content)
         except Exception as e:
@@ -206,9 +203,7 @@ class PytestOutputExtractor(Extractor):
             # Try to find the section first by full test id, then by just test name
             section = next((s for s in test_sections if test_id in s[0]), None)
             if not section:
-                section = next(
-                    (s for s in test_sections if test_name_only in s[0]), None
-                )
+                section = next((s for s in test_sections if test_name_only in s[0]), None)
 
             if not section:
                 logger.warning(f"No detailed section found for test {test_id}")
@@ -225,8 +220,8 @@ class PytestOutputExtractor(Extractor):
                 continue
 
             # Extract error details
-            error_type, error_message, traceback, line_number = (
-                self._extract_error_details(section[1])
+            error_type, error_message, traceback, line_number = self._extract_error_details(
+                section[1]
             )
 
             # Extract relevant code
@@ -317,9 +312,7 @@ class PytestOutputExtractor(Extractor):
 
         return sections
 
-    def _extract_error_details(
-        self, section_text: str
-    ) -> Tuple[str, str, str, Optional[int]]:
+    def _extract_error_details(self, section_text: str) -> Tuple[str, str, str, Optional[int]]:
         """
         Extract error details from a test section.
 
@@ -381,9 +374,7 @@ class PytestOutputExtractor(Extractor):
 
         return error_type, error_message, traceback, line_number
 
-    def _extract_relevant_code(
-        self, test_file: str, line_number: Optional[int]
-    ) -> Optional[str]:
+    def _extract_relevant_code(self, test_file: str, line_number: Optional[int]) -> Optional[str]:
         """
         Extract relevant code from the test file.
 
@@ -409,7 +400,7 @@ class PytestOutputExtractor(Extractor):
                 logger.warning(f"Test file not found: {file_path}")
                 return None
 
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 lines = f.readlines()
 
             # Extract context (5 lines before and after)

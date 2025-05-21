@@ -5,8 +5,9 @@ This module contains fixtures and configuration for testing GUI components.
 """
 
 import os
+from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any
 
 import pytest
 
@@ -22,7 +23,7 @@ from pytest_analyzer.gui.main_window import MainWindow
 
 # Ensure QApplication is only created once
 @pytest.fixture(scope="session")
-def qapp_session() -> Generator[PytestAnalyzerApp, None, None]:
+def qapp_session() -> PytestAnalyzerApp:
     """
     Create a QApplication for the entire test session.
 
@@ -39,7 +40,7 @@ def qapp_session() -> Generator[PytestAnalyzerApp, None, None]:
     app.set_setting("test_mode", True)
     app.set_setting("core_settings/project_root", str(Path.cwd()))
 
-    yield app
+    return app
 
 
 @pytest.fixture
@@ -59,9 +60,7 @@ def qapp(qapp_session: PytestAnalyzerApp) -> PytestAnalyzerApp:
 
 
 @pytest.fixture
-def main_window(
-    qapp: PytestAnalyzerApp, qtbot: QtBot
-) -> Generator[MainWindow, None, None]:
+def main_window(qapp: PytestAnalyzerApp, qtbot: QtBot) -> Generator[MainWindow, None, None]:
     """
     Create and yield a MainWindow instance.
 
@@ -105,6 +104,4 @@ def mock_settings(monkeypatch: pytest.MonkeyPatch) -> None:
         settings.project_root = Path.cwd()
         return settings
 
-    monkeypatch.setattr(
-        "pytest_analyzer.utils.settings.load_settings", mock_load_settings
-    )
+    monkeypatch.setattr("pytest_analyzer.utils.settings.load_settings", mock_load_settings)

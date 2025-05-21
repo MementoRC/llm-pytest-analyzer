@@ -121,9 +121,7 @@ class FileSelectionView(QWidget):
         self.file_tree.setAlternatingRowColors(True)
         self.file_tree.setAnimated(True)
         self.file_tree.setHeaderHidden(False)
-        self.file_tree.header().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.ResizeToContents
-        )
+        self.file_tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.file_tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.file_tree.setSelectionBehavior(QTreeView.SelectionBehavior.SelectRows)
         self.file_tree.clicked.connect(self._on_file_clicked)
@@ -284,9 +282,7 @@ class FileSelectionView(QWidget):
     def _on_select_report(self) -> None:
         """Handle the select report file button click."""
         file_filter = (
-            "JSON Files (*.json)"
-            if self.selected_report_type == "json"
-            else "XML Files (*.xml)"
+            "JSON Files (*.json)" if self.selected_report_type == "json" else "XML Files (*.xml)"
         )
 
         file_path, _ = QFileDialog.getOpenFileName(

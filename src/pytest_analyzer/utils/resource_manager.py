@@ -4,15 +4,13 @@ import resource
 import signal
 import time
 from collections import defaultdict
+from collections.abc import AsyncIterator, Awaitable, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from functools import wraps
 from typing import (
     Any,
-    AsyncIterator,
-    Awaitable,
     Callable,
     Dict,
-    Iterator,
     List,
     Optional,
     TypeVar,
@@ -80,9 +78,7 @@ async def async_timeout(seconds: float) -> AsyncIterator[None]:
     try:
         yield
     except asyncio.TimeoutError as e:
-        raise TimeoutError(
-            f"Async operation exceeded time limit of {seconds} seconds"
-        ) from e
+        raise TimeoutError(f"Async operation exceeded time limit of {seconds} seconds") from e
 
 
 def async_with_timeout(
@@ -97,9 +93,7 @@ def async_with_timeout(
                 # Use asyncio.wait_for instead of signal-based timeout
                 return await asyncio.wait_for(func(*args, **kwargs), timeout=seconds)
             except asyncio.TimeoutError:
-                raise TimeoutError(
-                    f"Async operation exceeded time limit of {seconds} seconds"
-                )
+                raise TimeoutError(f"Async operation exceeded time limit of {seconds} seconds")
 
         return wrapper
 
@@ -115,7 +109,7 @@ def limit_memory(max_mb: Optional[int] = None) -> None:
             max_bytes = max_mb * 1024 * 1024
             resource.setrlimit(resource.RLIMIT_AS, (max_bytes, hard))
             logger.debug(f"Memory limit set to {max_mb} MB")
-        except (resource.error, ValueError) as e:
+        except (OSError, ValueError) as e:
             logger.warning(f"Failed to set memory limit: {e}")
 
 
@@ -147,13 +141,8 @@ class ResourceMonitor:
     def check(self):
         """Check if resource limits have been exceeded"""
         # Check time limit
-        if (
-            self.max_time_seconds
-            and time.time() - self.start_time > self.max_time_seconds
-        ):
-            raise TimeoutError(
-                f"Operation exceeded time limit of {self.max_time_seconds} seconds"
-            )
+        if self.max_time_seconds and time.time() - self.start_time > self.max_time_seconds:
+            raise TimeoutError(f"Operation exceeded time limit of {self.max_time_seconds} seconds")
 
         # Check memory limit
         if self.max_memory_bytes:
@@ -193,10 +182,7 @@ class AsyncResourceMonitor:
     async def check(self):
         """Check if resource limits have been exceeded (async version)"""
         # Check time limit
-        if (
-            self.max_time_seconds
-            and time.time() - self.start_time > self.max_time_seconds
-        ):
+        if self.max_time_seconds and time.time() - self.start_time > self.max_time_seconds:
             raise TimeoutError(
                 f"Async operation exceeded time limit of {self.max_time_seconds} seconds"
             )
@@ -284,9 +270,7 @@ class PerformanceTracker:
         if operation:
             return self._calculate_metrics_for_operation(operation)
 
-        return {
-            op: self._calculate_metrics_for_operation(op) for op in self.timings.keys()
-        }
+        return {op: self._calculate_metrics_for_operation(op) for op in self.timings.keys()}
 
     def _calculate_metrics_for_operation(self, operation: str) -> Dict[str, Any]:
         """Calculate metrics for a specific operation"""

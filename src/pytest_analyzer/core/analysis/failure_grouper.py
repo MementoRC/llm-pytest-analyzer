@@ -38,9 +38,7 @@ def _extract_relevant_traceback_frame(
             # Basic check: Avoid frames inside standard library or site-packages
             if "site-packages" in line or "lib/python" in line:
                 # Skip likely pytest internal frames too
-                if i + 1 < len(lines) and any(
-                    kw in lines[i + 1] for kw in ["pytest", "_pytest"]
-                ):
+                if i + 1 < len(lines) and any(kw in lines[i + 1] for kw in ["pytest", "_pytest"]):
                     continue
 
             # More specific check if project_root is provided
@@ -58,12 +56,11 @@ def _extract_relevant_traceback_frame(
 
         if relevant_frame:
             return relevant_frame
-        else:
-            # Fallback to the last File line
-            if frame_lines:
-                match = re.search(r'File "(.+?)", line (\d+)', frame_lines[-1])
-                if match:
-                    return match.group(1), int(match.group(2)), None
+        # Fallback to the last File line
+        if frame_lines:
+            match = re.search(r'File "(.+?)", line (\d+)', frame_lines[-1])
+            if match:
+                return match.group(1), int(match.group(2)), None
 
     except Exception:
         # Silent failure, returning None values
@@ -72,9 +69,7 @@ def _extract_relevant_traceback_frame(
     return None, None, None
 
 
-def extract_failure_fingerprint(
-    failure: PytestFailure, project_root: Optional[str] = None
-) -> str:
+def extract_failure_fingerprint(failure: PytestFailure, project_root: Optional[str] = None) -> str:
     """
     Generates a fingerprint string for a PytestFailure to group similar errors.
 
@@ -127,18 +122,14 @@ def extract_failure_fingerprint(
                 core_message = f"Type_{obj_type}_Missing_{attr}"
             else:
                 # Generic attribute error pattern
-                attr_match = re.search(
-                    r"no attribute ['\"]([\w.]+)['\"]", error_message
-                )
+                attr_match = re.search(r"no attribute ['\"]([\w.]+)['\"]", error_message)
                 if attr_match:
                     attr = attr_match.group(1)
                     # Just group by the missing attribute
                     core_message = f"Missing_{attr}"
 
                     # For better grouping of similar failures, check if there's a "Did you mean" suggestion
-                    mean_match = re.search(
-                        r"Did you mean: ['\"]([\w.]+)['\"]", error_message
-                    )
+                    mean_match = re.search(r"Did you mean: ['\"]([\w.]+)['\"]", error_message)
                     if mean_match:
                         suggested = mean_match.group(1)
                         # Include the suggested alternative in the fingerprint
@@ -203,11 +194,7 @@ def extract_failure_fingerprint(
         if file_matches:
             for file_path in file_matches:
                 # Focus on the affected module/file, not the test file
-                if (
-                    "tests/" not in file_path
-                    and project_root
-                    and project_root in file_path
-                ):
+                if "tests/" not in file_path and project_root and project_root in file_path:
                     # Extract just the base filename without extension
                     base_name = os.path.basename(file_path)
                     module_name = os.path.splitext(base_name)[0]

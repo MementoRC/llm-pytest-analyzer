@@ -99,9 +99,7 @@ class TestAnalyzerServiceDI:
             explanation="The test expected 2 but the function returns 1",
         )
 
-    def test_service_initialization(
-        self, analyzer_service, settings, path_resolver, state_machine
-    ):
+    def test_service_initialization(self, analyzer_service, settings, path_resolver, state_machine):
         """Test that the service correctly initializes with injected dependencies."""
         assert analyzer_service.settings is settings
         assert analyzer_service.path_resolver is path_resolver
@@ -109,9 +107,7 @@ class TestAnalyzerServiceDI:
         assert analyzer_service.context is state_machine.context
         assert analyzer_service.llm_service is None  # Default is None
 
-    def test_service_initialization_with_llm(
-        self, settings, path_resolver, state_machine
-    ):
+    def test_service_initialization_with_llm(self, settings, path_resolver, state_machine):
         """Test that the service correctly initializes with an LLM service."""
         from pytest_analyzer.core.analyzer_service_di import DIPytestAnalyzerService
 
@@ -124,9 +120,7 @@ class TestAnalyzerServiceDI:
         )
         assert service.llm_service is llm_service
 
-    def test_apply_suggestion_delegates_to_fix_applier(
-        self, analyzer_service, fix_suggestion
-    ):
+    def test_apply_suggestion_delegates_to_fix_applier(self, analyzer_service, fix_suggestion):
         """Test that apply_suggestion delegates to the fix applier in the context."""
         # Mock the fix applier
         expected_result = FixApplicationResult(
@@ -135,9 +129,7 @@ class TestAnalyzerServiceDI:
             applied_files=["/path/to/source_file.py"],
             rolled_back_files=[],
         )
-        analyzer_service.context.fix_applier.apply_fix_suggestion.return_value = (
-            expected_result
-        )
+        analyzer_service.context.fix_applier.apply_fix_suggestion.return_value = expected_result
 
         # Apply suggestion
         result = analyzer_service.apply_suggestion(fix_suggestion)
@@ -148,9 +140,7 @@ class TestAnalyzerServiceDI:
         )
         assert result is expected_result
 
-    def test_apply_suggestion_handles_missing_fix_applier(
-        self, analyzer_service, fix_suggestion
-    ):
+    def test_apply_suggestion_handles_missing_fix_applier(self, analyzer_service, fix_suggestion):
         """Test that apply_suggestion handles a missing fix applier gracefully."""
         # Remove fix applier from context
         analyzer_service.context.fix_applier = None
@@ -210,9 +200,7 @@ class TestAnalyzerServiceDI:
         assert isinstance(service.state_machine, AnalyzerStateMachine)
         assert service.llm_service is not None
         # Check the type of the service - different instances are created when resolved multiple times
-        assert isinstance(
-            service.llm_service, type(container.resolve(LLMServiceProtocol))
-        )
+        assert isinstance(service.llm_service, type(container.resolve(LLMServiceProtocol)))
 
     def test_global_container_initialization(self, settings):
         """Test that the global container can be initialized and used to get services."""

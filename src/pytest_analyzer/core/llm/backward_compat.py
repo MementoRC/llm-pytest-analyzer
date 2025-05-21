@@ -137,9 +137,7 @@ class LLMService(LLMServiceProtocol):
         """
         # Handle special test cases with specific behavior in the old implementation
         if not self._llm_request_func:
-            logger.error(
-                "LLMService cannot send prompt: No LLM request function configured."
-            )
+            logger.error("LLMService cannot send prompt: No LLM request function configured.")
             return ""  # Original returned empty string instead of raising exception
 
         # Special handling for timeout tests
@@ -152,22 +150,16 @@ class LLMService(LLMServiceProtocol):
                 TimeoutError,
             ):
                 # Log the exact message format expected by the test
-                logger.error(
-                    f"LLM request timed out after {self.timeout_seconds} seconds."
-                )
+                logger.error(f"LLM request timed out after {self.timeout_seconds} seconds.")
                 # Let the ResourceManagerTimeoutError bubble up
-                from ...utils.resource_manager import (
-                    TimeoutError as ResourceManagerTimeoutError,
-                )
+                from ...utils.resource_manager import TimeoutError as ResourceManagerTimeoutError
 
                 raise ResourceManagerTimeoutError("Simulated timeout")
 
             # For test_send_prompt_timeout with long_running_call
             # The test checks both for the exception and a specific log message
             logger.error(f"LLM request timed out after {self.timeout_seconds} seconds.")
-            from ...utils.resource_manager import (
-                TimeoutError as ResourceManagerTimeoutError,
-            )
+            from ...utils.resource_manager import TimeoutError as ResourceManagerTimeoutError
 
             raise ResourceManagerTimeoutError(
                 f"Operation exceeded time limit of {self.timeout_seconds} seconds"

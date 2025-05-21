@@ -96,9 +96,7 @@ class MainWindow(QMainWindow):
         self.file_selection_view = FileSelectionView()
         self.file_selection_view.setMinimumWidth(300)
         self.file_selection_view.file_selected.connect(self.on_file_selected)
-        self.file_selection_view.report_type_changed.connect(
-            self.on_report_type_changed
-        )
+        self.file_selection_view.report_type_changed.connect(self.on_report_type_changed)
 
         # Create a container for the file selection view
         self.test_selection_widget = QWidget()
@@ -221,7 +219,9 @@ class MainWindow(QMainWindow):
         if settings.contains("mainwindow/splitterSizes"):
             # Convert the splitter sizes to integers
             sizes = settings.value("mainwindow/splitterSizes")
-            if isinstance(sizes, (list, tuple)) and all(isinstance(size, (int, str)) for size in sizes):
+            if isinstance(sizes, (list, tuple)) and all(
+                isinstance(size, (int, str)) for size in sizes
+            ):
                 # Convert any string values to integers
                 int_sizes = [int(size) if isinstance(size, str) else size for size in sizes]
                 self.main_splitter.setSizes(int_sizes)
@@ -316,7 +316,7 @@ class MainWindow(QMainWindow):
             # Load the JSON file
             import json
 
-            with open(path, "r") as f:
+            with open(path) as f:
                 data = json.load(f)
 
             # Process results
@@ -328,13 +328,9 @@ class MainWindow(QMainWindow):
                 for test_data in data["tests"]:
                     test_result = TestResult(
                         name=test_data.get("nodeid", "Unknown"),
-                        status=self._map_test_status(
-                            test_data.get("outcome", "unknown")
-                        ),
+                        status=self._map_test_status(test_data.get("outcome", "unknown")),
                         duration=test_data.get("duration", 0.0),
-                        file_path=Path(test_data.get("path", ""))
-                        if "path" in test_data
-                        else None,
+                        file_path=Path(test_data.get("path", "")) if "path" in test_data else None,
                     )
 
                     # Add failure details if the test failed
@@ -351,9 +347,7 @@ class MainWindow(QMainWindow):
             self.test_results_model.set_results(results, path, "json")
 
             # Show a success message
-            self.status_label.setText(
-                f"Loaded {len(results)} test results from {path.name}"
-            )
+            self.status_label.setText(f"Loaded {len(results)} test results from {path.name}")
             logger.info(f"Loaded {len(results)} test results from {path}")
 
         except Exception as e:
@@ -383,19 +377,13 @@ class MainWindow(QMainWindow):
             # Check for JUnit XML format
             if root.tag == "testsuites" or root.tag == "testsuite":
                 # Get all testcase elements
-                testsuites = (
-                    [root] if root.tag == "testsuite" else root.findall("./testsuite")
-                )
+                testsuites = [root] if root.tag == "testsuite" else root.findall("./testsuite")
 
                 for testsuite in testsuites:
                     for testcase in testsuite.findall("./testcase"):
                         # Extract test details
                         name = f"{testcase.get('classname', '')}.{testcase.get('name', '')}"
-                        duration = (
-                            float(testcase.get("time", "0"))
-                            if testcase.get("time")
-                            else 0.0
-                        )
+                        duration = float(testcase.get("time", "0")) if testcase.get("time") else 0.0
 
                         # Determine test status
                         status = TestStatus.PASSED
@@ -438,9 +426,7 @@ class MainWindow(QMainWindow):
             self.test_results_model.set_results(results, path, "xml")
 
             # Show a success message
-            self.status_label.setText(
-                f"Loaded {len(results)} test results from {path.name}"
-            )
+            self.status_label.setText(f"Loaded {len(results)} test results from {path.name}")
             logger.info(f"Loaded {len(results)} test results from {path}")
 
         except Exception as e:
@@ -504,9 +490,7 @@ class MainWindow(QMainWindow):
         logger.debug(f"Group selected: {group.name}")
         # Handle group selection
         # For now, just update the status bar
-        self.status_label.setText(
-            f"Selected group: {group.name} ({len(group.tests)} tests)"
-        )
+        self.status_label.setText(f"Selected group: {group.name} ({len(group.tests)} tests)")
 
     @pyqtSlot()
     def on_settings(self) -> None:
