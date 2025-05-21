@@ -47,6 +47,15 @@ pixi.lock
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
 # pixi environments
 .pixi
 *.egg-info
+
+# Aider and other refactoring tools
+.cursor/
+.roo/
+.roomodes
+.taskmasterconfig
+.windsurfrules
+.mypy.ini
