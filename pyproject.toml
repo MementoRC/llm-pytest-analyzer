@@ -124,6 +124,8 @@ test = { features = ["test"], solve-group = "default" }
 target-version = "py39"
 # Line length - this applies to both linting and formatting
 line-length = 100
+# Additional exclusions
+extend-exclude = ["*.md", "docs"]
 
 [tool.ruff.lint]
 # Enable necessary checks and rules with comments for clarity
@@ -199,15 +201,22 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 # Line ending configuration
 line-ending = "auto"
+# Disable auto-wrapping of long strings/docstrings
+docstring-code-format = false
 
 # Set to preserve line breaks in long expressions - this applies to both linting and formatting
-[tool.ruff.pycodestyle]
+[tool.ruff.lint.pycodestyle]
 ignore-overlong-task-comments = true
 
 [tool.isort]
 profile = "black"
 line_length = 100
 skip_gitignore = true
+
+# Ruff-specific isort settings
+[tool.ruff.lint.isort]
+# Use the black profile
+known-first-party = ["pytest_analyzer"]
 
 [tool.pixi.tasks]
 dev = "pip install -e ."
