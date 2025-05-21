@@ -68,8 +68,8 @@ class TestSuggesterFactory(unittest.TestCase):
         self.assertEqual(suggester.max_prompt_length, 5000)
         self.assertEqual(suggester.max_context_lines, 30)
         self.assertEqual(suggester.timeout_seconds, 90)
-        self.assertIs(suggester.llm_service, self.llm_service)
-        self.assertIs(suggester.prompt_builder, self.prompt_builder)
+        self.assertIs(suggester.llm_client, self.llm_service)
+        # Remove prompt_builder assertion as it's not stored as an attribute in the class
 
     def test_create_llm_based_suggester_without_llm_service(self):
         """Test creating an LLM-based suggester without an LLM service."""

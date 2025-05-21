@@ -107,8 +107,7 @@ def create_llm_based_suggester(
 
     # Create the LLM suggester
     return LLMSuggester(
-        llm_service=llm_service_instance,
-        prompt_builder=prompt_builder_instance,
+        llm_client=llm_service_instance,
         min_confidence=min_confidence,
         max_prompt_length=max_prompt_length,
         max_context_lines=max_context_lines,
