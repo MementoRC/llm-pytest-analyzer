@@ -62,6 +62,13 @@ test = [
     "pytest-qt>=4.2.0",
 ]
 
+ci = [
+    "pytest>=7.0.0",
+    "pytest-asyncio",
+    "pytest-cov",
+    "pytest-json-report>=1.5.0",
+]
+
 [project.scripts]
 pytest-analyzer = "pytest_analyzer.cli.analyzer_cli:main"
 pytest-analyzer-gui = "pytest_analyzer.gui.__main__:main"
@@ -110,12 +117,6 @@ platforms = ["linux-64"]
 [tool.pixi.dependencies]
 "pyyaml" = "*"
 "rich" = ">=12.0.0"
-"libstdcxx-ng" = "*"
-"libglib" = "*"
-"libegl" = "*"
-"libgl" = "*"
-"libxcb" = "*"
-"xorg-libx11" = "*"
 
 [tool.pixi.pypi-dependencies]
 # pytest-analyzer = { path = ".", editable = true }
@@ -124,6 +125,7 @@ platforms = ["linux-64"]
 default = { solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
 test = { features = ["test"], solve-group = "default" }
+ci = { features = ["ci"], solve-group = "default" }
 
 [tool.ruff]
 # Target Python version
