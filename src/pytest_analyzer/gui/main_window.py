@@ -13,10 +13,10 @@ from typing import Optional, List, Dict, Any
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QSplitter, QToolBar, QStatusBar, QMessageBox,
-    QFileDialog, QAction, QMenu, QLabel
+    QFileDialog, QMenu, QLabel
 )
 from PyQt6.QtCore import Qt, QSize, QSettings, pyqtSlot
-from PyQt6.QtGui import QIcon
+from PyQt6.QtGui import QIcon, QAction
 
 from ..core.analyzer_service import PytestAnalyzerService
 from ..utils.settings import Settings
