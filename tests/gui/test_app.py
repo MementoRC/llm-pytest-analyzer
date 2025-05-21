@@ -4,13 +4,14 @@ Tests for the PytestAnalyzerApp class.
 This module contains tests for the application initialization and settings.
 """
 
+from pathlib import Path
+
 import pytest
+
+from pytest_analyzer.gui.app import PytestAnalyzerApp
 
 # Mark all tests in this module as GUI tests
 pytestmark = pytest.mark.gui
-from pathlib import Path
-
-from pytest_analyzer.gui.app import PytestAnalyzerApp
 
 
 def test_app_initialization(qapp: PytestAnalyzerApp) -> None:
@@ -25,10 +26,10 @@ def test_app_settings(qapp: PytestAnalyzerApp) -> None:
     """Test that the application settings work correctly."""
     # Set a test setting
     qapp.set_setting("test_key", "test_value")
-    
+
     # Get the setting back
     value = qapp.get_setting("test_key")
-    
+
     # Check that the setting was stored correctly
     assert value == "test_value"
 
@@ -45,9 +46,9 @@ def test_app_settings_persistence(qapp_session: PytestAnalyzerApp) -> None:
     # We use qapp_session to ensure we get the same instance
     # Set a test setting
     qapp_session.set_setting("persistence_test", "persisted_value")
-    
+
     # Get the setting back immediately
     value = qapp_session.get_setting("persistence_test")
-    
+
     # Check that it's available
     assert value == "persisted_value"
