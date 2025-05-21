@@ -12,11 +12,11 @@ repos:
     rev: v0.11.10
     hooks:
       - id: ruff-format
-        args: ["--config=pyproject.toml", "--respect-gitignore"]
+        args: ["--config=.ruff.toml", "--respect-gitignore"]
         types_or: [python, pyi]
         require_serial: true
       - id: ruff
-        args: ["--config=pyproject.toml", "--fix", "--exit-non-zero-on-fix", "--respect-gitignore"]
+        args: ["--config=.ruff.toml", "--fix", "--exit-non-zero-on-fix", "--respect-gitignore"]
         types_or: [python, pyi]
         require_serial: true
   # - repo: https://github.com/pre-commit/mirrors-mypy
