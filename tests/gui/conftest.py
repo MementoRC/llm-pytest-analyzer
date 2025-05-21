@@ -10,6 +10,10 @@ import pytest
 from pathlib import Path
 from typing import Generator, Any
 
+# Skip all GUI tests if we don't have a display
+if os.environ.get("DISPLAY", "") == "" and os.environ.get("QT_QPA_PLATFORM", "") == "":
+    pytest.skip("No display available for GUI tests", allow_module_level=True)
+
 from PyQt6.QtWidgets import QApplication
 from pytestqt.plugin import QtBot
 
