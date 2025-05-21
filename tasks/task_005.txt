@@ -1,0 +1,49 @@
+# Task ID: 5
+# Title: Implement PromptBuilder Component
+# Status: done
+# Dependencies: 2, 4
+# Priority: medium
+# Description: Create a dedicated component for constructing prompts to send to the LLM service.
+# Details:
+Implement a PromptBuilder that handles template management and prompt construction:
+
+```python
+from string import Template
+from typing import Dict, Any, Optional
+import os
+import json
+
+class PromptBuilder:
+    def __init__(self, template_dir: Optional[str] = None):
+        self.template_dir = template_dir or os.path.join(os.path.dirname(__file__), "templates")
+        self.templates: Dict[str, Template] = {}
+        self._load_templates()
+
+    def _load_templates(self) -> None:
+        # Load templates from files
+        if os.path.exists(self.template_dir):
+            for filename in os.listdir(self.template_dir):
+                if filename.endswith(".txt"):
+                    template_name = os.path.splitext(filename)[0]
+                    with open(os.path.join(self.template_dir, filename), "r") as f:
+                        self.templates[template_name] = Template(f.read())
+
+    def build_prompt(self, template_name: str, **kwargs) -> str:
+        if template_name not in self.templates:
+            raise ValueError(f"Template '{template_name}' not found")
+
+        # Handle special cases like code formatting
+        for key, value in kwargs.items():
+            if isinstance(value, dict):
+                kwargs[key] = json.dumps(value, indent=2)
+
+        return self.templates[template_name].substitute(**kwargs)
+
+    def register_template(self, name: str, template_string: str) -> None:
+        self.templates[name] = Template(template_string)
+```
+
+Create a set of default templates for common operations like test failure analysis, fix suggestion, etc. Store these in a templates directory.
+
+# Test Strategy:
+Write unit tests that verify template loading, prompt building with various parameter types, and error handling for missing templates. Test with both file-based templates and programmatically registered templates.

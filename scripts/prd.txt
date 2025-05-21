@@ -1,0 +1,70 @@
+# Pytest-Analyzer Refactoring Project Requirements Document
+
+## Project Overview
+The pytest-analyzer is a tool for analyzing pytest test failures, suggesting fixes, and automatically applying them. This project focuses on refactoring the codebase to improve architecture, testability, maintainability, and extensibility.
+
+## Problem Statement
+The current implementation has several architectural issues:
+1. Tight coupling between components
+2. Lack of clear separation of concerns
+3. No dependency injection, making testing difficult
+4. Poor error handling and logging
+5. Inconsistent interfaces and implementations
+6. Complex state management
+
+## Project Goals
+1. Implement proper dependency injection throughout the codebase
+2. Create clear interfaces using protocols
+3. Establish a consistent error handling mechanism
+4. Improve logging and telemetry
+5. Create both synchronous and asynchronous APIs where needed
+6. Implement the State Machine pattern for complex processes
+7. Enhance test coverage and quality
+8. Improve code organization and modularity
+
+## Technical Requirements
+
+### Architectural Changes
+1. **Dependency Injection**: Implement DI throughout the codebase to allow for more modular components that can be easily tested and replaced.
+2. **Protocol Interfaces**: Create clear interfaces using Python's Protocol type for component contracts.
+3. **Component Separation**: Ensure clear separation between:
+   - Extractors (parse test results)
+   - Analyzers (analyze test failures)
+   - Suggesters (suggest fixes)
+   - Appliers (apply fixes)
+   - LLM Services (communicate with language models)
+
+### LLM Service Refactoring
+1. Create a proper LLM service with configuration and resource management injected
+2. Implement both synchronous and asynchronous API methods
+3. Create a PromptBuilder component for constructing prompts
+4. Create a ResponseParser component for parsing responses
+5. Add proper error handling with context managers
+6. Ensure backward compatibility with existing code
+
+### State Machine Implementation
+1. Create a state machine base class for managing complex processes
+2. Implement an analyzer state machine for the test analysis workflow
+3. Ensure the state machine is testable and can be easily extended
+4. Handle errors and transitions properly
+
+### Testing Improvements
+1. Increase test coverage, especially for error cases
+2. Improve test organization
+3. Create more focused unit tests with proper mocking
+4. Add integration tests for major workflows
+
+### Documentation and Logging
+1. Improve code documentation with proper docstrings
+2. Enhance logging with consistent levels and messages
+3. Add telemetry for important operations
+4. Create clear examples for API usage
+
+## Success Criteria
+1. All tests pass with improved code organization
+2. Increased test coverage (goal: 80%+)
+3. Clear separation of concerns with interfaces
+4. Improved error handling
+5. Both synchronous and asynchronous APIs available
+6. Backward compatibility with existing code
+7. Documentation updated to reflect architectural changes

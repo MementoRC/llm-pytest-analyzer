@@ -29,6 +29,45 @@ class XmlResultExtractor:
         self.path_resolver = path_resolver or PathResolver()
         self.timeout = timeout
 
+    def extract(self, xml_input: any) -> dict:
+        """
+        Extract test failures from pytest XML output following the Extractor protocol.
+
+        Args:
+            xml_input: Path to the XML report file or ET.Element (str, Path, or ET.Element)
+
+        Returns:
+            A dictionary containing extracted failures and metadata
+
+        Raises:
+            ExtractionError: If extraction fails
+        """
+        from ..errors import ExtractionError
+
+        failures = []
+        source = ""
+
+        try:
+            if isinstance(xml_input, (str, Path)):
+                path = Path(xml_input)
+                failures = self.extract_failures(path)
+                source = str(path)
+            elif isinstance(xml_input, ET.Element):
+                failures = self._parse_xml_element(xml_input)
+                source = "xml-element"
+            else:
+                raise TypeError(f"Unsupported input type: {type(xml_input)}")
+
+            return {
+                "failures": failures,
+                "format": "xml",
+                "count": len(failures),
+                "source": source,
+            }
+        except Exception as e:
+            logger.error(f"Error extracting from XML: {e}")
+            raise ExtractionError(f"Failed to extract from XML: {e}") from e
+
     @with_timeout(30)
     def extract_failures(self, xml_path: Path) -> List[PytestFailure]:
         """
@@ -165,3 +204,87 @@ class XmlResultExtractor:
                 pass
 
         return None
+
+    def _parse_xml_element(self, root: ET.Element) -> List[PytestFailure]:
+        """
+        Parse an XML element directly and extract test failures.
+
+        Args:
+            root: Root ET.Element of the XML document
+
+        Returns:
+            List of PytestFailure objects
+        """
+        failures = []
+
+        # Find all testcase elements
+        for testcase in root.findall(".//testcase"):
+            # Check if the testcase has failure or error elements
+            failure_elements = testcase.findall("failure")
+            error_elements = testcase.findall("error")
+
+            if failure_elements or error_elements:
+                # Get failure information
+                if failure_elements:
+                    failure_element = failure_elements[0]
+                    error_type = failure_element.get("type", "Failure")
+                    error_message = failure_element.get("message", "")
+                    traceback = failure_element.text or ""
+                elif error_elements:
+                    error_element = error_elements[0]
+                    error_type = error_element.get("type", "Error")
+                    error_message = error_element.get("message", "")
+                    traceback = error_element.text or ""
+                else:
+                    continue  # Should not happen, but just in case
+
+                # Extract more specific error type from message or traceback
+                import re
+
+                if error_type in ("Failure", "Error"):  # Only if generic type
+                    match = re.search(
+                        r"(?:^|\n)([A-Za-z_][\w.]*Error|[\w.]*Exception):",
+                        error_message,
+                    )
+                    if not match:
+                        match = re.search(
+                            r"(?:^|\n)([A-Za-z_][\w.]*Error|[\w.]*Exception):",
+                            traceback,
+                        )
+                    if match:
+                        error_type = match.group(1)
+
+                # Extract test information
+                test_name = testcase.get("name", "")
+                classname = testcase.get("classname", "")
+
+                # Create a full test name
+                full_test_name = f"{classname}.{test_name}" if classname else test_name
+
+                # Extract file path and line number
+                file_path = ""
+                line_number = None
+
+                # Try to extract file path from classname
+                if classname and "." in classname:
+                    file_part = classname.replace(".", "/") + ".py"
+                    file_path = str(self.path_resolver.resolve_path(file_part))
+
+                # Extract line number from traceback if available
+                if traceback:
+                    line_number = self._extract_line_number_from_traceback(traceback)
+
+                # Create PytestFailure object
+                failure = PytestFailure(
+                    test_name=full_test_name,
+                    test_file=file_path,
+                    line_number=line_number,
+                    error_type=error_type,
+                    error_message=error_message,
+                    traceback=traceback,
+                    raw_output_section=ET.tostring(testcase, encoding="unicode"),
+                )
+
+                failures.append(failure)
+
+        return failures

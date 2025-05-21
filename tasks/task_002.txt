@@ -1,0 +1,33 @@
+# Task ID: 2
+# Title: Implement Core Protocol Interfaces
+# Status: done
+# Dependencies: 1
+# Priority: high
+# Description: Define Protocol interfaces for all major components to establish clear contracts between system parts.
+# Details:
+Create Protocol classes for each major component type:
+
+```python
+from typing import Protocol, List, Dict, Any, Optional
+
+class Extractor(Protocol):
+    def extract(self, test_results: Any) -> Dict[str, Any]: ...
+
+class Analyzer(Protocol):
+    def analyze(self, extraction_results: Dict[str, Any]) -> Dict[str, Any]: ...
+
+class Suggester(Protocol):
+    def suggest(self, analysis_results: Dict[str, Any]) -> List[Dict[str, Any]]: ...
+
+class Applier(Protocol):
+    def apply(self, suggestions: List[Dict[str, Any]], target_files: List[str]) -> bool: ...
+
+class LLMService(Protocol):
+    def generate(self, prompt: str, **kwargs) -> str: ...
+    async def generate_async(self, prompt: str, **kwargs) -> str: ...
+```
+
+Ensure each Protocol has proper type hints and docstrings explaining the expected behavior and contract.
+
+# Test Strategy:
+Create test cases that verify implementations conform to the Protocol interfaces. Use mypy or similar static type checking to validate interface compliance.

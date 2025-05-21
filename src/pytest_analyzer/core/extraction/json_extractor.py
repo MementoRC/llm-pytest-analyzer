@@ -30,10 +30,54 @@ class JsonResultExtractor:
         self.path_resolver = path_resolver or PathResolver()
         self.timeout = timeout
 
+    def extract(self, json_input: Any) -> Dict[str, Any]:
+        """
+        Extract test failures from pytest output following the Extractor protocol.
+
+        Args:
+            json_input: Path to the JSON report file or JSON data (str, Path, or dict)
+
+        Returns:
+            A dictionary containing extracted failures and metadata
+
+        Raises:
+            ExtractionError: If extraction fails
+        """
+        from ..errors import ExtractionError
+
+        failures = []
+        source = ""
+
+        try:
+            if isinstance(json_input, (str, Path)):
+                path = Path(json_input)
+                # Check for nonexistent file and raise ExtractionError directly
+                if not path.exists():
+                    logger.error(f"JSON report file not found: {path}")
+                    raise ExtractionError(f"JSON report file not found: {path}")
+                failures = self.extract_failures(path)
+                source = str(path)
+            elif isinstance(json_input, dict):
+                failures = self._parse_json_data(json_input)
+                source = "dict"
+            else:
+                raise TypeError(f"Unsupported input type: {type(json_input)}")
+
+            return {
+                "failures": failures,
+                "format": "json",
+                "count": len(failures),
+                "source": source,
+            }
+        except Exception as e:
+            logger.error(f"Error extracting from JSON: {e}")
+            raise ExtractionError(f"Failed to extract from JSON: {e}") from e
+
     @with_timeout(30)
     def extract_failures(self, json_path: Path) -> List[PytestFailure]:
         """
         Extract test failures from a pytest JSON report.
+        This method is backward compatible and returns an empty list on errors.
 
         Args:
             json_path: Path to the JSON report file
@@ -43,7 +87,7 @@ class JsonResultExtractor:
         """
         if not json_path.exists():
             logger.error(f"JSON report file not found: {json_path}")
-            return []
+            return []  # Return empty list for compatibility with existing code
 
         try:
             with ResourceMonitor(max_time_seconds=self.timeout):
@@ -177,3 +221,25 @@ class JsonResultExtractor:
         except Exception as e:
             logger.error(f"Error creating PytestFailure from test entry: {e}")
             return None
+
+    def _parse_json_data(self, data: Dict[str, Any]) -> List[PytestFailure]:
+        """
+        Parse JSON data directly and extract test failures.
+
+        Args:
+            data: JSON data as dictionary
+
+        Returns:
+            List of PytestFailure objects
+        """
+        failures = []
+
+        # Process test entries
+        tests = data.get("tests", [])
+        for test in tests:
+            if test.get("outcome") == "failed":
+                failure = self._create_failure_from_test(test)
+                if failure:
+                    failures.append(failure)
+
+        return failures

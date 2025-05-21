@@ -121,6 +121,18 @@ def test_pass():
 SAMPLE_REPORTS_DIR = Path(__file__).parent / "sample_reports"
 
 
+@pytest.fixture
+def sample_json_report(report_assertion_json):
+    """Fixture that returns a Path to a sample JSON report file."""
+    return report_assertion_json
+
+
+@pytest.fixture
+def sample_assertion_file(project_assertion_failure):
+    """Fixture that returns a Path to a sample assertion failure test file."""
+    return project_assertion_failure / "test_assertion_fail.py"
+
+
 # Helper to create sample report files if they don't exist
 def create_sample_report(file_path, content):
     if not file_path.exists():

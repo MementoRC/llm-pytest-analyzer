@@ -1,0 +1,130 @@
+# Task ID: 12
+# Title: Implement Applier Component
+# Status: done
+# Dependencies: 2, 3
+# Priority: medium
+# Description: Create the Applier component for applying suggested fixes according to the Protocol interface.
+# Details:
+Implement a concrete Applier that applies suggested fixes to test files:
+
+```python
+from typing import Dict, Any, List, Optional
+import os
+import re
+from difflib import unified_diff
+
+class FixApplier:
+    def apply(self, suggestions: List[Dict[str, Any]], target_files: List[str] = None) -> bool:
+        """Apply suggested fixes to target files."""
+        if not suggestions:
+            return False
+
+        # Filter suggestions by target files if specified
+        if target_files:
+            suggestions = [s for s in suggestions if s.get('file_path') in target_files]
+
+        if not suggestions:
+            return False
+
+        success_count = 0
+        for suggestion in suggestions:
+            if self._apply_suggestion(suggestion):
+                success_count += 1
+
+        return success_count > 0
+
+    def _apply_suggestion(self, suggestion: Dict[str, Any]) -> bool:
+        file_path = suggestion.get('file_path')
+        if not file_path or not os.path.exists(file_path):
+            return False
+
+        code_changes = suggestion.get('code_changes', [])
+        if not code_changes:
+            return False
+
+        try:
+            # Read the original file
+            with open(file_path, 'r') as f:
+                original_lines = f.readlines()
+
+            # Apply changes
+            new_lines = original_lines.copy()
+            for change in code_changes:
+                change_type = change.get('type', '').lower()
+                if change_type == 'replace':
+                    self._apply_replace(new_lines, change)
+                elif change_type == 'insert':
+                    self._apply_insert(new_lines, change)
+                elif change_type == 'delete':
+                    self._apply_delete(new_lines, change)
+
+            # Only write if there were actual changes
+            if new_lines != original_lines:
+                # Create backup
+                backup_path = f"{file_path}.bak"
+                with open(backup_path, 'w') as f:
+                    f.writelines(original_lines)
+
+                # Write new content
+                with open(file_path, 'w') as f:
+                    f.writelines(new_lines)
+
+                return True
+
+            return False
+        except Exception as e:
+            # Log the error and return False
+            print(f"Error applying fix to {file_path}: {str(e)}")
+            return False
+
+    def _apply_replace(self, lines: List[str], change: Dict[str, Any]) -> None:
+        start_line = change.get('start_line', 0) - 1  # Convert to 0-based index
+        end_line = change.get('end_line', 0) - 1
+        new_code = change.get('new_code', '')
+
+        if start_line < 0 or end_line >= len(lines) or start_line > end_line:
+            return
+
+        # Replace the specified lines with new code
+        new_lines = new_code.split('\n')
+        if new_lines[-1] == '':
+            new_lines = new_lines[:-1]  # Remove trailing empty line
+
+        # Ensure each line ends with a newline
+        new_lines = [line if line.endswith('\n') else line + '\n' for line in new_lines]
+
+        lines[start_line:end_line+1] = new_lines
+
+    def _apply_insert(self, lines: List[str], change: Dict[str, Any]) -> None:
+        line_number = change.get('line_number', 0) - 1  # Convert to 0-based index
+        new_code = change.get('new_code', '')
+
+        if line_number < 0 or line_number > len(lines):
+            return
+
+        # Insert new code at the specified line
+        new_lines = new_code.split('\n')
+        if new_lines[-1] == '':
+            new_lines = new_lines[:-1]  # Remove trailing empty line
+
+        # Ensure each line ends with a newline
+        new_lines = [line if line.endswith('\n') else line + '\n' for line in new_lines]
+
+        for i, line in enumerate(new_lines):
+            lines.insert(line_number + i, line)
+
+    def _apply_delete(self, lines: List[str], change: Dict[str, Any]) -> None:
+        start_line = change.get('start_line', 0) - 1  # Convert to 0-based index
+        end_line = change.get('end_line', 0) - 1
+
+        if start_line < 0 or end_line >= len(lines) or start_line > end_line:
+            return
+
+        # Delete the specified lines
+        del lines[start_line:end_line+1]
+```
+
+This implementation should handle applying suggested fixes to test files, including replacing, inserting, and deleting code.
+
+# Test Strategy:
+Create unit tests with temporary test files to verify applying different types of changes (replace, insert, delete). Test both successful applications and error handling. Verify file backups are created correctly.

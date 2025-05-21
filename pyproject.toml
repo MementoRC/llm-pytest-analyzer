@@ -89,6 +89,14 @@ markers = [
 mypy_path = ["src"]
 namespace_packages = true
 explicit_package_bases = true
+exclude = ["examples/*", "demo_script.py"]
+python_version = "3.9"
+packages = ["pytest_analyzer"]
+ignore_errors = false
+
+[[tool.mypy.overrides]]
+module = ["anthropic.*", "openai.*"]
+ignore_missing_imports = true
 
 [tool.pixi.project]
 channels = ["conda-forge"]
@@ -112,7 +120,7 @@ install-editable = "pip install -e ."
 lint = "ruff check src tests"
 lint-fix = "ruff check --fix src tests"
 format = "ruff format src tests"
-typecheck = "mypy src tests"
+typecheck = "mypy src"
 test = "pytest tests"
 test-cov = { cmd = "pytest --cov=src/pytest_analyzer --cov-report=term-missing --cov-report=xml tests", depends-on = ["install-editable"] }
 build = { cmd = "hatch build", depends-on = ["install-editable"] }
