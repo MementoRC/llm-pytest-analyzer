@@ -126,6 +126,8 @@ target-version = "py39"
 line-length = 100
 # Additional exclusions
 extend-exclude = ["*.md", "docs"]
+# Force exclude to be respected even when files are passed directly
+force-exclude = true
 
 [tool.ruff.lint]
 # Enable necessary checks and rules with comments for clarity
@@ -197,12 +199,14 @@ exclude = [
 # Format configuration
 quote-style = "double"
 indent-style = "space"
-# Preserve line breaks with magic trailing comma
+# Preserve line breaks with magic trailing comma - this is critical for preserving existing formatting
 skip-magic-trailing-comma = false
 # Line ending configuration
 line-ending = "auto"
 # Disable auto-wrapping of long strings/docstrings
 docstring-code-format = false
+# Don't format docstrings at all to avoid line breaks changes
+docstring-code-line-length = 100
 
 # Set to preserve line breaks in long expressions - this applies to both linting and formatting
 [tool.ruff.lint.pycodestyle]
