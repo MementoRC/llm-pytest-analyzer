@@ -34,6 +34,7 @@ dependencies = [
     "openai",
     "pyyaml",
     "rich>=12.0.0",
+    "PyQt6>=6.5.0",
 ]
 
 [project.optional-dependencies]
@@ -61,6 +62,7 @@ test = [
 
 [project.scripts]
 pytest-analyzer = "pytest_analyzer.cli.analyzer_cli:main"
+pytest-analyzer-gui = "pytest_analyzer.gui.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/yourusername/pytest_analyzer"
