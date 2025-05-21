@@ -11,7 +11,7 @@ The GUI will consist of the following key components:
 1. **Main Window** - The primary application window with a menu bar, toolbar, and status bar
 2. **Test Selection Panel** - For selecting test files or directories
 3. **Failure Analysis View** - Displays test failures, groupings, and patterns
-4. **Fix Suggestion Panel** - Shows LLM-generated fix suggestions 
+4. **Fix Suggestion Panel** - Shows LLM-generated fix suggestions
 5. **Code Editor** - For reviewing and editing suggested fixes
 6. **Settings Dialog** - For configuring the application
 
