@@ -126,8 +126,26 @@ target-version = "py39"
 line-length = 100
 
 [tool.ruff.lint]
-# Enable necessary checks and rules
-select = ["E", "F", "I", "W", "UP", "N", "B", "A", "C4", "ISC", "NPY", "PD", "PT", "RET", "SIM", "TCH"]
+# Enable necessary checks and rules with comments for clarity
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "W",    # pycodestyle warnings
+    "UP",   # pyupgrade
+    "N",    # pep8-naming
+    "B",    # flake8-bugbear
+    "A",    # flake8-builtins
+    "C4",   # flake8-comprehensions
+    "ISC",  # flake8-implicit-str-concat
+    "NPY",  # NumPy-specific rules
+    "PD",   # pandas-specific rules
+    "PT",   # flake8-pytest-style
+    "RET",  # flake8-return
+    "SIM",  # flake8-simplify
+    "TCH",  # flake8-type-checking
+]
+
 # Ignore specific errors
 ignore = [
     "E203",    # Whitespace before ':' (Black formats this differently)
@@ -174,12 +192,13 @@ exclude = [
 ]
 
 [tool.ruff.format]
-# Quote style
+# Format configuration
 quote-style = "double"
-# Indent
 indent-style = "space"
-# Skip magic trailing comma
+# Preserve line breaks with magic trailing comma
 skip-magic-trailing-comma = false
+# Line ending configuration
+line-ending = "auto"
 
 [tool.pixi.tasks]
 dev = "pip install -e ."
