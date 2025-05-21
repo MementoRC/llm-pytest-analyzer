@@ -200,6 +200,15 @@ skip-magic-trailing-comma = false
 # Line ending configuration
 line-ending = "auto"
 
+# Set to preserve line breaks in long expressions - this applies to both linting and formatting
+[tool.ruff.pycodestyle]
+ignore-overlong-task-comments = true
+
+[tool.isort]
+profile = "black"
+line_length = 100
+skip_gitignore = true
+
 [tool.pixi.tasks]
 dev = "pip install -e ."
 install-editable = "pip install -e ."
