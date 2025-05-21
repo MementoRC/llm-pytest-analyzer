@@ -1,14 +1,11 @@
 """Tests for the LLM suggester module."""
-import json
-import pytest
-import re
-from unittest.mock import patch, MagicMock, ANY
-import os
-from pathlib import Path
 
-from src.pytest_analyzer.core.analysis.llm_suggester import LLMSuggester
-from src.pytest_analyzer.core.models.pytest_failure import PytestFailure, FixSuggestion
-from src.pytest_analyzer.utils.resource_manager import TimeoutError
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from pytest_analyzer.core.analysis.llm_suggester import LLMSuggester
+from pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
 
 
 @pytest.fixture
@@ -21,7 +18,7 @@ def test_failure():
         error_message="assert 1 == 2",
         traceback="E       assert 1 == 2\nE       +  where 1 = func()",
         line_number=42,
-        relevant_code="def test_function():\n    assert 1 == 2"
+        relevant_code="def test_function():\n    assert 1 == 2",
     )
 
 
@@ -35,7 +32,7 @@ def name_error_test_failure():
         error_message="name 'undefined_variable' is not defined",
         traceback="E       NameError: name 'undefined_variable' is not defined\nE       at line 25",
         line_number=25,
-        relevant_code="def test_function():\n    result = undefined_variable * 2"
+        relevant_code="def test_function():\n    result = undefined_variable * 2",
     )
 
 
@@ -98,7 +95,7 @@ class TestLLMSuggester:
             max_prompt_length=2000,
             max_context_lines=5,
             timeout_seconds=30,
-            custom_prompt_template=custom_template
+            custom_prompt_template=custom_template,
         )
         assert suggester.llm_client == mock_openai_client
         assert suggester.min_confidence == 0.9
@@ -135,40 +132,44 @@ class TestLLMSuggester:
         suggester = LLMSuggester(llm_client=None)
         # Explicitly set the request function to None to simulate no client
         suggester._llm_request_func = None
-        
+
         suggestions = suggester.suggest_fixes(test_failure)
-        
+
         assert suggestions == []
 
     @patch.object(LLMSuggester, "_build_prompt")
-    def test_suggest_fixes_exception(self, mock_build_prompt, llm_suggester, test_failure):
+    def test_suggest_fixes_exception(
+        self, mock_build_prompt, llm_suggester, test_failure
+    ):
         """Test error handling during fix suggestion."""
         # Cause an exception in _build_prompt
         mock_build_prompt.side_effect = Exception("Test error")
-        
+
         # Call suggest_fixes
         suggestions = llm_suggester.suggest_fixes(test_failure)
-        
+
         # Verify the results
         assert suggestions == []  # Empty list on error
         mock_build_prompt.assert_called_once_with(test_failure)
 
     @patch.object(LLMSuggester, "_build_prompt", return_value="Test prompt")
     @patch.object(LLMSuggester, "_parse_llm_response")
-    def test_suggest_fixes_success(self, mock_parse, mock_build_prompt, llm_suggester, test_failure):
+    def test_suggest_fixes_success(
+        self, mock_parse, mock_build_prompt, llm_suggester, test_failure
+    ):
         """Test successful fix suggestion."""
         # Set up the mocks
         llm_suggester._llm_request_func = MagicMock(return_value="Test response")
-        
+
         # Mock the parsed suggestions
         expected_suggestions = [
             FixSuggestion(failure=test_failure, suggestion="Fix 1", confidence=0.8)
         ]
         mock_parse.return_value = expected_suggestions
-        
+
         # Call suggest_fixes
         suggestions = llm_suggester.suggest_fixes(test_failure)
-        
+
         # Verify the results
         assert suggestions == expected_suggestions
         mock_build_prompt.assert_called_once_with(test_failure)
@@ -178,9 +179,13 @@ class TestLLMSuggester:
     def test_build_prompt(self, llm_suggester, test_failure):
         """Test building prompts for the language model."""
         # Patch _extract_code_context to return a known value
-        with patch.object(llm_suggester, "_extract_code_context", return_value="def test_function():\n    assert 1 == 2"):
+        with patch.object(
+            llm_suggester,
+            "_extract_code_context",
+            return_value="def test_function():\n    assert 1 == 2",
+        ):
             prompt = llm_suggester._build_prompt(test_failure)
-            
+
             # Check if prompt contains key information
             assert test_failure.test_name in prompt
             assert test_failure.error_type in prompt
@@ -193,17 +198,21 @@ class TestLLMSuggester:
         """Test prompt truncation for long prompts."""
         # Mock the truncate_text method
         mock_truncate.return_value = "truncated text"
-        
+
         # Create a long traceback and code context
         test_failure.traceback = "E       " + ("x" * 2000)
-        
+
         # Patch _extract_code_context to return a long value
-        with patch.object(llm_suggester, "_extract_code_context", return_value="def test_function():\n" + ("x" * 3000)):
+        with patch.object(
+            llm_suggester,
+            "_extract_code_context",
+            return_value="def test_function():\n" + ("x" * 3000),
+        ):
             # Set a small max_prompt_length
             llm_suggester.max_prompt_length = 500
-            
-            prompt = llm_suggester._build_prompt(test_failure)
-            
+
+            llm_suggester._build_prompt(test_failure)
+
             # Verify truncate_text was called
             assert mock_truncate.called
 
@@ -211,31 +220,33 @@ class TestLLMSuggester:
         """Test extracting code context when the file doesn't exist."""
         # Set test_file to a non-existent path
         test_failure.test_file = "/nonexistent/path.py"
-        
+
         context = llm_suggester._extract_code_context(test_failure)
-        
+
         # Should use relevant_code if available when file not found
         assert context == test_failure.relevant_code
 
     @patch("os.path.exists", return_value=True)
     @patch("builtins.open")
-    def test_extract_code_context_io_error(self, mock_open, mock_exists, llm_suggester, test_failure):
+    def test_extract_code_context_io_error(
+        self, mock_open, mock_exists, llm_suggester, test_failure
+    ):
         """Test extracting code context when there's an IO error."""
         # Simulate an IO error when opening the file
         mock_open.side_effect = IOError("Test IO error")
-        
+
         # Remove relevant_code to force file reading attempt
         test_failure.relevant_code = None
-        
+
         # Set up test_failure.traceback to contain code snippets
         test_failure.traceback = "E  >  assert 1 == 2\nE      where 1 = func()"
-        
+
         context = llm_suggester._extract_code_context(test_failure)
-        
+
         # Log the actual return value for debugging
         if context is not None:
             print(f"Context returned: {context}")
-        
+
         # Should return None or extract from traceback
         # If code pattern extraction is implemented, we might get a value
         # Otherwise, we should get None
@@ -249,9 +260,9 @@ class TestLLMSuggester:
         test_failure.test_file = "/nonexistent/path.py"
         # Set up a traceback with code patterns
         test_failure.traceback = ">       assert 1 == 2\nE       where 1 = func()"
-        
+
         context = llm_suggester._extract_code_context(test_failure)
-        
+
         # Should extract code lines or return None if pattern doesn't match
         if context is not None:
             assert "assert 1 == 2" in context
@@ -264,15 +275,15 @@ class TestLLMSuggester:
         # Test with text shorter than max_length
         short_text = "This is a short text"
         assert llm_suggester._truncate_text(short_text, 100) == short_text
-        
+
         # Test with text longer than max_length
         long_text = "x" * 1000
         truncated = llm_suggester._truncate_text(long_text, 100)
-        
+
         assert len(truncated) <= 120  # Allow for truncation markers
         assert "..." in truncated
         assert "[truncated]" in truncated
-        
+
         # Test with None or empty text
         assert llm_suggester._truncate_text(None, 100) is None
         assert llm_suggester._truncate_text("", 100) == ""
@@ -282,14 +293,14 @@ class TestLLMSuggester:
         # Create a prompt with multiple sections
         sections = ["Section 1", "Section 2", "Section 3", "Section 4"]
         prompt = "===".join(sections)
-        
+
         # Truncate to a length that requires dropping middle sections
         truncated = llm_suggester._truncate_prompt(prompt, 20)
-        
+
         # First and last sections should be preserved
         assert "Section 1" in truncated
         assert "Section 4" in truncated
-        
+
         # Should not exceed max length (plus some buffer)
         assert len(truncated) <= 30
 
@@ -305,9 +316,9 @@ class TestLLMSuggester:
             }
         ]
         ```"""
-        
+
         suggestions = llm_suggester._parse_llm_response(json_response, test_failure)
-        
+
         assert len(suggestions) == 1
         assert suggestions[0].suggestion == "Fix the assertion to expect 1 instead of 2"
         assert suggestions[0].confidence == 0.8
@@ -323,28 +334,30 @@ class TestLLMSuggester:
             "confidence": 0.8
         }
         ```"""
-        
+
         # Should fall back to text extraction
         suggestions = llm_suggester._parse_llm_response(invalid_json, test_failure)
-        
-        assert len(suggestions) >= 0  # May extract suggestions from text or return empty list
+
+        assert (
+            len(suggestions) >= 0
+        )  # May extract suggestions from text or return empty list
 
     def test_parse_llm_response_text(self, llm_suggester, test_failure):
         """Test parsing a plain text response from the LLM."""
         # Create a text response with suggestion patterns
         text_response = """
         Suggestion: Fix the assertion to expect 1 instead of 2.
-        
+
         The test is expecting 2 but actually gets 1. You should update the assertion.
-        
+
         ```python
         def test_function():
             assert 1 == 1  # Fixed
         ```
         """
-        
+
         suggestions = llm_suggester._parse_llm_response(text_response, test_failure)
-        
+
         assert len(suggestions) >= 1
         assert "Fix the assertion" in suggestions[0].suggestion
         assert suggestions[0].failure == test_failure
@@ -356,27 +369,31 @@ class TestLLMSuggester:
             "suggestion": "Fix the assertion",
             "confidence": 0.8,
             "explanation": "Explanation text",
-            "code_changes": {"fixed_code": "assert 1 == 1"}
+            "code_changes": {"fixed_code": "assert 1 == 1"},
         }
-        
-        suggestion = llm_suggester._create_suggestion_from_json(valid_data, test_failure)
-        
+
+        suggestion = llm_suggester._create_suggestion_from_json(
+            valid_data, test_failure
+        )
+
         assert suggestion is not None
         assert suggestion.suggestion == "Fix the assertion"
         assert suggestion.confidence == 0.8
         assert suggestion.explanation == "Explanation text"
         assert suggestion.code_changes == {"fixed_code": "assert 1 == 1"}
         assert suggestion.failure == test_failure
-        
+
         # Test with data below confidence threshold
         below_threshold_data = {
             "suggestion": "Low confidence fix",
             "confidence": 0.3,  # Below default threshold of 0.7
-            "explanation": "Explanation text"
+            "explanation": "Explanation text",
         }
-        
+
         # This might return None depending on implementation
-        low_confidence_suggestion = llm_suggester._create_suggestion_from_json(below_threshold_data, test_failure)
+        low_confidence_suggestion = llm_suggester._create_suggestion_from_json(
+            below_threshold_data, test_failure
+        )
         if low_confidence_suggestion is not None:
             assert low_confidence_suggestion.confidence < llm_suggester.min_confidence
 
@@ -385,28 +402,32 @@ class TestLLMSuggester:
         # Text with clear suggestion patterns
         text_with_suggestions = """
         Suggestion: Fix the assertion to expect 1 instead of 2.
-        
-        You should update the assertion in the test. 
-        
+
+        You should update the assertion in the test.
+
         ```python
         def test_function():
             assert 1 == 1  # Fixed
         ```
-        
+
         Suggestion 2: Fix the implementation of func() to return 2.
         """
-        
-        suggestions = llm_suggester._extract_suggestions_from_text(text_with_suggestions, test_failure)
-        
+
+        suggestions = llm_suggester._extract_suggestions_from_text(
+            text_with_suggestions, test_failure
+        )
+
         assert len(suggestions) >= 1
         assert any("Fix the assertion" in s.suggestion for s in suggestions)
         assert all(s.failure == test_failure for s in suggestions)
-        
+
         # Text with no clear suggestions
         text_without_suggestions = "The error seems to be in the test configuration."
-        
-        suggestions = llm_suggester._extract_suggestions_from_text(text_without_suggestions, test_failure)
-        
+
+        suggestions = llm_suggester._extract_suggestions_from_text(
+            text_without_suggestions, test_failure
+        )
+
         assert len(suggestions) == 1  # Should create a generic suggestion
         assert suggestions[0].suggestion == text_without_suggestions.strip()
         assert suggestions[0].failure == test_failure
@@ -416,28 +437,34 @@ class TestLLMSuggester:
         """Test making a request with an OpenAI client."""
         # Set up the mock to return a response
         mock_request_openai.return_value = "OpenAI response"
-        
+
         # Mock the client type detection
         with patch.object(llm_suggester.llm_client.__class__, "__module__", "openai"):
             response = llm_suggester._make_request_with_client("Test prompt")
-            
-            mock_request_openai.assert_called_once_with("Test prompt", llm_suggester.llm_client)
+
+            mock_request_openai.assert_called_once_with(
+                "Test prompt", llm_suggester.llm_client
+            )
             assert response == "OpenAI response"
 
     @patch.object(LLMSuggester, "_request_with_anthropic")
-    def test_make_request_with_client_anthropic(self, mock_request_anthropic, mock_anthropic_client):
+    def test_make_request_with_client_anthropic(
+        self, mock_request_anthropic, mock_anthropic_client
+    ):
         """Test making a request with an Anthropic client."""
         # Create suggester with Anthropic client
         suggester = LLMSuggester(llm_client=mock_anthropic_client)
-        
+
         # Set up the mock to return a response
         mock_request_anthropic.return_value = "Anthropic response"
-        
+
         # Mock the client type detection
         with patch.object(suggester.llm_client.__class__, "__module__", "anthropic"):
             response = suggester._make_request_with_client("Test prompt")
-            
-            mock_request_anthropic.assert_called_once_with("Test prompt", suggester.llm_client)
+
+            mock_request_anthropic.assert_called_once_with(
+                "Test prompt", suggester.llm_client
+            )
             assert response == "Anthropic response"
 
     def test_request_with_openai(self, llm_suggester, mock_openai_client):
@@ -446,16 +473,19 @@ class TestLLMSuggester:
         mock_openai_client.chat.completions.create.return_value = MagicMock(
             choices=[MagicMock(message=MagicMock(content="OpenAI API response"))]
         )
-        
+
         response = llm_suggester._request_with_openai("Test prompt", mock_openai_client)
-        
+
         mock_openai_client.chat.completions.create.assert_called_once_with(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are an expert Python developer helping to fix pytest failures."},
-                {"role": "user", "content": "Test prompt"}
+                {
+                    "role": "system",
+                    "content": "You are an expert Python developer helping to fix pytest failures.",
+                },
+                {"role": "user", "content": "Test prompt"},
             ],
-            max_tokens=1000
+            max_tokens=1000,
         )
         assert response == "OpenAI API response"
 
@@ -463,31 +493,33 @@ class TestLLMSuggester:
         """Test making a request with the Anthropic API."""
         # Create suggester with Anthropic client
         suggester = LLMSuggester(llm_client=mock_anthropic_client)
-        
+
         # Set up the mock to return a response
         mock_anthropic_client.messages.create.return_value = MagicMock(
             content=[MagicMock(text="Anthropic API response")]
         )
-        
-        response = suggester._request_with_anthropic("Test prompt", mock_anthropic_client)
-        
+
+        response = suggester._request_with_anthropic(
+            "Test prompt", mock_anthropic_client
+        )
+
         mock_anthropic_client.messages.create.assert_called_once_with(
             model="claude-3-haiku-20240307",
             max_tokens=1000,
-            messages=[
-                {"role": "user", "content": "Test prompt"}
-            ]
+            messages=[{"role": "user", "content": "Test prompt"}],
         )
         assert response == "Anthropic API response"
 
-    def test_request_with_openai_exception_handling(self, llm_suggester, mock_openai_client):
+    def test_request_with_openai_exception_handling(
+        self, llm_suggester, mock_openai_client
+    ):
         """Test handling of API errors with OpenAI."""
         # Setup mock to raise an exception
         mock_openai_client.chat.completions.create.side_effect = Exception("API error")
-        
+
         # The method should catch the exception and return an empty string
         response = llm_suggester._request_with_openai("Test prompt", mock_openai_client)
-        
+
         assert response == ""  # Should return empty string on error
         mock_openai_client.chat.completions.create.assert_called_once()
 
@@ -495,12 +527,14 @@ class TestLLMSuggester:
         """Test handling of API errors with Anthropic."""
         # Create suggester with Anthropic client
         suggester = LLMSuggester(llm_client=mock_anthropic_client)
-        
+
         # Setup mock to raise an exception
         mock_anthropic_client.messages.create.side_effect = Exception("API error")
-        
+
         # The method should catch the exception and return an empty string
-        response = suggester._request_with_anthropic("Test prompt", mock_anthropic_client)
-        
+        response = suggester._request_with_anthropic(
+            "Test prompt", mock_anthropic_client
+        )
+
         assert response == ""  # Should return empty string on error
         mock_anthropic_client.messages.create.assert_called_once()

@@ -1,0 +1,9 @@
+site_name: llm-pytest-analyzer
+repo_url: https://github.com/MementoRC/llm-pytest-analyzer  # Add this line
+edit_uri: edit/main/docs
+docs_dir: docs  # Change from . to docs
+site_dir: site  # Explicitly set site output directory
+theme:
+  name: readthedocs
+nav:
+  - Home: index.md

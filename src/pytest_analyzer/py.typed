@@ -1,0 +1,2 @@
+# Marker file for PEP 561 compliance
+# This file indicates that the pytest_analyzer package is typed

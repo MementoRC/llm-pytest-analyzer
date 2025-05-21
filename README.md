@@ -1,5 +1,7 @@
 # pytest-analyzer
 
+[![CI](https://github.com/MementoRC/llm-pytest-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/MementoRC/llm-pytest-analyzer/actions/workflows/ci.yml) [![Coverage Status](https://img.shields.io/codecov/c/gh/MementoRC/llm-pytest-analyzer?logo=codecov)](https://codecov.io/gh/MementoRC/llm-pytest-analyzer) [![Dependabot Status](https://img.shields.io/badge/dependabot-enabled-brightgreen?logo=dependabot)](https://github.com/MementoRC/llm-pytest-analyzer/network/updates)
+
 Enhanced pytest failure analyzer with robust extraction strategies and intelligent fix suggestions.
 
 ## Overview
