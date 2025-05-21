@@ -111,9 +111,12 @@ def create_app(argv: Optional[List[str]] = None) -> PytestAnalyzerApp:
     if argv is None:
         argv = sys.argv
 
-    # Enable high DPI scaling
-    QApplication.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True)
-    QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
+    # In Qt6/PyQt6, high DPI scaling is enabled by default
+    # No need to use the deprecated Qt5 attributes
+    # For fine-tuning, we can set the high DPI scale factor rounding policy if needed
+    QApplication.setHighDpiScaleFactorRoundingPolicy(
+        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+    )
 
     # Create the application
     app = PytestAnalyzerApp(argv)

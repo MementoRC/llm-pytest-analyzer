@@ -219,7 +219,12 @@ class MainWindow(QMainWindow):
             self.restoreState(settings.value("mainwindow/windowState"))
 
         if settings.contains("mainwindow/splitterSizes"):
-            self.main_splitter.setSizes(settings.value("mainwindow/splitterSizes"))
+            # Convert the splitter sizes to integers
+            sizes = settings.value("mainwindow/splitterSizes")
+            if isinstance(sizes, (list, tuple)) and all(isinstance(size, (int, str)) for size in sizes):
+                # Convert any string values to integers
+                int_sizes = [int(size) if isinstance(size, str) else size for size in sizes]
+                self.main_splitter.setSizes(int_sizes)
 
     def closeEvent(self, event: Any) -> None:
         """
