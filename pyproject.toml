@@ -119,6 +119,68 @@ default = { solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
 test = { features = ["test"], solve-group = "default" }
 
+[tool.ruff]
+# Target Python version
+target-version = "py39"
+# Line length - this applies to both linting and formatting
+line-length = 100
+
+[tool.ruff.lint]
+# Enable necessary checks and rules
+select = ["E", "F", "I", "W", "UP", "N", "B", "A", "C4", "ISC", "NPY", "PD", "PT", "RET", "SIM", "TCH"]
+# Ignore specific errors
+ignore = [
+    "E203",    # Whitespace before ':' (Black formats this differently)
+    "E501",    # Line too long - for now, allow longer lines
+    "UP006",   # Use built-in type hints - allow for compatibility with older Python
+    "UP035",   # Import from typing deprecated - allow for compatibility with older Python
+    "SIM117",  # Use a single with statement - may reduce readability in some cases
+    "SIM102",  # Use a single if statement instead of nested if - may reduce readability
+    "SIM105",  # Use contextlib.suppress instead of try-except-pass - may reduce readability
+    "SIM108",  # Use ternary instead of if-else block - may reduce readability
+    "SIM118",  # Use key in dict instead of key in dict.keys() - may reduce readability
+    "A001",    # Variable shadowing a Python builtin
+    "A004",    # Shadowing builtin names - for backward compatibility
+    "B007",    # Loop control variable not used - often used for clarity
+    "B008",    # Do not perform function call in argument defaults - often needed
+    "B011",    # Do not assert False - sometimes needed in tests
+    "B023",    # Function definition does not bind loop variable - sometimes needed
+    "B904",    # Raise from in except clause - for backward compatibility
+    "N802",    # Function name should be lowercase - Qt convention uses camelCase
+    "PT003",   # Fixture scope=function is implied - explicit is sometimes clearer
+    "PT009",   # Use regular assert instead of unittest style - for backward compatibility
+    "PT011",   # pytest.raises is too broad - for test flexibility
+    "PT015",   # Assertion always fails - sometimes used for test flow control
+    "PT017",   # Found assertion on exception in except block - sometimes clearer
+    "PT018",   # Break down assertions - may reduce readability in tests
+    "PT027",   # Use pytest.raises instead of assertRaises - for backward compatibility
+    "RET503",  # Missing explicit return - implicit return is sometimes clearer
+    "RET504",  # Unnecessary assignment before return - often used for clarity
+]
+
+# Files to exclude from checking
+exclude = [
+    ".git",
+    ".github",
+    "__pycache__",
+    "build",
+    "dist",
+    "venv",
+    ".venv",
+    ".env",
+    ".pixi",
+    ".pytest_cache",
+    ".ruff_cache",
+]
+
+[tool.ruff.format]
+# Quote style
+quote-style = "double"
+# Indent
+indent-style = "space"
+# Skip magic trailing comma
+skip-magic-trailing-comma = false
+
 [tool.pixi.tasks]
 dev = "pip install -e ."
 install-editable = "pip install -e ."
