@@ -50,7 +50,7 @@ dev = [
     "pytest-cov",
     "pytest-json-report>=1.5.0",
     "pytest-qt>=4.2.0",
-    "ruff",
+    "ruff==0.11.10",
     "types-pyyaml",
 ]
 
