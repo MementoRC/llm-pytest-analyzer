@@ -59,7 +59,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           export QT_QPA_PLATFORM=offscreen
-          pixi run -e dev pytest -m "not gui" -p no:qt
+          pixi run -e dev pytest -m "not gui"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
