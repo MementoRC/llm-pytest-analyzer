@@ -20,6 +20,9 @@ from PyQt6.QtGui import QIcon, QAction
 
 from ..core.analyzer_service import PytestAnalyzerService
 from ..utils.settings import Settings
+from .views.file_selection_view import FileSelectionView
+from .views.test_results_view import TestResultsView
+from .models.test_results_model import TestResultsModel, TestResult, TestGroup, TestStatus, TestFailureDetails
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -44,6 +47,7 @@ class MainWindow(QMainWindow):
         
         self.app = app
         self.analyzer_service = PytestAnalyzerService()
+        self.test_results_model = TestResultsModel()
         
         # Set window properties
         self.setWindowTitle("Pytest Analyzer")
@@ -75,16 +79,29 @@ class MainWindow(QMainWindow):
         # Create main splitter
         self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
         
-        # Create placeholder widgets for now
-        # These will be replaced with actual UI components in future tasks
-        self.test_selection_widget = QWidget()
-        self.test_selection_widget.setMinimumWidth(250)
-        self.test_selection_layout = QVBoxLayout(self.test_selection_widget)
-        self.test_selection_layout.addWidget(QLabel("Test Selection Panel (Placeholder)"))
+        # Create file selection view
+        self.file_selection_view = FileSelectionView()
+        self.file_selection_view.setMinimumWidth(300)
+        self.file_selection_view.file_selected.connect(self.on_file_selected)
+        self.file_selection_view.report_type_changed.connect(self.on_report_type_changed)
         
+        # Create a container for the file selection view
+        self.test_selection_widget = QWidget()
+        self.test_selection_layout = QVBoxLayout(self.test_selection_widget)
+        self.test_selection_layout.setContentsMargins(0, 0, 0, 0)
+        self.test_selection_layout.addWidget(self.file_selection_view)
+        
+        # Create test results view
+        self.test_results_view = TestResultsView()
+        self.test_results_view.set_results_model(self.test_results_model)
+        self.test_results_view.test_selected.connect(self.on_test_selected)
+        self.test_results_view.group_selected.connect(self.on_group_selected)
+        
+        # Create a container for the test results view
         self.analysis_widget = QWidget()
         self.analysis_layout = QVBoxLayout(self.analysis_widget)
-        self.analysis_layout.addWidget(QLabel("Analysis Panel (Placeholder)"))
+        self.analysis_layout.setContentsMargins(0, 0, 0, 0)
+        self.analysis_layout.addWidget(self.test_results_view)
         
         # Add widgets to splitter
         self.main_splitter.addWidget(self.test_selection_widget)
@@ -208,17 +225,254 @@ class MainWindow(QMainWindow):
     @pyqtSlot()
     def on_open(self) -> None:
         """Handle the Open action."""
-        # Show file dialog to select a test file or directory
+        # Show file dialog to select various file types
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Open Test File",
+            "Open File",
             str(self.app.core_settings.project_root),
-            "Python Files (*.py);;All Files (*)"
+            "Python Files (*.py);;JSON Files (*.json);;XML Files (*.xml);;All Files (*)"
         )
         
         if file_path:
+            path = Path(file_path)
             self.status_label.setText(f"Selected file: {file_path}")
             logger.info(f"Selected file: {file_path}")
+            
+            # Process the selected file based on its type
+            self.on_file_selected(path)
+    
+    @pyqtSlot(Path)
+    def on_file_selected(self, path: Path) -> None:
+        """
+        Handle file selection from the file selection view.
+        
+        Args:
+            path: Path to the selected file
+        """
+        file_type = path.suffix.lower()
+        
+        if file_type == ".py":
+            self.status_label.setText(f"Selected test file: {path.name}")
+            # Load the test file for analysis
+            self._load_test_file(path)
+        elif file_type == ".json":
+            self.status_label.setText(f"Selected JSON report: {path.name}")
+            # Load the JSON report for analysis
+            self._load_json_report(path)
+        elif file_type == ".xml":
+            self.status_label.setText(f"Selected XML report: {path.name}")
+            # Load the XML report for analysis
+            self._load_xml_report(path)
+        else:
+            self.status_label.setText(f"Unsupported file type: {path.name}")
+            logger.warning(f"Unsupported file type: {file_type}")
+    
+    def _load_test_file(self, path: Path) -> None:
+        """
+        Load test file for analysis.
+        
+        Args:
+            path: Path to the test file
+        """
+        # This would typically run the tests in the file
+        # For now, just show a message
+        QMessageBox.information(
+            self,
+            "Test File",
+            f"Running tests in {path.name} will be implemented in a future task."
+        )
+        
+        # Clear existing results
+        self.test_results_model.clear()
+    
+    def _load_json_report(self, path: Path) -> None:
+        """
+        Load test results from a JSON report file.
+        
+        Args:
+            path: Path to the JSON report file
+        """
+        try:
+            # Load the JSON file
+            import json
+            with open(path, 'r') as f:
+                data = json.load(f)
+            
+            # Process results
+            results = []
+            
+            # Check for pytest JSON report format
+            if 'tests' in data:
+                # Process each test in the report
+                for test_data in data['tests']:
+                    test_result = TestResult(
+                        name=test_data.get('nodeid', 'Unknown'),
+                        status=self._map_test_status(test_data.get('outcome', 'unknown')),
+                        duration=test_data.get('duration', 0.0),
+                        file_path=Path(test_data.get('path', '')) if 'path' in test_data else None
+                    )
+                    
+                    # Add failure details if the test failed
+                    if test_result.status in (TestStatus.FAILED, TestStatus.ERROR):
+                        failure_details = TestFailureDetails(
+                            message=test_data.get('message', ''),
+                            traceback=test_data.get('longrepr', '')
+                        )
+                        test_result.failure_details = failure_details
+                    
+                    results.append(test_result)
+            
+            # Update the model
+            self.test_results_model.set_results(results, path, 'json')
+            
+            # Show a success message
+            self.status_label.setText(f"Loaded {len(results)} test results from {path.name}")
+            logger.info(f"Loaded {len(results)} test results from {path}")
+        
+        except Exception as e:
+            # Show an error message
+            QMessageBox.warning(
+                self,
+                "Error Loading Report",
+                f"Failed to load JSON report: {str(e)}"
+            )
+            logger.exception(f"Error loading JSON report {path}: {e}")
+    
+    def _load_xml_report(self, path: Path) -> None:
+        """
+        Load test results from an XML report file.
+        
+        Args:
+            path: Path to the XML report file
+        """
+        try:
+            # Parse the XML file
+            import xml.etree.ElementTree as ET
+            tree = ET.parse(path)
+            root = tree.getroot()
+            
+            # Process results
+            results = []
+            
+            # Check for JUnit XML format
+            if root.tag == 'testsuites' or root.tag == 'testsuite':
+                # Get all testcase elements
+                testsuites = [root] if root.tag == 'testsuite' else root.findall('./testsuite')
+                
+                for testsuite in testsuites:
+                    for testcase in testsuite.findall('./testcase'):
+                        # Extract test details
+                        name = f"{testcase.get('classname', '')}.{testcase.get('name', '')}"
+                        duration = float(testcase.get('time', '0')) if testcase.get('time') else 0.0
+                        
+                        # Determine test status
+                        status = TestStatus.PASSED
+                        failure_details = None
+                        
+                        # Check for failure or error
+                        failure = testcase.find('./failure')
+                        error = testcase.find('./error')
+                        skipped = testcase.find('./skipped')
+                        
+                        if failure is not None:
+                            status = TestStatus.FAILED
+                            failure_details = TestFailureDetails(
+                                message=failure.get('message', ''),
+                                traceback=failure.text or ''
+                            )
+                        elif error is not None:
+                            status = TestStatus.ERROR
+                            failure_details = TestFailureDetails(
+                                message=error.get('message', ''),
+                                traceback=error.text or ''
+                            )
+                        elif skipped is not None:
+                            status = TestStatus.SKIPPED
+                        
+                        # Create test result
+                        test_result = TestResult(
+                            name=name,
+                            status=status,
+                            duration=duration,
+                            file_path=None  # XML format typically doesn't include file paths
+                        )
+                        
+                        if failure_details:
+                            test_result.failure_details = failure_details
+                        
+                        results.append(test_result)
+            
+            # Update the model
+            self.test_results_model.set_results(results, path, 'xml')
+            
+            # Show a success message
+            self.status_label.setText(f"Loaded {len(results)} test results from {path.name}")
+            logger.info(f"Loaded {len(results)} test results from {path}")
+        
+        except Exception as e:
+            # Show an error message
+            QMessageBox.warning(
+                self,
+                "Error Loading Report",
+                f"Failed to load XML report: {str(e)}"
+            )
+            logger.exception(f"Error loading XML report {path}: {e}")
+    
+    def _map_test_status(self, status_str: str) -> TestStatus:
+        """
+        Map a status string to a TestStatus enum value.
+        
+        Args:
+            status_str: Status string
+            
+        Returns:
+            TestStatus enum value
+        """
+        status_map = {
+            'passed': TestStatus.PASSED,
+            'failed': TestStatus.FAILED,
+            'error': TestStatus.ERROR,
+            'skipped': TestStatus.SKIPPED
+        }
+        
+        return status_map.get(status_str.lower(), TestStatus.UNKNOWN)
+    
+    @pyqtSlot(str)
+    def on_report_type_changed(self, report_type: str) -> None:
+        """
+        Handle report type change from the file selection view.
+        
+        Args:
+            report_type: Type of report ('json' or 'xml')
+        """
+        logger.debug(f"Report type changed to {report_type}")
+        # Update UI elements based on report type
+    
+    @pyqtSlot(TestResult)
+    def on_test_selected(self, test: TestResult) -> None:
+        """
+        Handle test selection from the test results view.
+        
+        Args:
+            test: Selected test result
+        """
+        logger.debug(f"Test selected: {test.name}")
+        # Handle test selection
+        # For now, just update the status bar
+        self.status_label.setText(f"Selected test: {test.name}")
+    
+    @pyqtSlot(TestGroup)
+    def on_group_selected(self, group: TestGroup) -> None:
+        """
+        Handle group selection from the test results view.
+        
+        Args:
+            group: Selected test group
+        """
+        logger.debug(f"Group selected: {group.name}")
+        # Handle group selection
+        # For now, just update the status bar
+        self.status_label.setText(f"Selected group: {group.name} ({len(group.tests)} tests)")
     
     @pyqtSlot()
     def on_settings(self) -> None:

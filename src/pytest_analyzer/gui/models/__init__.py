@@ -1,7 +1,3 @@
 """
-Models package for the Pytest Analyzer GUI.
-
-This package contains all the model components for the GUI.
+GUI model classes for the Pytest Analyzer.
 """
-
-__all__ = []
