@@ -584,7 +584,7 @@ def _create_llm_suggester(container: Container = None) -> Optional[LLMSuggester]
 
         if llm_service:
             return LLMSuggester(
-                llm_service=llm_service,
+                llm_client=llm_service,
                 min_confidence=settings.min_confidence,
                 timeout_seconds=settings.llm_timeout,
             )

@@ -88,7 +88,9 @@ def get_config_manager(
 
 
 def load_settings(
-    config_file: Optional[Union[str, Path]] = None, force_reload: bool = False
+    config_file: Optional[Union[str, Path]] = None,
+    force_reload: bool = False,
+    debug: bool = False,  # Added for backward compatibility
 ) -> Settings:
     """
     Load settings using the ConfigurationManager.
@@ -99,6 +101,7 @@ def load_settings(
     Args:
         config_file: Optional path to a specific configuration file.
         force_reload: If True, forces reloading the configuration from all sources.
+        debug: If True, enables debug logging (backward compatibility).
 
     Load settings using the singleton ConfigurationManager.
 
@@ -110,6 +113,7 @@ def load_settings(
         config_file: Optional path to a specific configuration file to use.
         force_reload: If True, forces reloading the configuration from all sources
                       before returning the settings object.
+        debug: If True, enables debug logging level (backward compatibility)
 
     Returns:
         A populated Settings object. Falls back to defaults if loading fails
@@ -120,7 +124,14 @@ def load_settings(
     """
     manager = get_config_manager(config_file=config_file, force_reload=force_reload)
     # get_settings now handles potential loading errors and fallbacks internally
-    return manager.get_settings()
+
+    # Handle debug parameter for backward compatibility
+    if debug:
+        settings = manager.get_settings({"log_level": "DEBUG"})
+    else:
+        settings = manager.get_settings()
+
+    return settings
 
 
 # Example of accessing settings (preferred way):

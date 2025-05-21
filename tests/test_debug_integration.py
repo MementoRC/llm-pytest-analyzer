@@ -46,14 +46,14 @@ def test_debug_integration():
     # Debug: Check what's being replaced
     print(f"service.llm_service: {service.llm_service}")
     print(f"service.llm_suggester: {service.llm_suggester}")
-    print(f"service.llm_suggester.llm_service: {service.llm_suggester.llm_service}")
+    print(f"service.llm_suggester.llm_client: {service.llm_suggester.llm_client}")
 
     # We need to also update the suggester's reference
-    service.llm_suggester.llm_service = mock_llm_service
+    service.llm_suggester.llm_client = mock_llm_service
 
     # Now check again
     print(
-        f"After update - service.llm_suggester.llm_service: {service.llm_suggester.llm_service}"
+        f"After update - service.llm_suggester.llm_client: {service.llm_suggester.llm_client}"
     )
 
     # Create a sample failure

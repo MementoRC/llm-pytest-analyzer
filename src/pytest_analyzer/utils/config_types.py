@@ -35,6 +35,19 @@ class Settings:
     llm_timeout: int = 60  # Timeout for LLM requests in seconds
     llm_api_key: Optional[str] = None  # API key for LLM service
     llm_model: str = "auto"  # Model to use (auto selects available models)
+    llm_provider: str = "auto"  # Provider to use (anthropic, openai, azure, etc.)
+    use_fallback: bool = True  # Whether to try fallback providers if primary fails
+    auto_apply: bool = False  # Whether to automatically apply suggested fixes
+
+    # Provider-specific settings
+    anthropic_api_key: Optional[str] = None  # Anthropic API key
+    openai_api_key: Optional[str] = None  # OpenAI API key
+    azure_api_key: Optional[str] = None  # Azure OpenAI API key
+    azure_endpoint: Optional[str] = None  # Azure OpenAI endpoint
+    azure_api_version: str = "2023-05-15"  # Azure OpenAI API version
+    together_api_key: Optional[str] = None  # Together.ai API key
+    ollama_host: str = "localhost"  # Ollama host
+    ollama_port: int = 11434  # Ollama port
 
     # Git integration settings
     check_git: bool = True  # Whether to check for Git compatibility
@@ -46,9 +59,16 @@ class Settings:
     mock_directories: Dict[str, str] = field(
         default_factory=dict
     )  # Absolute path mappings
+
     # Async processing settings
     batch_size: int = 5  # Number of failures to process in each batch in async mode
     max_concurrency: int = 10  # Maximum concurrent LLM requests in async mode
+
+    # Logging settings
+    log_level: str = "INFO"  # Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+
+    # Backward compatibility properties
+    debug: bool = False  # Enable debug mode (backward compatibility)
 
     def __post_init__(self):
         # Convert project_root to Path if it's a string
@@ -58,3 +78,9 @@ class Settings:
         # Set default project root if not provided
         if not self.project_root:
             self.project_root = Path.cwd()
+
+        # Synchronize debug and log_level for backward compatibility
+        if self.debug and self.log_level != "DEBUG":
+            self.log_level = "DEBUG"
+        elif self.log_level == "DEBUG" and not self.debug:
+            self.debug = True
