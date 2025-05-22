@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, List
 
 from PyQt6.QtCore import QObject, pyqtSlot
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
@@ -140,6 +140,11 @@ class MainController(BaseController):
         self.task_manager.task_failed.connect(self._on_global_task_failed)
         self._task_descriptions: dict[str, str] = {}
 
+        # Connect TestExecutionController signal to TestResultsController slot
+        self.test_execution_controller.test_execution_completed.connect(
+            self.test_results_controller.auto_load_test_results
+        )
+
     def _get_task_description(self, task_id: str) -> str:
         """Retrieves the cached description for a task, or a fallback."""
         return self._task_descriptions.get(task_id, task_id[:8])
@@ -222,14 +227,47 @@ class MainController(BaseController):
     @pyqtSlot()
     def on_run_tests_action_triggered(self) -> None:
         """
-        Handles the "Run Tests" action.
-        This method should gather necessary parameters (e.g., test path, args)
-        and then call the TestExecutionController to start the run.
+        Handles the "Run Tests" action from the main menu.
+        It retrieves the currently selected test file or directory from the
+        TestResultsModel and instructs the TestExecutionController to start the run.
         """
-        self.logger.info("'Run Tests' action triggered.")
-        # For now, using a placeholder path. In a real scenario, this would come
-        # from TestDiscoveryView or a project configuration.
-        # TODO: Get actual test path and arguments from the UI (e.g., TestDiscoveryView selection)
-        test_path_to_run = "."  # Placeholder: run tests in current directory
-        pytest_arguments = []  # Placeholder: no extra arguments
-        self.test_execution_controller.start_test_run(test_path_to_run, pytest_arguments)
+        self.logger.info("'Run Tests' action triggered by user.")
+
+        source_path = self.test_results_model.source_file
+        source_type = self.test_results_model.source_type
+
+        if source_path and (source_type == "py" or source_type == "directory"):
+            self.logger.info(f"Preparing to run tests for: {source_path} (type: {source_type})")
+            test_path_to_run = str(source_path)
+            pytest_arguments: List[str] = []  # Placeholder for future UI to set arguments
+
+            # TestExecutionController will show progress and output.
+            # Results will be auto-loaded via signal/slot connection.
+            task_id = self.test_execution_controller.start_test_run(
+                test_path_to_run, pytest_arguments
+            )
+            if task_id:
+                self.main_window.status_label.setText(
+                    f"Test execution started for {source_path.name}..."
+                )
+                self.logger.info(f"Test execution task submitted with ID: {task_id}")
+            else:
+                # This case should be rare if submit_background_task itself doesn't fail badly
+                QMessageBox.warning(
+                    self.main_window,
+                    "Run Tests Error",
+                    f"Failed to submit test execution task for {source_path.name}.",
+                )
+                self.logger.error(
+                    f"Failed to get task_id from start_test_run for {source_path.name}"
+                )
+        else:
+            QMessageBox.warning(
+                self.main_window,
+                "Run Tests",
+                "Please select a Python test file or directory first "
+                "(e.g., via File menu or File Selection tab).",
+            )
+            self.logger.warning(
+                "Run tests action: No valid Python file or directory selected in the model."
+            )

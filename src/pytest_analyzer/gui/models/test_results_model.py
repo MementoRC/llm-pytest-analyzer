@@ -6,6 +6,7 @@ This module contains data models for representing test results in the GUI.
 
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum, auto
 from pathlib import Path
 from typing import List, Optional
@@ -83,6 +84,16 @@ class TestResult:
 
 
 @dataclass
+class TestRunResult:
+    """Represents the results of a single test run, stored in history."""
+
+    timestamp: datetime
+    results: List[TestResult]  # The TestResult objects for this run
+    source_file: Optional[Path]  # The file/directory that was run
+    source_type: str  # e.g., "py_run", "directory_run"
+
+
+@dataclass
 class TestGroup:
     """Class representing a group of related test failures."""
 
@@ -114,6 +125,7 @@ class TestResultsModel(QObject):
         self.groups: List[TestGroup] = []
         self.source_file: Optional[Path] = None
         self.source_type: str = ""  # "json", "xml", "py", "output"
+        self.test_run_history: List[TestRunResult] = []
 
     def clear(self) -> None:
         """Clear all test results data."""
@@ -121,6 +133,7 @@ class TestResultsModel(QObject):
         self.groups = []
         self.source_file = None
         self.source_type = ""
+        self.test_run_history = []
 
         # Emit signals
         self.results_updated.emit()
@@ -141,6 +154,9 @@ class TestResultsModel(QObject):
         self.source_file = source_file
         self.source_type = source_type
 
+        # Loading from a file (report) resets the run history associated with a direct execution flow.
+        self.test_run_history = []
+        logger.info("Test run history cleared due to loading new results from file/report.")
         # Emit signal
         self.results_updated.emit()
 
@@ -242,46 +258,117 @@ class TestResultsModel(QObject):
         return pytest_failures
 
     def load_test_run_results(
-        self, pytest_failures: List[PytestFailure], source_path: Path, run_source_type: str
+        self,
+        pytest_failures: List[PytestFailure],
+        executed_source_path: Path,
+        run_operation_type: str,
     ) -> None:
         """
-        Converts PytestFailure objects from a test run into TestResult objects
-        and updates the model.
+        Converts PytestFailure objects from a test run into TestResult objects,
+        updates the model's current results, and adds the run to history.
         If pytest_failures is empty, it implies no failures were found.
         """
-        test_results: List[TestResult] = []
+        converted_test_results: List[TestResult] = []
         if not pytest_failures:
-            # If the run produced no failures, we might want to represent this differently,
-            # e.g. by showing a "No failures" message or loading all tests with PASSED status
-            # if the service could provide that. For now, an empty result list is set.
-            logger.info(f"Test run from '{source_path}' reported no failures.")
+            logger.info(f"Test run from '{executed_source_path}' reported no failures.")
 
         for pf_failure in pytest_failures:
-            status = TestStatus.ERROR  # Default for errors
+            status = TestStatus.ERROR
             if pf_failure.error_type == "AssertionError":
                 status = TestStatus.FAILED
 
             failure_details = TestFailureDetails(
                 message=pf_failure.error_message,
                 traceback=pf_failure.traceback,
-                file_path=pf_failure.test_file,  # PytestFailure.test_file is the primary file
+                file_path=pf_failure.test_file,
                 line_number=pf_failure.line_number,
                 error_type=pf_failure.error_type,
             )
-
-            # PytestFailure.test_file is a string, convert to Path for TestResult.file_path
             test_file_path = Path(pf_failure.test_file) if pf_failure.test_file else None
-
             tr = TestResult(
                 name=pf_failure.test_name,
                 status=status,
-                duration=0.0,  # PytestFailure doesn't carry duration
+                duration=0.0,
                 file_path=test_file_path,
                 failure_details=failure_details,
-                analysis_status=AnalysisStatus.NOT_ANALYZED,  # Reset analysis status for new results
-                suggestions=[],  # Reset suggestions
+                analysis_status=AnalysisStatus.NOT_ANALYZED,
+                suggestions=[],
             )
-            test_results.append(tr)
+            converted_test_results.append(tr)
 
-        self.set_results(test_results, source_path, run_source_type)
-        logger.info(f"Loaded {len(test_results)} results from test run of '{source_path}'.")
+        # Create a record for the test run history
+        current_run = TestRunResult(
+            timestamp=datetime.now(),
+            results=converted_test_results,
+            source_file=executed_source_path,  # Path that was executed
+            source_type=run_operation_type,  # e.g. "py_run", "directory_run"
+        )
+        self.test_run_history.append(current_run)
+
+        # Update the main results view to this latest run
+        self.results = converted_test_results
+        # self.source_file and self.source_type (of the model) remain unchanged,
+        # reflecting the user's primary selected file/directory.
+
+        logger.info(
+            f"Loaded {len(converted_test_results)} results from test run of '{executed_source_path}'. "
+            f"Added to history ({len(self.test_run_history)} runs total). Model source remains '{self.source_file}'."
+        )
+        self.results_updated.emit()
+
+    def get_latest_results(self) -> Optional[List[TestResult]]:
+        """
+        Returns the list of TestResult objects from the most recent test run in history.
+        Returns None if there is no run history.
+        """
+        if not self.test_run_history:
+            return None
+        return self.test_run_history[-1].results
+
+    def compare_with_previous(self) -> dict[str, list[str]]:
+        """
+        Compares the latest test run with the previous one from history.
+        Returns a dictionary categorizing test name changes (newly failing, newly passing, etc.).
+        This provides infrastructure for UI highlighting of changes.
+        Returns an empty dictionary if there are fewer than two runs in history.
+        """
+        if len(self.test_run_history) < 2:
+            return {}
+
+        latest_run_tr_objects = self.test_run_history[-1].results
+        previous_run_tr_objects = self.test_run_history[-2].results
+
+        latest_run_results = {tr.name: tr for tr in latest_run_tr_objects}
+        previous_run_results = {tr.name: tr for tr in previous_run_tr_objects}
+
+        comparison: dict[str, list[str]] = {
+            "newly_failing": [],
+            "newly_passing": [],
+            "still_failing": [],
+            "added_tests": [],  # Tests in latest but not previous
+            "removed_tests": [],  # Tests in previous but not latest
+        }
+
+        latest_run_test_names = set(latest_run_results.keys())
+        previous_run_test_names = set(previous_run_results.keys())
+
+        comparison["added_tests"] = sorted(latest_run_test_names - previous_run_test_names)
+        comparison["removed_tests"] = sorted(previous_run_test_names - latest_run_test_names)
+
+        common_test_names = latest_run_test_names.intersection(previous_run_test_names)
+
+        for name in sorted(common_test_names):
+            latest_test = latest_run_results[name]
+            previous_test = previous_run_results[name]
+
+            latest_is_issue = latest_test.is_failed or latest_test.is_error
+            previous_is_issue = previous_test.is_failed or previous_test.is_error
+
+            if latest_is_issue and not previous_is_issue:
+                comparison["newly_failing"].append(name)
+            elif not latest_is_issue and previous_is_issue:
+                comparison["newly_passing"].append(name)
+            elif latest_is_issue and previous_is_issue:
+                comparison["still_failing"].append(name)
+
+        return comparison

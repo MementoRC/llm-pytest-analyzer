@@ -27,6 +27,7 @@ class TestExecutionController(BaseController):
 
     # Signal to emit received output text, to be connected to TestOutputView
     output_received = pyqtSignal(str)
+    test_execution_completed = pyqtSignal(list)  # Emits List[PytestFailure]
 
     def __init__(
         self,
@@ -147,6 +148,9 @@ class TestExecutionController(BaseController):
                 # To get passed/skipped, we'd need the pytest summary or a more detailed report object.
                 # The current `run_pytest_only` only returns failures.
                 # We'll leave passed/skipped as 0 for now.
+
+            # Emit the signal with the raw PytestFailure list
+            self.test_execution_completed.emit(pytest_failures)
 
             self.progress_view.update_stats(passed_count, failed_count, skipped_count, error_count)
             self.progress_view.update_progress(100, final_message)  # Mark as 100%
