@@ -29,6 +29,7 @@ from .models.test_results_model import (
 from .views.file_selection_view import FileSelectionView
 from .views.test_discovery_view import TestDiscoveryView
 from .views.test_execution_progress_view import TestExecutionProgressView  # Added
+from .views.test_output_view import TestOutputView  # Added
 from .views.test_results_view import TestResultsView
 
 if TYPE_CHECKING:
@@ -113,11 +114,19 @@ class MainWindow(QMainWindow):
         self.test_results_view.set_results_model(self.test_results_model)
         # Connections for test_selected and group_selected will be handled by MainController
 
-        # Create a container for the test results view
+        # Create a QTabWidget for the analysis area (results and output)
         self.analysis_widget = QWidget()
         self.analysis_layout = QVBoxLayout(self.analysis_widget)
         self.analysis_layout.setContentsMargins(0, 0, 0, 0)
-        self.analysis_layout.addWidget(self.test_results_view)
+
+        self.analysis_tabs = QTabWidget()
+        self.analysis_tabs.addTab(self.test_results_view, "Test Results")
+
+        # Create test output view and add it as a tab
+        self.test_output_view = TestOutputView()
+        self.analysis_tabs.addTab(self.test_output_view, "Live Test Output")
+
+        self.analysis_layout.addWidget(self.analysis_tabs)
 
         # Add widgets to splitter
         self.main_splitter.addWidget(self.test_selection_widget)

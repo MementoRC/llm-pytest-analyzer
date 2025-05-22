@@ -66,6 +66,7 @@ class MainController(BaseController):
         # Instantiate TestExecutionController
         self.test_execution_controller = TestExecutionController(
             progress_view=self.main_window.test_execution_progress_view,
+            output_view=self.main_window.test_output_view,  # Pass the output view
             task_manager=self.task_manager,
             analyzer_service=self.analyzer_service,
             parent=self,
@@ -83,7 +84,10 @@ class MainController(BaseController):
         )  # Can remain direct or move to a controller
         self.main_window.exit_action.triggered.connect(self.main_window.close)
 
-        self.main_window.run_tests_action.triggered.connect(self.analysis_controller.on_run_tests)
+        # self.main_window.run_tests_action.triggered.connect(self.analysis_controller.on_run_tests)
+        # Connect Run Tests action to TestExecutionController or a new MainController slot
+        self.main_window.run_tests_action.triggered.connect(self.on_run_tests_action_triggered)
+
         self.main_window.analyze_action.triggered.connect(self.analysis_controller.on_analyze)
         self.main_window.settings_action.triggered.connect(self.settings_controller.on_settings)
 
@@ -214,3 +218,18 @@ class MainController(BaseController):
             self.file_controller.on_file_selected(path)  # Delegate to FileController
         else:
             self.logger.info("File dialog cancelled.")
+
+    @pyqtSlot()
+    def on_run_tests_action_triggered(self) -> None:
+        """
+        Handles the "Run Tests" action.
+        This method should gather necessary parameters (e.g., test path, args)
+        and then call the TestExecutionController to start the run.
+        """
+        self.logger.info("'Run Tests' action triggered.")
+        # For now, using a placeholder path. In a real scenario, this would come
+        # from TestDiscoveryView or a project configuration.
+        # TODO: Get actual test path and arguments from the UI (e.g., TestDiscoveryView selection)
+        test_path_to_run = "."  # Placeholder: run tests in current directory
+        pytest_arguments = []  # Placeholder: no extra arguments
+        self.test_execution_controller.start_test_run(test_path_to_run, pytest_arguments)
