@@ -76,91 +76,38 @@ git diff -- <modified-files>
 
 ### Current GUI Enhancement Project
 
-#### Status - Task 7 COMPLETED ✅
-- **Current Phase**: Automatic Test Results Loading implemented successfully
-- **PRD Location**: `scripts/gui_enhancement_prd.txt`
-- **Task List**: `tasks/gui_tasks.json` (managed by taskmaster-ai)
-- **Progress**: 7/20 tasks complete (35%)
-- **PR #8**: All CI checks passing ✅
+**PRD Location**: `scripts/gui_enhancement_prd.txt`  
+**Task Management**: Use `mcp__taskmaster-ai__get_tasks` to view current status
 
-#### Task 1 Achievement: MVC Controller Architecture
-**Successfully implemented complete controller architecture:**
-- ✅ **BaseController**: Abstract base with common functionality
-- ✅ **FileController**: File loading and report parsing (JSON/XML)
-- ✅ **TestResultsController**: Test selection and results management
-- ✅ **AnalysisController**: Test execution/analysis coordination (placeholders)
-- ✅ **SettingsController**: Configuration management (placeholder)
-- ✅ **MainController**: Main orchestration and signal routing
+### Architectural Achievements
 
-#### Task 2 Achievement: Background Task Management
-**Successfully implemented Qt QThread-based background task system:**
-- ✅ **TaskManager**: QObject-based task orchestration and queue management
-- ✅ **WorkerThread**: QThread-based task execution with progress reporting
-- ✅ **ProgressBridge**: Bridge between Rich progress and Qt signals
-- ✅ **Controller Integration**: Enhanced all controllers with background task support
-- ✅ **AnalysisController**: Fully implemented test execution and LLM analysis
+**MVC Controller Architecture**
+- BaseController: Abstract base with common functionality
+- FileController: File loading and report parsing (JSON/XML)
+- TestResultsController: Test selection and results management
+- AnalysisController: Test execution/analysis coordination
+- SettingsController: Configuration management
+- MainController: Main orchestration and signal routing
 
-#### Task 3 Achievement: PytestAnalyzerService Integration
-**Successfully integrated core test execution service with GUI:**
-- ✅ **Enhanced AnalysisController**: Full file and directory test execution support
-- ✅ **Extended TestResultsModel**: Suggestion storage and analysis status tracking
-- ✅ **Bidirectional Conversion**: Seamless data conversion between service and GUI
-- ✅ **Real-time Progress**: Background execution with progress reporting
-- ✅ **Analysis Integration**: LLM analysis workflow with suggestion management
+**Background Task Management**
+- TaskManager: QObject-based task orchestration and queue management
+- WorkerThread: QThread-based task execution with progress reporting
+- ProgressBridge: Bridge between Rich progress and Qt signals
+- Controller Integration: All controllers support background tasks
+- Non-blocking UI: All long operations run in separate threads
 
-#### Task 4 Achievement: Test Discovery and Selection UI
-**Successfully implemented test discovery interface:**
-- ✅ **TestDiscoveryView**: Tree-based test hierarchy display
-- ✅ **TestDiscoveryController**: Test discovery and selection management
-- ✅ **Checkbox Selection**: Individual and batch test selection
-- ✅ **Search Filtering**: Quick test location functionality
-- ✅ **Pytest Integration**: Seamless pytest test collection
+**Test Execution Integration**
+- PytestAnalyzerService: Full integration with core service
+- Real-time Progress: Live updates during test execution
+- Output Streaming: Real-time stdout/stderr capture
+- Automatic Results Loading: Results auto-load after execution
+- Test Run History: History tracking for comparisons
 
-#### Task 5 Achievement: Test Execution Progress Tracking
-**Successfully implemented progress tracking:**
-- ✅ **TestExecutionProgressView**: Real-time progress display
-- ✅ **Progress Indicators**: Overall progress bar and status counts
-- ✅ **Time Tracking**: Elapsed time and test counts
-- ✅ **Cancel Support**: Ability to stop running tests
-- ✅ **State Management**: Proper handling of execution states
-
-#### Task 6 Achievement: Live Test Output Display
-**Successfully implemented test output streaming:**
-- ✅ **TestOutputView**: Real-time output display widget
-- ✅ **Syntax Highlighting**: Python traceback highlighting
-- ✅ **Output Filtering**: All Output/Errors Only modes
-- ✅ **Autoscroll Toggle**: User-controlled scrolling
-- ✅ **Copy Functionality**: Easy output sharing
-
-#### Task 7 Achievement: Automatic Test Results Loading
-**Successfully implemented automatic results loading after test execution:**
-- ✅ **TestExecutionController Signal**: Added `test_execution_completed` signal emitting List[PytestFailure]
-- ✅ **Auto-loading Method**: Implemented `auto_load_test_results` in TestResultsController
-- ✅ **Test Run History**: Added TestRunResult dataclass and history tracking to TestResultsModel
-- ✅ **Signal/Slot Connection**: Connected execution completion to automatic results loading
-- ✅ **Fixed Run Tests Action**: Now uses actual source file from model instead of placeholder
-- ✅ **Comparison Infrastructure**: Added `compare_with_previous` and `get_latest_results` methods for future use
-
-**Architecture Benefits Achieved:**
-- Complete test execution workflow in GUI
-- File and directory test execution support
-- Real-time progress feedback during execution
-- Live output streaming during test runs
-- Automatic results loading upon test completion
-- Test run history tracking for future comparisons
-- Enhanced data model with suggestion support
-- Seamless integration with existing background task system
-- All tests passing (11 GUI tests, 15% overall coverage)
-
-#### GUI Development Tasks Overview
-1. **Phase 1**: ✅ Controller Architecture, ✅ Background Tasks, ✅ Test Execution, ✅ Test Discovery, ✅ Progress Tracking, ✅ Live Output, ✅ Auto Results Loading
-2. **Phase 2**: LLM Analysis Integration (In Progress - Task 8)
-3. **Phase 3**: Fix Application Workflow
-4. **Phase 4**: Settings & Project Management
-5. **Phase 5**: Advanced Features
-
-#### Next: Task 8 - Integrate LLMSuggester for Failure Analysis
-Ready to integrate the existing LLMSuggester component to analyze test failures.
+**GUI Components**
+- TestDiscoveryView: Tree-based test hierarchy display
+- TestExecutionProgressView: Real-time progress tracking
+- TestOutputView: Live output with syntax highlighting
+- TestResultsView: Enhanced with auto-loading support
 
 ### Project Structure
 ```
@@ -314,12 +261,21 @@ export QT_QPA_PLATFORM=offscreen  # For headless testing
 3. **Pre-commit Hooks**: May modify files; commit again after fixes
 4. **Token Usage**: Prefer aider for implementation, Claude for planning
 
-### Next Steps
-Task 7 (Automatic Test Results Loading) completed successfully with all CI checks passing. 
-Ready to proceed with Task 8 (Integrate LLMSuggester for Failure Analysis) to continue Phase 2 of GUI development.
+### Working Framework Reminders
 
-Remember: 
-- Use aider for complex code implementations
-- Always run quality checks after changes
-- Create git branches for each major feature
-- Keep this CLAUDE.md updated with project evolution
+**Git Safety Protocol**
+- Always create dedicated aider branches: `git checkout -b aider/<task-name>`
+- Commit before aider work for safety
+- Show diffs immediately after aider completes
+- Run quality checks before merging
+
+**Quality Standards**
+- Pre-commit checks: `pixi run -e dev pre-commit run --all-files`
+- GUI tests: `pixi run -e dev pytest tests/gui/ -v`
+- All code must pass mypy, ruff, and formatting checks
+
+**Aider Best Practices**
+- Use architect mode for complex features
+- Provide comprehensive file context (editable + readonly)
+- Focus prompts on clear requirements and integration points
+- Let aider handle implementation details
