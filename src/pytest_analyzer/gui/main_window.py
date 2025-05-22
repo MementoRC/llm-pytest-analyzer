@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QSplitter,
     QStatusBar,
+    QTabWidget,
     QToolBar,
     QVBoxLayout,
     QWidget,
@@ -32,6 +33,7 @@ from .models.test_results_model import (
     TestStatus,
 )
 from .views.file_selection_view import FileSelectionView
+from .views.test_discovery_view import TestDiscoveryView  # Added
 from .views.test_results_view import TestResultsView
 
 if TYPE_CHECKING:
@@ -92,17 +94,26 @@ class MainWindow(QMainWindow):
         # Create main splitter
         self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
 
-        # Create file selection view
-        self.file_selection_view = FileSelectionView()
-        self.file_selection_view.setMinimumWidth(300)
-        self.file_selection_view.file_selected.connect(self.on_file_selected)
-        self.file_selection_view.report_type_changed.connect(self.on_report_type_changed)
-
-        # Create a container for the file selection view
+        # Create a container for the left panel (selection views)
         self.test_selection_widget = QWidget()
         self.test_selection_layout = QVBoxLayout(self.test_selection_widget)
         self.test_selection_layout.setContentsMargins(0, 0, 0, 0)
-        self.test_selection_layout.addWidget(self.file_selection_view)
+        self.test_selection_widget.setMinimumWidth(350)  # Adjusted min width
+
+        # Create TabWidget for selection views
+        self.selection_tabs = QTabWidget()
+
+        # Create file selection view (for reports and individual files)
+        self.file_selection_view = FileSelectionView()
+        # self.file_selection_view.file_selected.connect(self.on_file_selected) # Now handled by FileController
+        # self.file_selection_view.report_type_changed.connect(self.on_report_type_changed) # Now handled by FileController
+        self.selection_tabs.addTab(self.file_selection_view, "Select Files/Reports")
+
+        # Create test discovery view
+        self.test_discovery_view = TestDiscoveryView()
+        self.selection_tabs.addTab(self.test_discovery_view, "Discover Tests")
+
+        self.test_selection_layout.addWidget(self.selection_tabs)
 
         # Create test results view
         self.test_results_view = TestResultsView()
