@@ -1,6 +1,6 @@
 # Task ID: 2
 # Title: Implement Background Task Management
-# Status: in-progress
+# Status: done
 # Dependencies: 1
 # Priority: high
 # Description: Create a background task management system using Qt QThread to handle long-running operations without freezing the UI.
