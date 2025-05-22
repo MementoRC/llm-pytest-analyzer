@@ -1,56 +1,18 @@
 # Task ID: 6
-# Title: Implement ResponseParser Component
-# Status: done
-# Dependencies: 2, 4
+# Title: Implement Live Test Output Display
+# Status: pending
+# Dependencies: 3, 5
 # Priority: medium
-# Description: Create a dedicated component for parsing and validating responses from the LLM service.
+# Description: Create a dedicated tab to display live output from test execution.
 # Details:
-Implement a ResponseParser that handles different response formats and validation:
+Implement a test output display with:
+- Real-time capture and display of stdout/stderr
+- Syntax highlighting for Python code and test output
+- Auto-scrolling with option to pause
+- Output filtering options
+- Copy to clipboard functionality
 
-```python
-from typing import Dict, Any, List, Optional, TypeVar, Generic, Type, cast
-import json
-from pydantic import BaseModel, ValidationError
-
-T = TypeVar('T', bound=BaseModel)
-
-class ResponseParser(Generic[T]):
-    def __init__(self, model_class: Type[T]):
-        self.model_class = model_class
-
-    def parse_json(self, response_text: str) -> T:
-        try:
-            # Extract JSON from response if needed
-            json_str = self._extract_json(response_text)
-            # Parse JSON
-            data = json.loads(json_str)
-            # Validate with Pydantic model
-            return self.model_class.parse_obj(data)
-        except json.JSONDecodeError as e:
-            raise ResponseParseError(f"Invalid JSON in response: {str(e)}") from e
-        except ValidationError as e:
-            raise ResponseParseError(f"Response validation failed: {str(e)}") from e
-
-    def _extract_json(self, text: str) -> str:
-        # Handle cases where JSON is embedded in markdown or other text
-        # This is a simple implementation - might need to be more robust
-        if text.strip().startswith('{') and text.strip().endswith('}'):
-            return text
-
-        # Try to find JSON between triple backticks
-        import re
-        json_match = re.search(r'```(?:json)?\s*(.+?)\s*```', text, re.DOTALL)
-        if json_match:
-            return json_match.group(1)
-
-        # If no JSON found, raise error
-        raise ResponseParseError("Could not extract JSON from response")
-
-class ResponseParseError(Exception):
-    pass
-```
-
-Create Pydantic models for different response types (analysis results, fix suggestions, etc.).
+Use a QTextEdit with custom formatting for different output types. Implement efficient text handling to avoid UI freezing with large outputs. Connect to output signals from the TestExecutionController.
 
 # Test Strategy:
-Write unit tests for parsing different response formats, including valid JSON, JSON embedded in markdown, and invalid responses. Test validation with Pydantic models for both valid and invalid data structures.
+Test output capture with various test scenarios. Verify performance with large output volumes. Test auto-scrolling and pause functionality. Ensure proper formatting and highlighting of different output types.

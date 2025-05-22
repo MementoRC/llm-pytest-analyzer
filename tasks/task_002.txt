@@ -1,33 +1,18 @@
 # Task ID: 2
-# Title: Implement Core Protocol Interfaces
-# Status: done
+# Title: Implement Background Task Management
+# Status: pending
 # Dependencies: 1
 # Priority: high
-# Description: Define Protocol interfaces for all major components to establish clear contracts between system parts.
+# Description: Create a background task management system using Qt QThread to handle long-running operations without freezing the UI.
 # Details:
-Create Protocol classes for each major component type:
+Implement a TaskManager class that handles background processing using Qt's QThread mechanism. Include:
+- Task queue management
+- Progress reporting through Qt signals/slots
+- Cancellation support for long-running operations
+- Error handling and user feedback
+- Thread-safe communication with the main UI thread
 
-```python
-from typing import Protocol, List, Dict, Any, Optional
-
-class Extractor(Protocol):
-    def extract(self, test_results: Any) -> Dict[str, Any]: ...
-
-class Analyzer(Protocol):
-    def analyze(self, extraction_results: Dict[str, Any]) -> Dict[str, Any]: ...
-
-class Suggester(Protocol):
-    def suggest(self, analysis_results: Dict[str, Any]) -> List[Dict[str, Any]]: ...
-
-class Applier(Protocol):
-    def apply(self, suggestions: List[Dict[str, Any]], target_files: List[str]) -> bool: ...
-
-class LLMService(Protocol):
-    def generate(self, prompt: str, **kwargs) -> str: ...
-    async def generate_async(self, prompt: str, **kwargs) -> str: ...
-```
-
-Ensure each Protocol has proper type hints and docstrings explaining the expected behavior and contract.
+Create a WorkerThread class that can execute arbitrary tasks and report progress. Implement proper thread synchronization and error handling.
 
 # Test Strategy:
-Create test cases that verify implementations conform to the Protocol interfaces. Use mypy or similar static type checking to validate interface compliance.
+Test thread creation, task execution, progress reporting, and cancellation. Verify thread safety with concurrent operations. Test error handling and recovery. Ensure UI remains responsive during long-running tasks.

@@ -1,110 +1,18 @@
 # Task ID: 13
-# Title: Implement Facade for Backward Compatibility
-# Status: done
-# Dependencies: 3, 8, 9, 10, 11, 12
+# Title: Integrate FixApplier for Code Modifications
+# Status: pending
+# Dependencies: 10, 12
 # Priority: high
-# Description: Create a facade that maintains backward compatibility with the existing API while using the new architecture internally.
+# Description: Integrate the existing FixApplier component to apply suggested fixes to source files.
 # Details:
-Implement a facade that provides the same interface as the original code but uses the new components internally:
+Implement the FixController to:
+- Connect to the existing FixApplier components
+- Apply selected fixes to source files
+- Handle file backup and restoration
+- Track applied changes
+- Support batch fix application
 
-```python
-from typing import Dict, Any, List, Optional, Union
-import os
-import json
-
-class PytestAnalyzerFacade:
-    def __init__(self, di_container: DIContainer = None):
-        if di_container is None:
-            # Create and configure a default container
-            di_container = self._create_default_container()
-
-        self.di_container = di_container
-
-    def _create_default_container(self) -> DIContainer:
-        container = DIContainer()
-
-        # Create default configuration
-        llm_config = LLMConfig(
-            api_key=os.environ.get('OPENAI_API_KEY', ''),
-            model_name='gpt-3.5-turbo',
-            temperature=0.7,
-            max_tokens=1000
-        )
-
-        # Register components
-        container.register(LLMService, LLMService(llm_config))
-        container.register(PromptBuilder, PromptBuilder())
-        container.register(Extractor, PytestExtractor())
-
-        # Register factories for components that need dependencies
-        container.register_factory(Analyzer, lambda: TestFailureAnalyzer(
-            container.resolve(LLMService),
-            container.resolve(PromptBuilder),
-            ResponseParser(AnalysisModel)
-        ))
-
-        container.register_factory(Suggester, lambda: FixSuggester(
-            container.resolve(LLMService),
-            container.resolve(PromptBuilder),
-            ResponseParser(SuggestionModel)
-        ))
-
-        container.register(Applier, FixApplier())
-
-        return container
-
-    def analyze_test_results(self, test_output: str) -> Dict[str, Any]:
-        """Analyze pytest test results and return analysis."""
-        # Create and run the state machine
-        state_machine = AnalyzerStateMachine(self.di_container)
-        result = state_machine.run(test_results=test_output, apply_fixes=False)
-
-        if 'error' in result:
-            # Handle error case
-            return {
-                'success': False,
-                'error': result['error'],
-                'analyses': [],
-                'suggestions': []
-            }
-
-        return {
-            'success': True,
-            'analyses': result.get('analysis_results', {}).get('analyses', []),
-            'suggestions': result.get('suggestions', [])
-        }
-
-    def suggest_fixes(self, test_output: str) -> List[Dict[str, Any]]:
-        """Analyze test results and suggest fixes."""
-        result = self.analyze_test_results(test_output)
-        return result.get('suggestions', [])
-
-    def apply_fixes(self, test_output: str, target_files: List[str] = None) -> Dict[str, Any]:
-        """Analyze test results, suggest and apply fixes."""
-        # Create and run the state machine
-        state_machine = AnalyzerStateMachine(self.di_container)
-        result = state_machine.run(
-            test_results=test_output,
-            apply_fixes=True,
-            target_files=target_files
-        )
-
-        if 'error' in result:
-            # Handle error case
-            return {
-                'success': False,
-                'error': result['error'],
-                'fixes_applied': False
-            }
-
-        return {
-            'success': True,
-            'fixes_applied': result.get('fixes_applied', False),
-            'suggestions': result.get('suggestions', [])
-        }
-```
-
-This facade should provide the same interface as the original code while using the new architecture internally, ensuring backward compatibility.
+Implement proper error handling for file operations. Create a change history mechanism to track applied fixes. Use the background task system for file operations.
 
 # Test Strategy:
-Create unit tests that verify the facade provides the same interface as the original code. Test with different inputs and verify the outputs match the expected format. Test both successful and error scenarios.
+Test fix application with various code changes. Verify file backup and restoration. Test error handling during file operations. Ensure changes are correctly applied to source files.
