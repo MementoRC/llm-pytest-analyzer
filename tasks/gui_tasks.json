@@ -8,7 +8,7 @@
       "testStrategy": "Create unit tests for each controller using pytest and Qt Test framework. Mock dependencies to isolate controller logic. Verify signal emissions and slot connections. Test controller initialization and proper separation of concerns.",
       "priority": "high",
       "dependencies": [],
-      "status": "in-progress",
+      "status": "done",
       "subtasks": []
     },
     {
