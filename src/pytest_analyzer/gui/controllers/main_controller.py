@@ -10,7 +10,10 @@ from .analysis_controller import AnalysisController
 from .base_controller import BaseController
 from .file_controller import FileController
 from .settings_controller import SettingsController
-from .test_discovery_controller import TestDiscoveryController  # Added
+from .test_discovery_controller import TestDiscoveryController
+from .test_execution_controller import (  # Added
+    TestExecutionController,
+)
 from .test_results_controller import TestResultsController
 
 if TYPE_CHECKING:
@@ -20,7 +23,7 @@ if TYPE_CHECKING:
     from ..main_window import MainWindow
     from ..models.test_results_model import TestResultsModel
     from ..views.file_selection_view import FileSelectionView
-    from ..views.test_discovery_view import TestDiscoveryView  # Added
+    from ..views.test_discovery_view import TestDiscoveryView
     from ..views.test_results_view import TestResultsView
 
 logger = logging.getLogger(__name__)
@@ -60,6 +63,13 @@ class MainController(BaseController):
         self.test_discovery_controller = TestDiscoveryController(
             self.analyzer_service, parent=self, task_manager=self.task_manager
         )
+        # Instantiate TestExecutionController
+        self.test_execution_controller = TestExecutionController(
+            progress_view=self.main_window.test_execution_progress_view,
+            task_manager=self.task_manager,
+            analyzer_service=self.analyzer_service,
+            parent=self,
+        )
 
         self._connect_signals()
         self.logger.info("MainController initialized and signals connected.")
@@ -68,8 +78,10 @@ class MainController(BaseController):
         """Connect signals and slots between components."""
         # --- MainWindow Actions to Controllers ---
         self.main_window.open_action.triggered.connect(self.on_open)
-        self.main_window.about_action.triggered.connect(self.on_about)
-        self.main_window.exit_action.triggered.connect(self.main_window.close)  # Can remain direct
+        self.main_window.about_action.triggered.connect(
+            self.main_window.on_about
+        )  # Can remain direct or move to a controller
+        self.main_window.exit_action.triggered.connect(self.main_window.close)
 
         self.main_window.run_tests_action.triggered.connect(self.analysis_controller.on_run_tests)
         self.main_window.analyze_action.triggered.connect(self.analysis_controller.on_analyze)
@@ -83,10 +95,10 @@ class MainController(BaseController):
 
         # TestResultsView -> TestResultsController
         test_results_view: TestResultsView = self.main_window.test_results_view
+        # These connections were previously in MainWindow, now correctly here
         test_results_view.test_selected.connect(self.test_results_controller.on_test_selected)
         test_results_view.group_selected.connect(self.test_results_controller.on_group_selected)
 
-        # TestDiscoveryView -> TestDiscoveryController
         test_discovery_view: TestDiscoveryView = self.main_window.test_discovery_view
         test_discovery_view.discover_tests_requested.connect(
             self.test_discovery_controller.request_discover_tests
@@ -109,74 +121,96 @@ class MainController(BaseController):
             test_discovery_view.update_test_tree
         )
         self.test_discovery_controller.discovery_started.connect(
-            self.main_window.status_label.setText
-        )  # Or a dedicated slot for more complex updates
+            lambda msg: self.main_window.status_label.setText(f"Discovery: {msg}")
+        )
         self.test_discovery_controller.discovery_finished.connect(
-            self.main_window.status_label.setText
+            lambda msg: self.main_window.status_label.setText(f"Discovery: {msg}")
         )
 
-        # --- TaskManager Global Signals to MainWindow Status Updates ---
+        # --- TaskManager Global Signals to MainWindow Status Updates & TestExecutionController ---
+        # TestExecutionController will handle its specific tasks.
+        # MainController handles generic status updates for other tasks.
         self.task_manager.task_started.connect(self._on_global_task_started)
         self.task_manager.task_progress.connect(self._on_global_task_progress)
         self.task_manager.task_completed.connect(self._on_global_task_completed)
         self.task_manager.task_failed.connect(self._on_global_task_failed)
+        self._task_descriptions: dict[str, str] = {}
+
+    def _get_task_description(self, task_id: str) -> str:
+        """Retrieves the cached description for a task, or a fallback."""
+        return self._task_descriptions.get(task_id, task_id[:8])
 
     @pyqtSlot(str, str)
     def _on_global_task_started(self, task_id: str, description: str) -> None:
-        self.main_window.status_label.setText(f"Task started: {description} ({task_id[:8]}...).")
-        # Optionally, show a global progress bar or indicator
+        self._task_descriptions[task_id] = description
+        # TestExecutionController also listens to task_started and will manage its view.
+        # MainController provides a general status update.
+        if not self.test_execution_controller.is_test_execution_task(task_id, description):
+            self.main_window.status_label.setText(
+                f"Task started: {description} ({task_id[:8]}...)."
+            )
+        # Else, TestExecutionController is handling the display for this task.
 
     @pyqtSlot(str, int, str)
     def _on_global_task_progress(self, task_id: str, percentage: int, message: str) -> None:
-        self.main_window.status_label.setText(
-            f"Progress ({task_id[:8]}...): {percentage}% - {message}"
-        )
-        # Optionally, update a global progress bar
+        # TestExecutionController handles progress for its specific task.
+        # MainController provides general status update for other tasks.
+        # We need to check if the TestExecutionController is currently tracking this task_id.
+        if task_id != self.test_execution_controller._current_task_id:
+            task_desc = self._get_task_description(task_id)
+            self.main_window.status_label.setText(
+                f"Task '{task_desc}' progress: {percentage}% - {message}"
+            )
+        # Else, TestExecutionController's view is showing progress.
 
     @pyqtSlot(str, object)
     def _on_global_task_completed(self, task_id: str, result: Any) -> None:
-        # Result is often not directly shown in status bar, but controller handles it.
-        self.main_window.status_label.setText(f"Task completed: {task_id[:8]}...")
-        # Optionally, hide global progress bar
+        task_desc = self._get_task_description(task_id)
+        self._task_descriptions.pop(task_id, None)  # Clean up cached description
+
+        if (
+            task_id != self.test_execution_controller._current_task_id
+        ):  # Check if it was handled by TEC
+            # If TestExecutionController was tracking it, it would have set _current_task_id to None on completion.
+            # So, if _current_task_id is still this task_id, it means TEC's _handle_task_completed hasn't run yet or this is a different task.
+            # This logic might need refinement if signal order is an issue.
+            # A simpler approach: if it's NOT a test execution task that TEC would have picked up.
+            # This requires knowing the description again, or checking if TEC *was* tracking it.
+            # For now, let's assume TEC clears its _current_task_id promptly.
+            self.main_window.status_label.setText(f"Task '{task_desc}' completed.")
 
     @pyqtSlot(str, str)
     def _on_global_task_failed(self, task_id: str, error_message: str) -> None:
-        self.main_window.status_label.setText(f"Task failed: {task_id[:8]}...")
-        QMessageBox.warning(
-            self.main_window,
-            "Task Error",
-            f"A background task failed ({task_id[:8]}):\n\n{error_message.splitlines()[0]}",  # Show first line
-        )
-        # Optionally, hide global progress bar, show error icon
+        task_desc = self._get_task_description(task_id)
+        self._task_descriptions.pop(task_id, None)  # Clean up cached description
+
+        if (
+            task_id != self.test_execution_controller._current_task_id
+        ):  # Check if it was handled by TEC
+            self.main_window.status_label.setText(f"Task '{task_desc}' failed.")
+            QMessageBox.warning(
+                self.main_window,
+                "Task Error",
+                f"Task '{task_desc}' failed:\n\n{error_message.splitlines()[0]}",
+            )
 
     @pyqtSlot()
     def on_open(self) -> None:
         """Handle the Open action from MainWindow."""
         self.logger.info("Open action triggered.")
+        # Use core_settings for default directory if available
+        default_dir = str(self.core_settings.project_root) if self.core_settings else ""
+
         file_path_str, _ = QFileDialog.getOpenFileName(
-            self.main_window,  # Parent for the dialog
+            self.main_window,
             "Open File",
-            str(self.core_settings.project_root),  # Default directory
+            default_dir,
             "Python Files (*.py);;JSON Files (*.json);;XML Files (*.xml);;All Files (*)",
         )
 
         if file_path_str:
             path = Path(file_path_str)
             self.logger.info(f"File dialog selected: {path}")
-            # Delegate to FileController to handle the selection
-            self.file_controller.on_file_selected(path)
+            self.file_controller.on_file_selected(path)  # Delegate to FileController
         else:
             self.logger.info("File dialog cancelled.")
-
-    @pyqtSlot()
-    def on_about(self) -> None:
-        """Handle the About action from MainWindow."""
-        self.logger.info("About action triggered.")
-        QMessageBox.about(
-            self.main_window,  # Parent for the dialog
-            "About Pytest Analyzer",
-            f"""<b>Pytest Analyzer</b> v{self.app.applicationVersion()}
-            <p>A tool for analyzing pytest test failures and suggesting fixes.</p>
-            <p>Created by MementoRC</p>
-            """,
-        )
