@@ -1,0 +1,280 @@
+{
+  "tasks": [
+    {
+      "id": 1,
+      "title": "Implement Controller Architecture",
+      "description": "Create the controller directory structure and implement the base controller classes to establish proper MVC architecture.",
+      "details": "Create the controllers directory with the following files:\n- main_controller.py: Main application orchestration\n- test_execution_controller.py: Test running and progress\n- analysis_controller.py: LLM analysis coordination\n- fix_controller.py: Fix suggestion and application\n- file_controller.py: File operations and project management\n- settings_controller.py: Configuration management\n\nImplement a BaseController class with common functionality and have each specific controller inherit from it. Ensure proper signal/slot connections between controllers and views. Move existing logic from MainWindow into appropriate controllers.",
+      "testStrategy": "Create unit tests for each controller using pytest and Qt Test framework. Mock dependencies to isolate controller logic. Verify signal emissions and slot connections. Test controller initialization and proper separation of concerns.",
+      "priority": "high",
+      "dependencies": [],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 2,
+      "title": "Implement Background Task Management",
+      "description": "Create a background task management system using Qt QThread to handle long-running operations without freezing the UI.",
+      "details": "Implement a TaskManager class that handles background processing using Qt's QThread mechanism. Include:\n- Task queue management\n- Progress reporting through Qt signals/slots\n- Cancellation support for long-running operations\n- Error handling and user feedback\n- Thread-safe communication with the main UI thread\n\nCreate a WorkerThread class that can execute arbitrary tasks and report progress. Implement proper thread synchronization and error handling.",
+      "testStrategy": "Test thread creation, task execution, progress reporting, and cancellation. Verify thread safety with concurrent operations. Test error handling and recovery. Ensure UI remains responsive during long-running tasks.",
+      "priority": "high",
+      "dependencies": [
+        1
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 3,
+      "title": "Integrate PytestAnalyzerService for Test Execution",
+      "description": "Integrate the existing PytestAnalyzerService with the GUI to enable test execution directly from the interface.",
+      "details": "Connect the TestExecutionController to the existing PytestAnalyzerService. Implement methods to:\n- Discover available tests in a project\n- Execute selected tests\n- Capture test output in real-time\n- Track test execution progress\n- Handle test execution errors\n\nUse the background task system to run tests without blocking the UI. Implement proper signal connections to update the UI with test progress and results.",
+      "testStrategy": "Test integration with PytestAnalyzerService using mock test suites. Verify test discovery, execution, and result capture. Test error handling during test execution. Ensure progress tracking accurately reflects test execution state.",
+      "priority": "high",
+      "dependencies": [
+        1,
+        2
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 4,
+      "title": "Implement Test Discovery and Selection UI",
+      "description": "Create a tree view interface for discovering and selecting tests to run.",
+      "details": "Implement a test selection interface with:\n- Tree view of discovered tests organized by modules/classes\n- Checkbox selection for individual tests/suites\n- Filter functionality by test names, files, or directories\n- Support for pytest markers and custom filters\n- Context menu for common actions\n\nUse Qt's QTreeView with a custom model to represent the test hierarchy. Store selection state and restore it across sessions. Connect selection changes to the TestExecutionController.",
+      "testStrategy": "Test UI rendering of test hierarchy. Verify selection persistence across sessions. Test filter functionality with various criteria. Ensure proper handling of large test suites with lazy loading.",
+      "priority": "high",
+      "dependencies": [
+        3
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 5,
+      "title": "Implement Test Execution Progress Tracking",
+      "description": "Create a progress tracking interface to display real-time test execution status.",
+      "details": "Implement a progress tracking UI with:\n- Overall progress bar showing test execution percentage\n- Current test name display\n- Elapsed time and estimated time remaining\n- Test counts (passed, failed, skipped)\n- Cancel button for stopping test execution\n\nConnect progress tracking to signals from the TestExecutionController. Update the UI in real-time as tests execute. Implement proper state management for test execution status.",
+      "testStrategy": "Test progress updates with mock test execution. Verify accuracy of progress calculation. Test cancellation functionality. Ensure UI updates correctly with rapid test execution.",
+      "priority": "high",
+      "dependencies": [
+        3
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 6,
+      "title": "Implement Live Test Output Display",
+      "description": "Create a dedicated tab to display live output from test execution.",
+      "details": "Implement a test output display with:\n- Real-time capture and display of stdout/stderr\n- Syntax highlighting for Python code and test output\n- Auto-scrolling with option to pause\n- Output filtering options\n- Copy to clipboard functionality\n\nUse a QTextEdit with custom formatting for different output types. Implement efficient text handling to avoid UI freezing with large outputs. Connect to output signals from the TestExecutionController.",
+      "testStrategy": "Test output capture with various test scenarios. Verify performance with large output volumes. Test auto-scrolling and pause functionality. Ensure proper formatting and highlighting of different output types.",
+      "priority": "medium",
+      "dependencies": [
+        3,
+        5
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 7,
+      "title": "Implement Automatic Test Results Loading",
+      "description": "Automatically load and display test results after execution completes.",
+      "details": "Enhance the existing results visualization to:\n- Automatically load results after test execution\n- Update the UI to show new results\n- Highlight changes from previous runs\n- Maintain history of test runs\n\nConnect to the test execution completion signal and trigger results loading. Implement comparison logic to identify changes between runs. Update the results model and view to reflect new data.",
+      "testStrategy": "Test automatic loading with various test results. Verify correct highlighting of changes between runs. Test history tracking and navigation. Ensure performance with large result sets.",
+      "priority": "medium",
+      "dependencies": [
+        3,
+        5,
+        6
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 8,
+      "title": "Integrate LLMSuggester for Failure Analysis",
+      "description": "Integrate the existing LLMSuggester component to analyze test failures.",
+      "details": "Implement the AnalysisController to:\n- Connect to the existing LLMSuggester components\n- Trigger automatic analysis of failed tests\n- Handle LLM API communication in background threads\n- Process and store analysis results\n- Handle API errors and rate limiting\n\nUse the background task system to perform analysis without blocking the UI. Implement caching to avoid redundant API calls. Handle authentication and API key management securely.",
+      "testStrategy": "Test integration with LLMSuggester using mock failures. Verify API communication and error handling. Test caching mechanism for repeated analyses. Ensure proper handling of rate limits and API errors.",
+      "priority": "high",
+      "dependencies": [
+        1,
+        2,
+        7
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 9,
+      "title": "Implement Analysis Results Display",
+      "description": "Create a dedicated panel to display LLM analysis results for failed tests.",
+      "details": "Implement an analysis results display with:\n- Rich text formatting for analysis explanations\n- Code highlighting for relevant code snippets\n- Collapsible sections for detailed analysis\n- Manual re-analysis trigger button\n- Loading indicators during analysis\n\nUse QTextBrowser or similar widget with HTML formatting. Connect to signals from the AnalysisController to update the display. Implement proper state management for analysis status.",
+      "testStrategy": "Test display rendering with various analysis results. Verify formatting and highlighting. Test manual re-analysis functionality. Ensure proper state handling during analysis loading.",
+      "priority": "high",
+      "dependencies": [
+        8
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 10,
+      "title": "Implement Fix Suggestion Display",
+      "description": "Create a UI component to display LLM-generated fix suggestions with code highlighting and diff view.",
+      "details": "Implement a fix suggestion display with:\n- Rich text display of suggested fixes\n- Code highlighting for Python syntax\n- Diff view showing proposed changes\n- Navigation between multiple suggestions\n- Suggestion ranking/scoring display\n\nUse a custom widget combining QTextEdit and a diff viewer component. Implement syntax highlighting using QSyntaxHighlighter. Connect to the AnalysisController to receive fix suggestions.",
+      "testStrategy": "Test rendering of various fix suggestions. Verify diff view accuracy. Test navigation between multiple suggestions. Ensure proper highlighting of code changes.",
+      "priority": "high",
+      "dependencies": [
+        8,
+        9
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 11,
+      "title": "Implement Embedded Code Editor",
+      "description": "Create an embedded code editor for viewing and modifying code with syntax highlighting.",
+      "details": "Implement an embedded code editor with:\n- Python syntax highlighting\n- Line numbering\n- Code folding\n- Search and replace functionality\n- Undo/redo support\n\nUse QScintilla or a similar advanced editor component. Implement proper file loading and saving. Connect to the FileController for file operations. Support both viewing and editing modes.",
+      "testStrategy": "Test editor functionality with various Python files. Verify syntax highlighting accuracy. Test file loading and saving. Ensure proper handling of large files without performance issues.",
+      "priority": "high",
+      "dependencies": [
+        1
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 12,
+      "title": "Implement Side-by-Side Diff View",
+      "description": "Create a side-by-side diff view to compare original code with suggested fixes.",
+      "details": "Implement a diff view component with:\n- Side-by-side comparison of original and modified code\n- Highlighting of added, removed, and modified lines\n- Line linking between corresponding sections\n- Navigation between changes\n- Apply/reject buttons for individual changes\n\nUse two synchronized code editors with custom highlighting for changes. Implement diff algorithm or integrate with existing diff library. Connect to the FixController for applying changes.",
+      "testStrategy": "Test diff rendering with various code changes. Verify highlighting accuracy. Test navigation between changes. Ensure proper synchronization between the two editor views.",
+      "priority": "high",
+      "dependencies": [
+        10,
+        11
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 13,
+      "title": "Integrate FixApplier for Code Modifications",
+      "description": "Integrate the existing FixApplier component to apply suggested fixes to source files.",
+      "details": "Implement the FixController to:\n- Connect to the existing FixApplier components\n- Apply selected fixes to source files\n- Handle file backup and restoration\n- Track applied changes\n- Support batch fix application\n\nImplement proper error handling for file operations. Create a change history mechanism to track applied fixes. Use the background task system for file operations.",
+      "testStrategy": "Test fix application with various code changes. Verify file backup and restoration. Test error handling during file operations. Ensure changes are correctly applied to source files.",
+      "priority": "high",
+      "dependencies": [
+        10,
+        12
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 14,
+      "title": "Implement Git Integration",
+      "description": "Add Git integration for tracking and committing applied fixes.",
+      "details": "Enhance the FixController with Git integration:\n- Detect Git repositories\n- Show file status (modified, staged, etc.)\n- Create commits for applied fixes\n- Support for custom commit messages\n- Basic branch management\n\nUse GitPython or similar library for Git operations. Implement proper error handling for Git commands. Use the background task system for Git operations to avoid blocking the UI.",
+      "testStrategy": "Test Git operations with various repository states. Verify commit creation and message formatting. Test error handling for Git operations. Ensure proper detection of Git repositories.",
+      "priority": "medium",
+      "dependencies": [
+        13
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 15,
+      "title": "Implement Settings Dialog",
+      "description": "Create a comprehensive settings dialog for configuring application preferences.",
+      "details": "Implement a settings dialog with sections for:\n- LLM provider configuration (OpenAI, Anthropic, etc.)\n- API keys and authentication\n- Test execution settings (timeout, parallel execution)\n- GUI preferences (theme, layout)\n- Git integration settings\n\nUse QSettings for persistent storage. Implement validation for required settings. Create a clean, organized UI with tabs or categories. Connect to the SettingsController for managing configuration.",
+      "testStrategy": "Test settings persistence across application restarts. Verify validation of required fields. Test loading and applying settings. Ensure proper handling of sensitive data like API keys.",
+      "priority": "medium",
+      "dependencies": [
+        1
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 16,
+      "title": "Implement Project Management",
+      "description": "Create project management functionality for handling multiple projects.",
+      "details": "Implement project management features:\n- Project discovery and selection\n- Per-project settings storage\n- Recent projects menu\n- Project-specific test configuration\n- Project directory structure detection\n\nCreate a Project class to encapsulate project data. Implement project configuration file handling. Update the FileController to manage project operations. Add UI components for project selection and management.",
+      "testStrategy": "Test project creation, loading, and switching. Verify per-project settings isolation. Test recent projects functionality. Ensure proper handling of project-specific configurations.",
+      "priority": "medium",
+      "dependencies": [
+        1,
+        15
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 17,
+      "title": "Implement Session Management",
+      "description": "Create functionality to save and restore analysis sessions.",
+      "details": "Implement session management features:\n- Session state persistence (test results, analysis, fixes)\n- Analysis history tracking\n- Bookmarking of important failures\n- Export/import of sessions\n\nCreate a Session class to encapsulate session data. Implement serialization/deserialization of session state. Add UI components for session management. Update controllers to support session operations.",
+      "testStrategy": "Test session saving and loading with various states. Verify complete restoration of analysis results. Test bookmarking functionality. Ensure proper handling of session import/export.",
+      "priority": "low",
+      "dependencies": [
+        7,
+        9,
+        10
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 18,
+      "title": "Implement Reporting and Export",
+      "description": "Create functionality to generate and export reports of analysis results.",
+      "details": "Implement reporting features:\n- HTML report generation\n- PDF export capabilities\n- Test coverage reports\n- Fix application summaries\n- Customizable report templates\n\nCreate a ReportGenerator class for report creation. Use templates for report formatting. Implement export to various formats (HTML, PDF, etc.). Add UI components for report configuration and generation.",
+      "testStrategy": "Test report generation with various data sets. Verify formatting and content accuracy. Test export to different formats. Ensure proper handling of large reports without performance issues.",
+      "priority": "low",
+      "dependencies": [
+        7,
+        9,
+        10
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 19,
+      "title": "Implement Complete Workflow Integration",
+      "description": "Integrate all components into a seamless workflow from test execution to fix application.",
+      "details": "Implement the complete workflow:\n- Connect all controllers to create a seamless flow\n- Implement state machine for workflow progression\n- Add UI guidance for workflow steps\n- Create shortcuts and quick actions for common operations\n- Implement error recovery for workflow interruptions\n\nUse the AnalyzerStateMachine to manage workflow state. Update the MainController to orchestrate the workflow. Add UI components to guide users through the workflow.",
+      "testStrategy": "Test the complete workflow with various scenarios. Verify proper state transitions. Test error recovery at different workflow stages. Ensure intuitive user guidance throughout the workflow.",
+      "priority": "high",
+      "dependencies": [
+        3,
+        7,
+        9,
+        10,
+        13
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 20,
+      "title": "Implement Performance Optimization and Polishing",
+      "description": "Optimize performance and polish the UI for production readiness.",
+      "details": "Implement performance optimizations:\n- Lazy loading of UI components\n- Caching of expensive operations\n- Memory usage optimization\n- UI responsiveness improvements\n- Keyboard shortcuts and accessibility\n\nConduct performance profiling to identify bottlenecks. Implement optimizations for identified issues. Add final polish to UI components. Ensure consistent styling and behavior across the application.",
+      "testStrategy": "Conduct performance testing with large projects and test suites. Measure and verify improvements in key metrics. Test memory usage under sustained operation. Ensure UI remains responsive during all operations.",
+      "priority": "medium",
+      "dependencies": [
+        19
+      ],
+      "status": "pending",
+      "subtasks": []
+    }
+  ]
+}

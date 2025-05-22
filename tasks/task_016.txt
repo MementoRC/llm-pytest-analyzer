@@ -1,0 +1,18 @@
+# Task ID: 16
+# Title: Implement Project Management
+# Status: pending
+# Dependencies: 1, 15
+# Priority: medium
+# Description: Create project management functionality for handling multiple projects.
+# Details:
+Implement project management features:
+- Project discovery and selection
+- Per-project settings storage
+- Recent projects menu
+- Project-specific test configuration
+- Project directory structure detection
+
+Create a Project class to encapsulate project data. Implement project configuration file handling. Update the FileController to manage project operations. Add UI components for project selection and management.
+
+# Test Strategy:
+Test project creation, loading, and switching. Verify per-project settings isolation. Test recent projects functionality. Ensure proper handling of project-specific configurations.

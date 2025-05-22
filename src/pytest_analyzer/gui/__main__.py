@@ -13,6 +13,7 @@ import sys
 from pytest_analyzer.gui.app import create_app
 from pytest_analyzer.gui.main_window import MainWindow
 from pytest_analyzer.utils.logging_config import configure_logging
+from pytest_analyzer.utils.settings import load_settings
 
 
 def main() -> int:
@@ -22,8 +23,9 @@ def main() -> int:
     Returns:
         Exit code
     """
-    # Configure logging
-    configure_logging(debug=False)
+    # Load settings and configure logging
+    settings = load_settings(debug=False)
+    configure_logging(settings)
     logger = logging.getLogger(__name__)
 
     try:

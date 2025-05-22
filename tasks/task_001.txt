@@ -1,20 +1,19 @@
 # Task ID: 1
-# Title: Create Project Architecture Document
-# Status: done
+# Title: Implement Controller Architecture
+# Status: pending
 # Dependencies: None
 # Priority: high
-# Description: Create a comprehensive architecture document outlining the new structure, component relationships, and interfaces based on the refactoring requirements.
+# Description: Create the controller directory structure and implement the base controller classes to establish proper MVC architecture.
 # Details:
-The architecture document should include:
-1. Component diagram showing the relationships between Extractors, Analyzers, Suggesters, Appliers, and LLM Services
-2. Interface definitions for each component using Python's Protocol type
-3. Data flow diagrams
-4. Dependency injection approach
-5. Error handling strategy
-6. State machine design
-7. Both synchronous and asynchronous API patterns
+Create the controllers directory with the following files:
+- main_controller.py: Main application orchestration
+- test_execution_controller.py: Test running and progress
+- analysis_controller.py: LLM analysis coordination
+- fix_controller.py: Fix suggestion and application
+- file_controller.py: File operations and project management
+- settings_controller.py: Configuration management
 
-The document should serve as a reference for the entire refactoring process and ensure all team members have a clear understanding of the target architecture.
+Implement a BaseController class with common functionality and have each specific controller inherit from it. Ensure proper signal/slot connections between controllers and views. Move existing logic from MainWindow into appropriate controllers.
 
 # Test Strategy:
-Review the document with stakeholders to ensure it addresses all requirements in the PRD. Validate that the proposed architecture supports all current functionality while enabling the improvements specified in the project goals.
+Create unit tests for each controller using pytest and Qt Test framework. Mock dependencies to isolate controller logic. Verify signal emissions and slot connections. Test controller initialization and proper separation of concerns.

@@ -1,169 +1,18 @@
 # Task ID: 15
-# Title: Implement Comprehensive Testing Suite
+# Title: Implement Settings Dialog
 # Status: pending
-# Dependencies: 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14
-# Priority: high
-# Description: Create a comprehensive testing suite for all components and workflows.
+# Dependencies: 1
+# Priority: medium
+# Description: Create a comprehensive settings dialog for configuring application preferences.
 # Details:
-Implement a comprehensive testing suite that covers all components and workflows:
+Implement a settings dialog with sections for:
+- LLM provider configuration (OpenAI, Anthropic, etc.)
+- API keys and authentication
+- Test execution settings (timeout, parallel execution)
+- GUI preferences (theme, layout)
+- Git integration settings
 
-1. **Unit Tests**:
-   - Create test files for each component
-   - Use pytest fixtures for common test data and mocks
-   - Test both success and error paths
-   - Use parameterized tests for different scenarios
-
-2. **Integration Tests**:
-   - Test component chains (e.g., Extractor -> Analyzer -> Suggester)
-   - Test the state machine with different inputs
-   - Test the facade with different scenarios
-
-3. **End-to-End Tests**:
-   - Test the complete workflow with real-world examples
-   - Test backward compatibility with existing code
-
-4. **Test Helpers**:
-   - Create mock implementations of all interfaces for testing
-   - Create test fixtures for common test data
-   - Create test utilities for common assertions
-
-Example test file structure:
-
-```
-tests/
-  unit/
-    test_extractor.py
-    test_analyzer.py
-    test_suggester.py
-    test_applier.py
-    test_llm_service.py
-    test_prompt_builder.py
-    test_response_parser.py
-    test_state_machine.py
-    test_di_container.py
-    test_error_handling.py
-  integration/
-    test_analysis_workflow.py
-    test_suggestion_workflow.py
-    test_application_workflow.py
-  e2e/
-    test_facade.py
-    test_backward_compatibility.py
-  conftest.py  # Common fixtures
-  test_data/   # Test data files
-```
-
-Example unit test for the Extractor:
-
-```python
-import pytest
-from pytest_analyzer.extractors import PytestExtractor
-
-@pytest.fixture
-def sample_pytest_output():
-    with open('tests/test_data/sample_pytest_output.txt', 'r') as f:
-        return f.read()
-
-def test_extractor_with_valid_output(sample_pytest_output):
-    # Arrange
-    extractor = PytestExtractor()
-
-    # Act
-    result = extractor.extract(sample_pytest_output)
-
-    # Assert
-    assert 'failures' in result
-    assert isinstance(result['failures'], list)
-    assert len(result['failures']) > 0
-
-    # Check first failure structure
-    failure = result['failures'][0]
-    assert 'file_path' in failure
-    assert 'test_name' in failure
-    assert 'error' in failure
-    assert 'traceback' in failure
-    assert 'code_context' in failure
-
-def test_extractor_with_empty_output():
-    # Arrange
-    extractor = PytestExtractor()
-
-    # Act
-    result = extractor.extract('')
-
-    # Assert
-    assert 'failures' in result
-    assert len(result['failures']) == 0
-    assert 'test_files' in result
-    assert len(result['test_files']) == 0
-
-def test_extractor_error_handling():
-    # Arrange
-    extractor = PytestExtractor()
-
-    # Act & Assert
-    with pytest.raises(ExtractionError):
-        extractor.extract(None)  # Should raise for None input
-```
-
-Example integration test for the analysis workflow:
-
-```python
-import pytest
-from pytest_analyzer.di import DIContainer
-from pytest_analyzer.extractors import PytestExtractor
-from pytest_analyzer.analyzers import TestFailureAnalyzer
-from pytest_analyzer.llm import LLMService, LLMConfig
-from pytest_analyzer.prompts import PromptBuilder
-from pytest_analyzer.parsers import ResponseParser, AnalysisModel
-
-@pytest.fixture
-def mock_llm_service(monkeypatch):
-    class MockLLMService:
-        def generate(self, prompt, **kwargs):
-            # Return a predefined response based on the prompt
-            if 'analyze_failure' in prompt:
-                return '{"root_cause": "Test error", "explanation": "This is a test"}'
-            return '{}'
-
-    return MockLLMService()
-
-@pytest.fixture
-def di_container(mock_llm_service):
-    container = DIContainer()
-    container.register(LLMService, mock_llm_service)
-    container.register(PromptBuilder, PromptBuilder())
-    container.register(Extractor, PytestExtractor())
-    container.register_factory(Analyzer, lambda: TestFailureAnalyzer(
-        container.resolve(LLMService),
-        container.resolve(PromptBuilder),
-        ResponseParser(AnalysisModel)
-    ))
-    return container
-
-def test_analysis_workflow(di_container, sample_pytest_output):
-    # Arrange
-    extractor = di_container.resolve(Extractor)
-    analyzer = di_container.resolve(Analyzer)
-
-    # Act
-    extraction_results = extractor.extract(sample_pytest_output)
-    analysis_results = analyzer.analyze(extraction_results)
-
-    # Assert
-    assert 'analyses' in analysis_results
-    assert isinstance(analysis_results['analyses'], list)
-    assert len(analysis_results['analyses']) > 0
-
-    # Check first analysis structure
-    analysis = analysis_results['analyses'][0]
-    assert 'failure' in analysis
-    assert 'analysis' in analysis
-    assert 'root_cause' in analysis['analysis']
-    assert 'explanation' in analysis['analysis']
-```
-
-Implement similar tests for all components and workflows.
+Use QSettings for persistent storage. Implement validation for required settings. Create a clean, organized UI with tabs or categories. Connect to the SettingsController for managing configuration.
 
 # Test Strategy:
-Run the tests with pytest and verify that all tests pass. Use pytest-cov to measure test coverage and ensure it meets the 80% target. Verify that all components and workflows are properly tested, including error cases.
+Test settings persistence across application restarts. Verify validation of required fields. Test loading and applying settings. Ensure proper handling of sensitive data like API keys.
