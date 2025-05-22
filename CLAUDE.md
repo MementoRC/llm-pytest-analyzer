@@ -32,11 +32,12 @@ pixi run -e dev pytest --cov=src/pytest_analyzer --cov-report=html
 
 #### Git Safety Protocol (CRITICAL)
 ```bash
-# Work directly on feature/gui-interface branch for PR progress
+# Create dedicated aider branch for isolated work
 git checkout feature/gui-interface
+git checkout -b aider/<task-name>
 
 # Commit work before aider (optional for safety)
-git add . && git commit -m "WIP: Before aider implementation" 
+git add . && git commit -m "WIP: Before aider <task-name> implementation" 
 
 # After aider, show changes
 git diff
@@ -45,8 +46,15 @@ git diff
 pixi run -e dev pre-commit run --all-files
 pixi run -e dev pytest
 
-# Commit progress to feature branch for PR visibility
-git add . && git commit -m "Implement <feature>: <details>"
+# Commit clean implementation to aider branch
+git add . && git commit -m "Implement <task>: <details>"
+
+# Merge to feature branch for PR progress
+git checkout feature/gui-interface
+git merge aider/<task-name> --no-ff
+
+# Keep aider branch for safety/parallel work/exploration
+# DON'T DELETE: git branch -D aider/<task-name>
 ```
 
 #### Aider Command Patterns
@@ -142,8 +150,9 @@ The GUI controllers need to integrate with these core services:
    # Mark task as in-progress in taskmaster-ai
    mcp__taskmaster-ai__set_task_status --id=1 --status=in-progress
    
-   # Work on feature/gui-interface branch for PR progress
+   # Create isolated aider branch from feature branch
    git checkout feature/gui-interface
+   git checkout -b aider/<task-name>
    git add . && git commit -m "WIP: Before aider <task-name> implementation"
    ```
 
@@ -175,17 +184,21 @@ The GUI controllers need to integrate with these core services:
    pixi run -e dev pytest tests/gui/ -v
    
    # Fix any issues found
-   # Commit clean implementation to feature branch
+   # Commit clean implementation to aider branch
    git add . && git commit -m "Implement Task X: Detailed implementation message"
    ```
 
-5. **Task Completion**
+5. **Task Completion & Integration**
    ```bash
+   # Merge to feature branch for PR visibility
+   git checkout feature/gui-interface
+   git merge aider/<task-name> --no-ff
+   
    # Update taskmaster-ai status
    mcp__taskmaster-ai__set_task_status --id=1 --status=done
    
-   # Update CLAUDE.md with progress
-   # Document methodology improvements
+   # Keep aider branch for safety and future exploration
+   # Update CLAUDE.md with progress and methodology improvements
    ```
 
 **Key Success Factors:**
@@ -194,6 +207,14 @@ The GUI controllers need to integrate with these core services:
 - **Quality First**: Never skip pre-commit and testing validation
 - **Progressive Documentation**: Update CLAUDE.md after each major milestone
 - **Signal/Slot Architecture**: Maintain Qt best practices for loose coupling
+
+**Branching Strategy Benefits:**
+- **Isolation**: Each aider/task-name branch isolates work safely
+- **Parallel Development**: Multiple tasks can be worked on simultaneously  
+- **Clean PR History**: feature/gui-interface shows clean progression
+- **Rollback Safety**: Can revert to any aider branch if issues arise
+- **Exploration**: Keep branches for trying alternative approaches
+- **CI/CD Exercise**: Each merge to feature branch triggers CI pipeline
 
 ### Environment Setup
 ```bash
