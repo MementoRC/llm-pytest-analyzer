@@ -32,11 +32,11 @@ pixi run -e dev pytest --cov=src/pytest_analyzer --cov-report=html
 
 #### Git Safety Protocol (CRITICAL)
 ```bash
-# ALWAYS create dedicated branches for aider work
-git checkout -b aider/<feature-name>
+# Work directly on feature/gui-interface branch for PR progress
+git checkout feature/gui-interface
 
-# Commit work before aider
-git add . && git commit -m "WIP: Before aider implementation"
+# Commit work before aider (optional for safety)
+git add . && git commit -m "WIP: Before aider implementation" 
 
 # After aider, show changes
 git diff
@@ -44,6 +44,9 @@ git diff
 # Run quality checks
 pixi run -e dev pre-commit run --all-files
 pixi run -e dev pytest
+
+# Commit progress to feature branch for PR visibility
+git add . && git commit -m "Implement <feature>: <details>"
 ```
 
 #### Aider Command Patterns
@@ -139,8 +142,8 @@ The GUI controllers need to integrate with these core services:
    # Mark task as in-progress in taskmaster-ai
    mcp__taskmaster-ai__set_task_status --id=1 --status=in-progress
    
-   # Create dedicated git branch
-   git checkout -b aider/<task-name>
+   # Work on feature/gui-interface branch for PR progress
+   git checkout feature/gui-interface
    git add . && git commit -m "WIP: Before aider <task-name> implementation"
    ```
 
@@ -172,8 +175,8 @@ The GUI controllers need to integrate with these core services:
    pixi run -e dev pytest tests/gui/ -v
    
    # Fix any issues found
-   # Commit clean implementation
-   git add . && git commit -m "Detailed implementation message"
+   # Commit clean implementation to feature branch
+   git add . && git commit -m "Implement Task X: Detailed implementation message"
    ```
 
 5. **Task Completion**
