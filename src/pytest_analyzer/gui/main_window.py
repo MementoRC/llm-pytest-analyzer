@@ -57,7 +57,7 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.app = app
-        self.analyzer_service = PytestAnalyzerService()  # This will be passed to controllers
+        self.analyzer_service = PytestAnalyzerService(settings=app.core_settings)
         self.test_results_model = TestResultsModel()
 
         # Set window properties

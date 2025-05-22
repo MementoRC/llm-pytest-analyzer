@@ -1,9 +1,11 @@
 import logging
-from typing import TYPE_CHECKING, Any, List, Optional
+import time
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from PyQt6.QtCore import QObject, pyqtSlot
 from PyQt6.QtWidgets import QMessageBox
 
+from ...core.analysis.failure_grouper import extract_failure_fingerprint
 from ...core.analyzer_service import PytestAnalyzerService
 from ...core.models.pytest_failure import FixSuggestion, PytestFailure
 from ..models.test_results_model import (
@@ -32,6 +34,12 @@ class AnalysisController(BaseController):
         super().__init__(parent, task_manager=task_manager)  # Pass to base
         self.analyzer_service = analyzer_service
         self.test_results_model = test_results_model
+        self.suggestion_cache: Dict[str, Tuple[float, List[FixSuggestion]]] = {}
+        self.project_root_for_fingerprint: Optional[str] = None
+        if self.analyzer_service.path_resolver:  # Ensure path_resolver exists
+            self.project_root_for_fingerprint = str(
+                self.analyzer_service.path_resolver.project_root
+            )
 
         # Connect to task manager signals if specific handling is needed here
         if self.task_manager:
@@ -99,9 +107,21 @@ class AnalysisController(BaseController):
             QMessageBox.critical(None, "Error", "TaskManager not available.")
             return
 
-        failures_to_analyze = self.test_results_model.get_pytest_failures_for_analysis()
+        # Check if LLM suggester is configured
+        suggester = self.analyzer_service.llm_suggester
+        if not suggester._llm_request_func and not suggester._async_llm_request_func:
+            QMessageBox.warning(
+                None,
+                "LLM Not Configured",
+                "The Language Model (LLM) for generating suggestions is not configured.\n"
+                "Please set the LLM provider and API key in the Settings.",
+            )
+            self.logger.warning("Analysis aborted: LLM suggester not configured.")
+            return
 
-        if not failures_to_analyze:
+        all_failures_for_analysis = self.test_results_model.get_pytest_failures_for_analysis()
+
+        if not all_failures_for_analysis:
             QMessageBox.information(
                 None,
                 "Analyze",
@@ -110,15 +130,68 @@ class AnalysisController(BaseController):
             self.logger.info("Analyze action: No failures to analyze.")
             return
 
-        self.logger.info(f"Preparing to analyze {len(failures_to_analyze)} failures.")
+        self.logger.info(f"Preparing to analyze {len(all_failures_for_analysis)} failures.")
 
-        # Update status for tests being analyzed
-        for pf_failure in failures_to_analyze:
-            self.test_results_model.update_test_data(
-                test_name=pf_failure.test_name, analysis_status=AnalysisStatus.ANALYSIS_PENDING
+        failures_to_submit_for_llm: List[PytestFailure] = []
+        cached_suggestion_count = 0
+
+        if self.analyzer_service.settings.llm_cache_enabled:
+            current_time = time.time()
+            cache_ttl = self.analyzer_service.settings.llm_cache_ttl_seconds
+            for pf_failure in all_failures_for_analysis:
+                fingerprint = extract_failure_fingerprint(
+                    pf_failure, self.project_root_for_fingerprint
+                )
+                if fingerprint in self.suggestion_cache:
+                    timestamp, cached_suggestions = self.suggestion_cache[fingerprint]
+                    if (current_time - timestamp) < cache_ttl:
+                        self.logger.info(
+                            f"Cache hit (valid TTL) for failure {pf_failure.test_name} (fingerprint: {fingerprint[:8]}...)."
+                        )
+                        self.test_results_model.update_test_data(
+                            test_name=pf_failure.test_name,
+                            suggestions=cached_suggestions,
+                            analysis_status=AnalysisStatus.SUGGESTIONS_AVAILABLE
+                            if cached_suggestions
+                            else AnalysisStatus.ANALYZED_NO_SUGGESTIONS,
+                        )
+                        cached_suggestion_count += 1
+                    else:
+                        self.logger.info(
+                            f"Cache hit (expired TTL) for failure {pf_failure.test_name}. Will re-fetch."
+                        )
+                        del self.suggestion_cache[fingerprint]  # Remove expired entry
+                        failures_to_submit_for_llm.append(pf_failure)
+                        self.test_results_model.update_test_data(
+                            test_name=pf_failure.test_name,
+                            analysis_status=AnalysisStatus.ANALYSIS_PENDING,
+                        )
+                else:  # Not in cache
+                    failures_to_submit_for_llm.append(pf_failure)
+                    self.test_results_model.update_test_data(
+                        test_name=pf_failure.test_name,
+                        analysis_status=AnalysisStatus.ANALYSIS_PENDING,
+                    )
+            self.logger.info(f"{cached_suggestion_count} failures served from valid cache.")
+        else:  # Cache disabled
+            failures_to_submit_for_llm = all_failures_for_analysis
+            for pf_failure in failures_to_submit_for_llm:
+                self.test_results_model.update_test_data(
+                    test_name=pf_failure.test_name, analysis_status=AnalysisStatus.ANALYSIS_PENDING
+                )
+
+        if not failures_to_submit_for_llm:
+            QMessageBox.information(
+                None,
+                "Analysis Complete",
+                "All failures were resolved from the cache. No new LLM analysis needed.",
             )
+            self.logger.info("All failures resolved from cache. No LLM task submitted.")
+            return
 
-        args = (failures_to_analyze,)
+        self.logger.info(f"Submitting {len(failures_to_submit_for_llm)} failures for LLM analysis.")
+
+        args = (failures_to_submit_for_llm,)
         kwargs = {
             "quiet": True,  # Suppress terminal output from service if any
             "use_async": self.analyzer_service.use_async,
@@ -129,18 +202,18 @@ class AnalysisController(BaseController):
             args=args,
             kwargs=kwargs,
             use_progress_bridge=True,
-            # task_id_prefix="analyze_failures_"
+            description=f"Analyzing {len(failures_to_submit_for_llm)} test failures with LLM...",
         )
 
         if task_id:
-            self.logger.info(f"Analysis task submitted with ID: {task_id}")
+            self.logger.info(f"LLM Analysis task submitted with ID: {task_id}")
         else:
-            QMessageBox.warning(None, "Analyze", "Failed to submit analysis task.")
+            QMessageBox.warning(None, "Analyze", "Failed to submit LLM analysis task.")
             # Revert status for tests that were marked PENDING
-            for pf_failure in failures_to_analyze:
+            for pf_failure in failures_to_submit_for_llm:
                 self.test_results_model.update_test_data(
                     test_name=pf_failure.test_name,
-                    analysis_status=AnalysisStatus.NOT_ANALYZED,  # Or ANALYSIS_FAILED if preferred
+                    analysis_status=AnalysisStatus.ANALYSIS_FAILED,
                 )
 
     @pyqtSlot(str, object)
@@ -209,30 +282,50 @@ class AnalysisController(BaseController):
 
             # Update model for tests that were part of the analysis
             # (those that were ANALYSIS_PENDING or identified by get_pytest_failures_for_analysis)
-            processed_test_names = set(suggestions_by_test_name.keys())
+            processed_test_names = set()
 
-            for test_result in self.test_results_model.results:
-                if test_result.analysis_status == AnalysisStatus.ANALYSIS_PENDING:
-                    suggs_for_this_test = suggestions_by_test_name.get(test_result.name, [])
-                    new_status = (
-                        AnalysisStatus.SUGGESTIONS_AVAILABLE
-                        if suggs_for_this_test
-                        else AnalysisStatus.ANALYZED_NO_SUGGESTIONS
-                    )
-                    self.test_results_model.update_test_data(
-                        test_name=test_result.name,
-                        suggestions=suggs_for_this_test,
-                        analysis_status=new_status,
-                    )
-                    if test_result.name in processed_test_names:
-                        processed_test_names.remove(test_result.name)
-
-            if (
-                processed_test_names
-            ):  # Suggestions for tests not marked PENDING (should not happen ideally)
-                self.logger.warning(
-                    f"Received suggestions for tests not marked as PENDING: {processed_test_names}"
+            for test_name, suggs_for_this_test in suggestions_by_test_name.items():
+                processed_test_names.add(test_name)
+                new_status = (
+                    AnalysisStatus.SUGGESTIONS_AVAILABLE
+                    if suggs_for_this_test
+                    else AnalysisStatus.ANALYZED_NO_SUGGESTIONS
                 )
+                self.test_results_model.update_test_data(
+                    test_name=test_name,
+                    suggestions=suggs_for_this_test,
+                    analysis_status=new_status,
+                )
+                # Add to cache
+                if self.analyzer_service.settings.llm_cache_enabled and suggs_for_this_test:
+                    original_failure = next(
+                        (
+                            f.failure
+                            for f in suggs_for_this_test
+                            if f.failure.test_name == test_name
+                        ),
+                        None,
+                    )
+                    if original_failure:
+                        fingerprint = extract_failure_fingerprint(
+                            original_failure, self.project_root_for_fingerprint
+                        )
+                        self.suggestion_cache[fingerprint] = (time.time(), suggs_for_this_test)
+                        self.logger.info(
+                            f"Stored suggestions for {test_name} (fingerprint: {fingerprint[:8]}...) in cache with TTL."
+                        )
+
+            for test_result_in_model in self.test_results_model.results:
+                if test_result_in_model.analysis_status == AnalysisStatus.ANALYSIS_PENDING:
+                    if test_result_in_model.name not in processed_test_names:
+                        self.logger.warning(
+                            f"Test {test_result_in_model.name} was PENDING but no suggestions received. Marking as NO_SUGGESTIONS."
+                        )
+                        self.test_results_model.update_test_data(
+                            test_name=test_result_in_model.name,
+                            suggestions=[],
+                            analysis_status=AnalysisStatus.ANALYZED_NO_SUGGESTIONS,
+                        )
 
             QMessageBox.information(
                 None,

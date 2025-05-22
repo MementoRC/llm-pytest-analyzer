@@ -5,19 +5,17 @@ from typing import TYPE_CHECKING, Any, List
 from PyQt6.QtCore import QObject, pyqtSlot
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
-from ..background.task_manager import TaskManager  # Added import
+from ...core.analyzer_service import PytestAnalyzerService
+from ..background.task_manager import TaskManager
 from .analysis_controller import AnalysisController
 from .base_controller import BaseController
 from .file_controller import FileController
 from .settings_controller import SettingsController
 from .test_discovery_controller import TestDiscoveryController
-from .test_execution_controller import (  # Added
-    TestExecutionController,
-)
+from .test_execution_controller import TestExecutionController
 from .test_results_controller import TestResultsController
 
 if TYPE_CHECKING:
-    from ...core.analyzer_service import PytestAnalyzerService
     from ...utils.settings import Settings as CoreSettings
     from ..app import PytestAnalyzerApp
     from ..main_window import MainWindow
@@ -59,7 +57,9 @@ class MainController(BaseController):
             parent=self,
             task_manager=self.task_manager,
         )
-        self.settings_controller = SettingsController(parent=self, task_manager=self.task_manager)
+        self.settings_controller = SettingsController(
+            app=self.app, parent=self, task_manager=self.task_manager
+        )
         self.test_discovery_controller = TestDiscoveryController(
             self.analyzer_service, parent=self, task_manager=self.task_manager
         )
@@ -144,6 +144,10 @@ class MainController(BaseController):
         self.test_execution_controller.test_execution_completed.connect(
             self.test_results_controller.auto_load_test_results
         )
+
+        # SettingsController -> MainController for LLM updates
+        self.settings_controller.llm_settings_changed.connect(self._on_llm_settings_changed)
+        self._update_llm_status_label()  # Initial status update
 
     def _get_task_description(self, task_id: str) -> str:
         """Retrieves the cached description for a task, or a fallback."""
@@ -271,3 +275,52 @@ class MainController(BaseController):
             self.logger.warning(
                 "Run tests action: No valid Python file or directory selected in the model."
             )
+
+    def _update_llm_status_label(self) -> None:
+        """Updates the LLM status label in the main window's status bar."""
+        provider = self.core_settings.llm_provider
+        api_key_present = False
+        model_name = ""
+
+        if provider == "openai":
+            if self.core_settings.llm_api_key_openai:
+                api_key_present = True
+            model_name = self.core_settings.llm_model_openai
+        elif provider == "anthropic":
+            if self.core_settings.llm_api_key_anthropic:
+                api_key_present = True
+            model_name = self.core_settings.llm_model_anthropic
+
+        status_text = "LLM: Disabled"
+        if provider != "none":
+            if api_key_present:
+                status_text = f"LLM: {provider.capitalize()} ({model_name}) - Ready"
+            else:
+                status_text = f"LLM: {provider.capitalize()} - API Key Missing"
+
+        self.main_window.llm_status_label.setText(status_text)
+        self.logger.debug(f"LLM status label updated: {status_text}")
+
+    @pyqtSlot()
+    def _on_llm_settings_changed(self) -> None:
+        """Handles changes to LLM settings."""
+        self.logger.info(
+            "LLM settings changed. Re-initializing analysis service and clearing cache."
+        )
+
+        self.analyzer_service = PytestAnalyzerService(settings=self.app.core_settings)
+
+        self.analysis_controller.analyzer_service = self.analyzer_service
+        self.test_discovery_controller.analyzer_service = self.analyzer_service
+        self.test_execution_controller.analyzer_service = self.analyzer_service
+
+        if hasattr(self.analysis_controller, "suggestion_cache"):
+            self.analysis_controller.suggestion_cache.clear()
+            self.logger.info("Analysis suggestion cache cleared.")
+
+        self._update_llm_status_label()
+        QMessageBox.information(
+            self.main_window,
+            "Settings Changed",
+            "LLM settings have been updated. The analysis service has been re-initialized.",
+        )
