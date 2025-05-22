@@ -39,6 +39,9 @@ class FileController(BaseController):
         if file_type == ".py":
             self.status_message_updated.emit(f"Selected test file: {path.name}")
             self._load_test_file(path)
+        elif path.is_dir():  # Check if it's a directory before specific file types
+            self.status_message_updated.emit(f"Selected directory: {path.name}")
+            self._load_directory(path)
         elif file_type == ".json":
             self.status_message_updated.emit(f"Selected JSON report: {path.name}")
             self._load_json_report(path)
@@ -51,22 +54,41 @@ class FileController(BaseController):
 
     def _load_test_file(self, path: Path) -> None:
         """
-        Load test file for analysis. (Placeholder)
+        Prepare for running tests from a specific Python file.
+        Actual test execution is handled by AnalysisController.on_run_tests.
 
         Args:
             path: Path to the test file
         """
-        self.logger.info(f"Loading test file: {path}")
-        # This would typically run the tests in the file
-        # For now, just show a message
-        QMessageBox.information(
-            None,  # Parent widget, None for now
-            "Test File",
-            f"Running tests in {path.name} will be implemented in a future task.",
+        self.logger.info(f"Preparing for test file: {path}")
+        self.test_results_model.clear()  # Clear previous results/source
+        self.test_results_model.source_file = path
+        self.test_results_model.source_type = "py"  # Indicates a single python file as source
+
+        # Emit results_loaded with empty list to signal source change and clear views
+        self.results_loaded.emit([], path, "py")
+        self.status_message_updated.emit(
+            f"Selected test file: {path.name}. Press 'Run Tests' to execute."
         )
-        # Clear existing results
-        self.test_results_model.clear()
-        self.status_message_updated.emit(f"Test file {path.name} selected (run not implemented).")
+
+    def _load_directory(self, path: Path) -> None:
+        """
+        Prepare for running tests from a directory.
+        Actual test execution is handled by AnalysisController.on_run_tests.
+
+        Args:
+            path: Path to the directory
+        """
+        self.logger.info(f"Preparing for test directory: {path}")
+        self.test_results_model.clear()  # Clear previous results/source
+        self.test_results_model.source_file = path
+        self.test_results_model.source_type = "directory"
+
+        # Emit results_loaded with empty list to signal source change and clear views
+        self.results_loaded.emit([], path, "directory")
+        self.status_message_updated.emit(
+            f"Selected directory: {path.name}. Press 'Run Tests' to execute."
+        )
 
     def _load_json_report(self, path: Path) -> None:
         """
@@ -88,11 +110,17 @@ class FileController(BaseController):
                         status=self._map_test_status(test_data.get("outcome", "unknown")),
                         duration=test_data.get("duration", 0.0),
                         file_path=Path(test_data.get("path", "")) if "path" in test_data else None,
+                        # Ensure failure_details includes error_type if available from JSON
                     )
                     if test_result.status in (TestStatus.FAILED, TestStatus.ERROR):
+                        # Attempt to get error type from JSON if possible (often not standard)
+                        # For now, it will remain empty unless JSON has a specific field for it.
+                        # Pytest's default JSON report does not provide a distinct 'error_type' field
+                        # separate from the 'longrepr' string.
                         failure_details = TestFailureDetails(
                             message=test_data.get("message", ""),
                             traceback=test_data.get("longrepr", ""),
+                            error_type="",  # Default to empty as JSON usually doesn't have it
                         )
                         test_result.failure_details = failure_details
                     results.append(test_result)
@@ -134,17 +162,27 @@ class FileController(BaseController):
                         error = testcase.find("./error")
                         skipped = testcase.find("./skipped")
 
+                        error_type_str = ""  # Initialize error_type
+
                         if failure is not None:
                             status = TestStatus.FAILED
+                            error_type_str = failure.get(
+                                "type", "AssertionError"
+                            )  # Junit often has 'type'
                             failure_details = TestFailureDetails(
                                 message=failure.get("message", ""),
                                 traceback=failure.text or "",
+                                error_type=error_type_str,
                             )
                         elif error is not None:
                             status = TestStatus.ERROR
+                            error_type_str = error.get(
+                                "type", "Exception"
+                            )  # Junit often has 'type'
                             failure_details = TestFailureDetails(
                                 message=error.get("message", ""),
                                 traceback=error.text or "",
+                                error_type=error_type_str,
                             )
                         elif skipped is not None:
                             status = TestStatus.SKIPPED
