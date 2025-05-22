@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import QMessageBox
 from ...core.analyzer_service import PytestAnalyzerService
 from ...core.models.pytest_failure import FixSuggestion, PytestFailure
 from ..models.test_results_model import (
-    AnalysisStatus,  # Added AnalysisStatus
+    AnalysisStatus,
     TestResultsModel,
 )
 from .base_controller import BaseController

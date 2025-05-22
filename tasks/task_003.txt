@@ -1,6 +1,6 @@
 # Task ID: 3
 # Title: Integrate PytestAnalyzerService for Test Execution
-# Status: in-progress
+# Status: done
 # Dependencies: 1, 2
 # Priority: high
 # Description: Integrate the existing PytestAnalyzerService with the GUI to enable test execution directly from the interface.
