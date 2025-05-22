@@ -598,6 +598,11 @@ class PytestAnalyzerService:
             logger.error(f"Failed to initialize LLM client for {self.settings.llm_provider}: {e}")
             llm_api_client = None
 
+        # Use the provided llm_client if available (e.g., for testing)
+        if llm_client is not None:
+            llm_api_client = llm_client
+            logger.info("Using provided LLM client (e.g., for testing)")
+
         # Always initialize LLM suggester - no rule-based suggester
         self.llm_suggester = LLMSuggester(
             llm_client=llm_api_client,
