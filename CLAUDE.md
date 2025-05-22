@@ -76,11 +76,11 @@ git diff -- <modified-files>
 
 ### Current GUI Enhancement Project
 
-#### Status - Task 6 COMPLETED ✅
-- **Current Phase**: Live Test Output Display implemented successfully
+#### Status - Task 7 COMPLETED ✅
+- **Current Phase**: Automatic Test Results Loading implemented successfully
 - **PRD Location**: `scripts/gui_enhancement_prd.txt`
 - **Task List**: `tasks/gui_tasks.json` (managed by taskmaster-ai)
-- **Progress**: 6/20 tasks complete (30%)
+- **Progress**: 7/20 tasks complete (35%)
 - **PR #8**: All CI checks passing ✅
 
 #### Task 1 Achievement: MVC Controller Architecture
@@ -132,24 +132,35 @@ git diff -- <modified-files>
 - ✅ **Autoscroll Toggle**: User-controlled scrolling
 - ✅ **Copy Functionality**: Easy output sharing
 
+#### Task 7 Achievement: Automatic Test Results Loading
+**Successfully implemented automatic results loading after test execution:**
+- ✅ **TestExecutionController Signal**: Added `test_execution_completed` signal emitting List[PytestFailure]
+- ✅ **Auto-loading Method**: Implemented `auto_load_test_results` in TestResultsController
+- ✅ **Test Run History**: Added TestRunResult dataclass and history tracking to TestResultsModel
+- ✅ **Signal/Slot Connection**: Connected execution completion to automatic results loading
+- ✅ **Fixed Run Tests Action**: Now uses actual source file from model instead of placeholder
+- ✅ **Comparison Infrastructure**: Added `compare_with_previous` and `get_latest_results` methods for future use
+
 **Architecture Benefits Achieved:**
 - Complete test execution workflow in GUI
 - File and directory test execution support
 - Real-time progress feedback during execution
 - Live output streaming during test runs
+- Automatic results loading upon test completion
+- Test run history tracking for future comparisons
 - Enhanced data model with suggestion support
 - Seamless integration with existing background task system
 - All tests passing (11 GUI tests, 15% overall coverage)
 
 #### GUI Development Tasks Overview
-1. **Phase 1**: ✅ Controller Architecture, ✅ Background Tasks, ✅ Test Execution, ✅ Test Discovery, ✅ Progress Tracking, ✅ Live Output
-2. **Phase 2**: LLM Analysis Integration (In Progress - Task 7)
+1. **Phase 1**: ✅ Controller Architecture, ✅ Background Tasks, ✅ Test Execution, ✅ Test Discovery, ✅ Progress Tracking, ✅ Live Output, ✅ Auto Results Loading
+2. **Phase 2**: LLM Analysis Integration (In Progress - Task 8)
 3. **Phase 3**: Fix Application Workflow
 4. **Phase 4**: Settings & Project Management
 5. **Phase 5**: Advanced Features
 
-#### Next: Task 7 - Automatic Test Results Loading
-Ready to implement automatic loading and display of test results after execution completes.
+#### Next: Task 8 - Integrate LLMSuggester for Failure Analysis
+Ready to integrate the existing LLMSuggester component to analyze test failures.
 
 ### Project Structure
 ```
@@ -304,8 +315,8 @@ export QT_QPA_PLATFORM=offscreen  # For headless testing
 4. **Token Usage**: Prefer aider for implementation, Claude for planning
 
 ### Next Steps
-Task 6 (Live Test Output Display) completed successfully with all CI checks passing. 
-Ready to proceed with Task 7 (Automatic Test Results Loading) to continue Phase 2 of GUI development.
+Task 7 (Automatic Test Results Loading) completed successfully with all CI checks passing. 
+Ready to proceed with Task 8 (Integrate LLMSuggester for Failure Analysis) to continue Phase 2 of GUI development.
 
 Remember: 
 - Use aider for complex code implementations
