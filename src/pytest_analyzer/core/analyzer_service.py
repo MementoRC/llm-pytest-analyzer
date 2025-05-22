@@ -534,7 +534,7 @@ class PytestAnalyzerService:
 
     def __init__(
         self,
-        settings: Optional[Settings] = None,
+        settings: Settings,
         llm_client: Optional[Any] = None,
         use_async: bool = False,
         batch_size: int = 5,
@@ -549,7 +549,7 @@ class PytestAnalyzerService:
         :param batch_size: Number of failures to process in each batch
         :param max_concurrency: Maximum number of concurrent LLM requests
         """
-        self.settings = settings or Settings()
+        self.settings = settings
         self.settings.use_llm = True  # Force LLM usage
         self.path_resolver = PathResolver(self.settings.project_root)
         self.analyzer = FailureAnalyzer(max_suggestions=self.settings.max_suggestions)
@@ -568,15 +568,44 @@ class PytestAnalyzerService:
             self.git_available = confirm_git_setup(project_root)
             logger.info(f"Git integration {'enabled' if self.git_available else 'disabled'}")
 
+        # Initialize LLM client based on settings
+        llm_api_client: Optional[Any] = None
+        try:
+            if self.settings.llm_provider == "openai" and self.settings.llm_api_key_openai:
+                import openai
+
+                llm_api_client = openai.OpenAI(api_key=self.settings.llm_api_key_openai)
+                logger.info(
+                    f"OpenAI client initialized for model: {self.settings.llm_model_openai}"
+                )
+            elif self.settings.llm_provider == "anthropic" and self.settings.llm_api_key_anthropic:
+                from anthropic import Anthropic
+
+                llm_api_client = Anthropic(api_key=self.settings.llm_api_key_anthropic)
+                logger.info(
+                    f"Anthropic client initialized for model: {self.settings.llm_model_anthropic}"
+                )
+            elif self.settings.llm_provider != "none":
+                logger.warning(
+                    f"LLM provider '{self.settings.llm_provider}' selected, but API key is missing or provider is unsupported by direct init."
+                )
+        except ImportError as e:
+            logger.error(
+                f"Failed to import LLM client library for {self.settings.llm_provider}: {e}"
+            )
+            llm_api_client = None  # Ensure client is None if import fails
+        except Exception as e:
+            logger.error(f"Failed to initialize LLM client for {self.settings.llm_provider}: {e}")
+            llm_api_client = None
+
         # Always initialize LLM suggester - no rule-based suggester
         self.llm_suggester = LLMSuggester(
-            llm_client=llm_client,
+            llm_client=llm_api_client,
             min_confidence=self.settings.min_confidence,
             timeout_seconds=self.settings.llm_timeout,
             batch_size=batch_size,
             max_concurrency=max_concurrency,
         )
-
         # Prepare fix_applier attribute to accept different implementations
         self.fix_applier: Any = None
         # Initialize fix applier for applying suggestions

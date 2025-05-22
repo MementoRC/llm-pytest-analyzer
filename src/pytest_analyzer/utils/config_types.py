@@ -32,10 +32,17 @@ class Settings:
 
     # LLM settings
     use_llm: bool = True  # Whether to use LLM-based suggestions
-    llm_timeout: int = 60  # Timeout for LLM requests in seconds
-    llm_api_key: Optional[str] = None  # API key for LLM service
-    llm_model: str = "auto"  # Model to use (auto selects available models)
-    llm_provider: str = "auto"  # Provider to use (anthropic, openai, azure, etc.)
+    llm_timeout: int = 120  # Timeout for LLM requests in seconds, increased from 60
+    # llm_api_key: Optional[str] = None  # Generic API key, replaced by specific ones
+    # llm_model: str = "auto"  # Generic model, replaced by specific ones
+
+    # LLM Configuration
+    llm_provider: str = "none"  # 'none', 'openai', 'anthropic'
+    llm_api_key_openai: str = ""
+    llm_api_key_anthropic: str = ""
+    llm_model_openai: str = "gpt-3.5-turbo"
+    llm_model_anthropic: str = "claude-3-haiku-20240307"
+
     use_fallback: bool = True  # Whether to try fallback providers if primary fails
     auto_apply: bool = False  # Whether to automatically apply suggested fixes
 
@@ -64,6 +71,10 @@ class Settings:
 
     # Logging settings
     log_level: str = "INFO"  # Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+
+    # LLM Caching
+    llm_cache_enabled: bool = True
+    llm_cache_ttl_seconds: int = 3600  # 1 hour
 
     # Backward compatibility properties
     debug: bool = False  # Enable debug mode (backward compatibility)

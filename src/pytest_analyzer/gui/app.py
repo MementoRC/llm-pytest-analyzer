@@ -67,6 +67,31 @@ class PytestAnalyzerApp(QApplication):
             if project_root and Path(project_root).exists():
                 self.core_settings.project_root = Path(project_root)
 
+        # Load LLM settings
+        self.core_settings.llm_provider = self.settings.value(
+            "core_settings/llm_provider", self.core_settings.llm_provider
+        )
+        self.core_settings.llm_api_key_openai = self.settings.value(
+            "core_settings/llm_api_key_openai", self.core_settings.llm_api_key_openai
+        )
+        self.core_settings.llm_api_key_anthropic = self.settings.value(
+            "core_settings/llm_api_key_anthropic", self.core_settings.llm_api_key_anthropic
+        )
+        self.core_settings.llm_model_openai = self.settings.value(
+            "core_settings/llm_model_openai", self.core_settings.llm_model_openai
+        )
+        self.core_settings.llm_model_anthropic = self.settings.value(
+            "core_settings/llm_model_anthropic", self.core_settings.llm_model_anthropic
+        )
+        self.core_settings.llm_cache_enabled = self.settings.value(
+            "core_settings/llm_cache_enabled", self.core_settings.llm_cache_enabled, type=bool
+        )
+        self.core_settings.llm_cache_ttl_seconds = self.settings.value(
+            "core_settings/llm_cache_ttl_seconds",
+            self.core_settings.llm_cache_ttl_seconds,
+            type=int,
+        )
+
     def _init_resources(self) -> None:
         """Initialize application resources like icons and themes."""
         # TODO: Add proper resource loading when resources are added
@@ -96,6 +121,30 @@ class PytestAnalyzerApp(QApplication):
         """
         self.settings.setValue(key, value)
         self.settings.sync()
+
+    def save_core_llm_settings(self) -> None:
+        """Save LLM-related core settings to QSettings."""
+        self.settings.setValue("core_settings/llm_provider", self.core_settings.llm_provider)
+        self.settings.setValue(
+            "core_settings/llm_api_key_openai", self.core_settings.llm_api_key_openai
+        )
+        self.settings.setValue(
+            "core_settings/llm_api_key_anthropic", self.core_settings.llm_api_key_anthropic
+        )
+        self.settings.setValue(
+            "core_settings/llm_model_openai", self.core_settings.llm_model_openai
+        )
+        self.settings.setValue(
+            "core_settings/llm_model_anthropic", self.core_settings.llm_model_anthropic
+        )
+        self.settings.setValue(
+            "core_settings/llm_cache_enabled", self.core_settings.llm_cache_enabled
+        )
+        self.settings.setValue(
+            "core_settings/llm_cache_ttl_seconds", self.core_settings.llm_cache_ttl_seconds
+        )
+        self.settings.sync()
+        logger.info("LLM core settings saved to QSettings.")
 
 
 def create_app(argv: Optional[List[str]] = None) -> PytestAnalyzerApp:
