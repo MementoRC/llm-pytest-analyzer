@@ -10,6 +10,7 @@ from .analysis_controller import AnalysisController
 from .base_controller import BaseController
 from .file_controller import FileController
 from .settings_controller import SettingsController
+from .test_discovery_controller import TestDiscoveryController  # Added
 from .test_results_controller import TestResultsController
 
 if TYPE_CHECKING:
@@ -19,6 +20,7 @@ if TYPE_CHECKING:
     from ..main_window import MainWindow
     from ..models.test_results_model import TestResultsModel
     from ..views.file_selection_view import FileSelectionView
+    from ..views.test_discovery_view import TestDiscoveryView  # Added
     from ..views.test_results_view import TestResultsView
 
 logger = logging.getLogger(__name__)
@@ -54,9 +56,10 @@ class MainController(BaseController):
             parent=self,
             task_manager=self.task_manager,
         )
-        self.settings_controller = SettingsController(
-            parent=self, task_manager=self.task_manager
-        )  # Assuming it might need it
+        self.settings_controller = SettingsController(parent=self, task_manager=self.task_manager)
+        self.test_discovery_controller = TestDiscoveryController(
+            self.analyzer_service, parent=self, task_manager=self.task_manager
+        )
 
         self._connect_signals()
         self.logger.info("MainController initialized and signals connected.")
@@ -83,6 +86,13 @@ class MainController(BaseController):
         test_results_view.test_selected.connect(self.test_results_controller.on_test_selected)
         test_results_view.group_selected.connect(self.test_results_controller.on_group_selected)
 
+        # TestDiscoveryView -> TestDiscoveryController
+        test_discovery_view: TestDiscoveryView = self.main_window.test_discovery_view
+        test_discovery_view.discover_tests_requested.connect(
+            self.test_discovery_controller.request_discover_tests
+        )
+        # TestDiscoveryView.selection_changed could be connected if needed by a controller
+
         # --- Controller Signals to Model/View Updates ---
         # FileController -> TestResultsModel
         self.file_controller.results_loaded.connect(self.test_results_model.set_results)
@@ -91,6 +101,17 @@ class MainController(BaseController):
 
         # TestResultsController -> MainWindow Status Label
         self.test_results_controller.status_message_updated.connect(
+            self.main_window.status_label.setText
+        )
+
+        # TestDiscoveryController -> TestDiscoveryView and MainWindow Status
+        self.test_discovery_controller.tests_discovered.connect(
+            test_discovery_view.update_test_tree
+        )
+        self.test_discovery_controller.discovery_started.connect(
+            self.main_window.status_label.setText
+        )  # Or a dedicated slot for more complex updates
+        self.test_discovery_controller.discovery_finished.connect(
             self.main_window.status_label.setText
         )
 
