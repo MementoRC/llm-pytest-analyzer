@@ -1,6 +1,6 @@
 # Task ID: 1
 # Title: Implement Controller Architecture
-# Status: pending
+# Status: in-progress
 # Dependencies: None
 # Priority: high
 # Description: Create the controller directory structure and implement the base controller classes to establish proper MVC architecture.
