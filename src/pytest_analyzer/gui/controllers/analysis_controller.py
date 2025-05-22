@@ -10,6 +10,7 @@ from ...core.analyzer_service import PytestAnalyzerService
 from ...core.models.pytest_failure import FixSuggestion, PytestFailure
 from ..models.test_results_model import (
     AnalysisStatus,
+    TestResult,
     TestResultsModel,
 )
 from .base_controller import BaseController
@@ -335,6 +336,95 @@ class AnalysisController(BaseController):
         else:
             self.logger.warning(
                 f"Task {task_id} completed with unhandled result type: {type(result)}"
+            )
+
+    @pyqtSlot(TestResult)
+    def on_analyze_single_test(self, test_result_to_analyze: TestResult) -> None:
+        """Handle request to analyze a single test."""
+        self.logger.info(f"Single test analysis requested for: {test_result_to_analyze.name}")
+        if not self.task_manager:
+            QMessageBox.critical(
+                None, "Error", "TaskManager not available for single test analysis."
+            )
+            return
+
+        suggester = self.analyzer_service.llm_suggester
+        if not suggester._llm_request_func and not suggester._async_llm_request_func:
+            QMessageBox.warning(
+                None,
+                "LLM Not Configured",
+                "The Language Model (LLM) for generating suggestions is not configured.\n"
+                "Please set the LLM provider and API key in the Settings.",
+            )
+            self.logger.warning("Single test analysis aborted: LLM suggester not configured.")
+            return
+
+        if (
+            not (test_result_to_analyze.is_failed or test_result_to_analyze.is_error)
+            or not test_result_to_analyze.failure_details
+        ):
+            QMessageBox.warning(
+                None,
+                "Analyze Test",
+                f"Test '{test_result_to_analyze.name}' is not a failure or has no details.",
+            )
+            self.logger.warning(
+                f"Cannot analyze test {test_result_to_analyze.name}: not a failure or no details."
+            )
+            # Optionally reset status if it was PENDING from a failed attempt
+            if test_result_to_analyze.analysis_status == AnalysisStatus.ANALYSIS_PENDING:
+                self.test_results_model.update_test_data(
+                    test_name=test_result_to_analyze.name,
+                    analysis_status=AnalysisStatus.NOT_ANALYZED,
+                )
+            return
+
+        # Convert TestResult to PytestFailure
+        pf_failure = PytestFailure(
+            test_name=test_result_to_analyze.name,
+            test_file=str(test_result_to_analyze.file_path)
+            if test_result_to_analyze.file_path
+            else "",
+            error_type=test_result_to_analyze.failure_details.error_type,
+            error_message=test_result_to_analyze.failure_details.message,
+            traceback=test_result_to_analyze.failure_details.traceback,
+            line_number=test_result_to_analyze.failure_details.line_number,
+            # relevant_code and raw_output_section are not in TestResult, keep as None
+        )
+
+        self.logger.info(f"Submitting single test {pf_failure.test_name} for LLM analysis.")
+        self.test_results_model.update_test_data(
+            test_name=pf_failure.test_name, analysis_status=AnalysisStatus.ANALYSIS_PENDING
+        )
+
+        args = ([pf_failure],)  # _generate_suggestions expects a list of PytestFailure
+        kwargs = {
+            "quiet": True,
+            "use_async": self.analyzer_service.use_async,
+        }
+
+        task_id = self.submit_background_task(
+            callable_task=self.analyzer_service._generate_suggestions,
+            args=args,
+            kwargs=kwargs,
+            use_progress_bridge=True,  # Can be True, progress will be for 1 item
+            description=f"Analyzing test {pf_failure.test_name} with LLM...",
+            # task_id_prefix=f"analyze_single_{pf_failure.test_name}_" # Optional for specific handling
+        )
+
+        if task_id:
+            self.logger.info(
+                f"Single test LLM Analysis task submitted with ID: {task_id} for {pf_failure.test_name}"
+            )
+        else:
+            QMessageBox.warning(
+                None,
+                "Analyze Test",
+                f"Failed to submit LLM analysis task for {pf_failure.test_name}.",
+            )
+            self.test_results_model.update_test_data(
+                test_name=pf_failure.test_name,
+                analysis_status=AnalysisStatus.ANALYSIS_FAILED,
             )
 
     @pyqtSlot(str, str)

@@ -29,6 +29,7 @@ from ..models.test_results_model import (
     TestResultsModel,
     TestStatus,
 )
+from .analysis_results_view import AnalysisResultsView
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -176,6 +177,9 @@ class TestResultsView(QWidget):
         self.selected_test: Optional[TestResult] = None
         self.selected_group: Optional[TestGroup] = None
 
+        # Initialize AnalysisResultsView
+        self.analysis_results_view = AnalysisResultsView(self.results_model, self)
+
         # Initialize UI
         self._init_ui()
 
@@ -259,6 +263,7 @@ class TestResultsView(QWidget):
         # Add tabs to details tab widget
         self.details_tabs.addTab(self.failure_details, "Failure Details")
         self.details_tabs.addTab(self.traceback_details, "Traceback")
+        self.details_tabs.addTab(self.analysis_results_view, "Analysis")
 
         # Add details tab widget to details layout
         details_layout.addWidget(self.details_tabs)
@@ -288,15 +293,36 @@ class TestResultsView(QWidget):
         Args:
             model: Test results model
         """
-        # Disconnect old model signals
+        # Disconnect old model signals (for TestResultsView itself)
         if self.results_model:
             self.results_model.results_updated.disconnect(self._on_results_updated)
             self.results_model.groups_updated.disconnect(self._on_groups_updated)
+            # Also disconnect for analysis_results_view if it was connected to the old model
+            if hasattr(self, "analysis_results_view") and self.analysis_results_view.results_model:
+                try:
+                    self.analysis_results_view.results_model.suggestions_updated.disconnect(
+                        self.analysis_results_view._on_model_data_updated
+                    )
+                except TypeError:  # Raised if not connected
+                    pass
+                try:
+                    self.analysis_results_view.results_model.analysis_status_updated.disconnect(
+                        self.analysis_results_view._on_model_data_updated
+                    )
+                except TypeError:  # Raised if not connected
+                    pass
 
         # Set new model
         self.results_model = model
 
-        # Connect new model signals
+        # Update AnalysisResultsView with the new model and reconnect its signals
+        if hasattr(self, "analysis_results_view"):  # If AnalysisResultsView exists
+            self.analysis_results_view.results_model = (
+                self.results_model
+            )  # Give it the new model instance
+            self.analysis_results_view._connect_signals()  # Tell it to connect to this new model instance
+
+        # Connect new model signals (for TestResultsView itself)
         if self.results_model:
             self.results_model.results_updated.connect(self._on_results_updated)
             self.results_model.groups_updated.connect(self._on_groups_updated)
@@ -320,6 +346,9 @@ class TestResultsView(QWidget):
         # Reset selected items
         self.selected_test = None
         self.selected_group = None
+
+        if hasattr(self, "analysis_results_view"):
+            self.analysis_results_view.clear_view()
 
     def _update_summary(self) -> None:
         """Update the summary label with current results data."""
@@ -354,6 +383,8 @@ class TestResultsView(QWidget):
         if not test:
             self.failure_details.clear()
             self.traceback_details.clear()
+            if hasattr(self, "analysis_results_view"):
+                self.analysis_results_view.update_view_for_test(None)
             return
 
         # Update failure details
@@ -379,6 +410,9 @@ class TestResultsView(QWidget):
             self.traceback_details.setPlainText(test.failure_details.traceback)
         else:
             self.traceback_details.clear()
+
+        if hasattr(self, "analysis_results_view"):
+            self.analysis_results_view.update_view_for_test(test)
 
     @pyqtSlot()
     def _on_results_updated(self) -> None:
