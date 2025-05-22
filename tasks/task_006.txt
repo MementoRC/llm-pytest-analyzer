@@ -1,6 +1,6 @@
 # Task ID: 6
 # Title: Implement Live Test Output Display
-# Status: in-progress
+# Status: done
 # Dependencies: 3, 5
 # Priority: medium
 # Description: Create a dedicated tab to display live output from test execution.
