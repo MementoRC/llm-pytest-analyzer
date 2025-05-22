@@ -9,6 +9,7 @@ from rich.progress import Progress
 from pytest_analyzer.core.analyzer_service import PytestAnalyzerService
 from pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
 from pytest_analyzer.utils.resource_manager import performance_tracker
+from pytest_analyzer.utils.settings import Settings
 
 
 class MockLLMClient:
@@ -92,7 +93,11 @@ def sample_failures():
 def analyzer_service_sync(mock_llm_client):
     """Create a synchronous analyzer service."""
     return PytestAnalyzerService(
-        llm_client=mock_llm_client, use_async=False, batch_size=5, max_concurrency=3
+        settings=Settings(),
+        llm_client=mock_llm_client,
+        use_async=False,
+        batch_size=5,
+        max_concurrency=3,
     )
 
 
@@ -100,7 +105,11 @@ def analyzer_service_sync(mock_llm_client):
 def analyzer_service_async(mock_llm_client):
     """Create an asynchronous analyzer service."""
     return PytestAnalyzerService(
-        llm_client=mock_llm_client, use_async=True, batch_size=5, max_concurrency=3
+        settings=Settings(),
+        llm_client=mock_llm_client,
+        use_async=True,
+        batch_size=5,
+        max_concurrency=3,
     )
 
 
