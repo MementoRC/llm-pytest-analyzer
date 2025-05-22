@@ -1,6 +1,6 @@
 # Task ID: 4
 # Title: Implement Test Discovery and Selection UI
-# Status: in-progress
+# Status: done
 # Dependencies: 3
 # Priority: high
 # Description: Create a tree view interface for discovering and selecting tests to run.
