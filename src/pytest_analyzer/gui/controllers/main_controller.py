@@ -1,10 +1,11 @@
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import QObject, pyqtSlot
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
+from ..background.task_manager import TaskManager  # Added import
 from .analysis_controller import AnalysisController
 from .base_controller import BaseController
 from .file_controller import FileController
@@ -27,20 +28,35 @@ class MainController(BaseController):
     """Main orchestration controller for the GUI."""
 
     def __init__(self, main_window: "MainWindow", app: "PytestAnalyzerApp", parent: QObject = None):
-        super().__init__(parent)
+        # Initialize TaskManager first as it's needed by BaseController's __init__
+        self.task_manager = TaskManager(parent=self)
+        # Call super().__init__ once, passing the task_manager
+        super().__init__(parent, task_manager=self.task_manager)
+
+        # Assign other MainController specific attributes
         self.main_window = main_window
         self.app = app
         self.core_settings: CoreSettings = app.core_settings
         self.analyzer_service: PytestAnalyzerService = main_window.analyzer_service
         self.test_results_model: TestResultsModel = main_window.test_results_model
 
-        # Initialize sub-controllers
-        self.file_controller = FileController(self.test_results_model, parent=self)
-        self.test_results_controller = TestResultsController(self.test_results_model, parent=self)
-        self.analysis_controller = AnalysisController(
-            self.analyzer_service, self.test_results_model, parent=self
+        # Initialize sub-controllers, passing TaskManager
+        # BaseController's __init__ for these sub-controllers will correctly receive the task_manager
+        self.file_controller = FileController(
+            self.test_results_model, parent=self, task_manager=self.task_manager
         )
-        self.settings_controller = SettingsController(parent=self)
+        self.test_results_controller = TestResultsController(
+            self.test_results_model, parent=self, task_manager=self.task_manager
+        )
+        self.analysis_controller = AnalysisController(
+            self.analyzer_service,
+            self.test_results_model,
+            parent=self,
+            task_manager=self.task_manager,
+        )
+        self.settings_controller = SettingsController(
+            parent=self, task_manager=self.task_manager
+        )  # Assuming it might need it
 
         self._connect_signals()
         self.logger.info("MainController initialized and signals connected.")
@@ -77,6 +93,40 @@ class MainController(BaseController):
         self.test_results_controller.status_message_updated.connect(
             self.main_window.status_label.setText
         )
+
+        # --- TaskManager Global Signals to MainWindow Status Updates ---
+        self.task_manager.task_started.connect(self._on_global_task_started)
+        self.task_manager.task_progress.connect(self._on_global_task_progress)
+        self.task_manager.task_completed.connect(self._on_global_task_completed)
+        self.task_manager.task_failed.connect(self._on_global_task_failed)
+
+    @pyqtSlot(str, str)
+    def _on_global_task_started(self, task_id: str, description: str) -> None:
+        self.main_window.status_label.setText(f"Task started: {description} ({task_id[:8]}...).")
+        # Optionally, show a global progress bar or indicator
+
+    @pyqtSlot(str, int, str)
+    def _on_global_task_progress(self, task_id: str, percentage: int, message: str) -> None:
+        self.main_window.status_label.setText(
+            f"Progress ({task_id[:8]}...): {percentage}% - {message}"
+        )
+        # Optionally, update a global progress bar
+
+    @pyqtSlot(str, object)
+    def _on_global_task_completed(self, task_id: str, result: Any) -> None:
+        # Result is often not directly shown in status bar, but controller handles it.
+        self.main_window.status_label.setText(f"Task completed: {task_id[:8]}...")
+        # Optionally, hide global progress bar
+
+    @pyqtSlot(str, str)
+    def _on_global_task_failed(self, task_id: str, error_message: str) -> None:
+        self.main_window.status_label.setText(f"Task failed: {task_id[:8]}...")
+        QMessageBox.warning(
+            self.main_window,
+            "Task Error",
+            f"A background task failed ({task_id[:8]}):\n\n{error_message.splitlines()[0]}",  # Show first line
+        )
+        # Optionally, hide global progress bar, show error icon
 
     @pyqtSlot()
     def on_open(self) -> None:
