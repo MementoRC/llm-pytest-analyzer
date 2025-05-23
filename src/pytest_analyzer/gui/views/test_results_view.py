@@ -23,12 +23,14 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ...core.models.pytest_failure import FixSuggestion  # For type hint
 from ..models.test_results_model import (
     TestGroup,
     TestResult,
     TestResultsModel,
     TestStatus,
 )
+from . import fix_suggestion_code_view  # Changed import
 from .analysis_results_view import AnalysisResultsView
 
 # Configure logging
@@ -177,11 +179,15 @@ class TestResultsView(QWidget):
         self.selected_test: Optional[TestResult] = None
         self.selected_group: Optional[TestGroup] = None
 
-        # Initialize AnalysisResultsView
         self.analysis_results_view = AnalysisResultsView(self.results_model, self)
+        self.fix_suggestion_code_view = fix_suggestion_code_view.FixSuggestionCodeView(
+            self
+        )  # Changed instantiation
 
-        # Initialize UI
         self._init_ui()
+
+        # Connect the new signal from AnalysisResultsView
+        self.analysis_results_view.view_code_requested.connect(self._on_view_code_requested)
 
     def _init_ui(self) -> None:
         """Initialize the UI components."""
@@ -264,6 +270,7 @@ class TestResultsView(QWidget):
         self.details_tabs.addTab(self.failure_details, "Failure Details")
         self.details_tabs.addTab(self.traceback_details, "Traceback")
         self.details_tabs.addTab(self.analysis_results_view, "Analysis")
+        self.details_tabs.addTab(self.fix_suggestion_code_view, "Code Preview")  # New tab
 
         # Add details tab widget to details layout
         details_layout.addWidget(self.details_tabs)
@@ -330,6 +337,7 @@ class TestResultsView(QWidget):
             # Update UI with current model data
             self._on_results_updated()
             self._on_groups_updated()
+            self.fix_suggestion_code_view.clear()  # Clear when model changes
 
     def clear(self) -> None:
         """Clear all test results data."""
@@ -349,6 +357,9 @@ class TestResultsView(QWidget):
 
         if hasattr(self, "analysis_results_view"):
             self.analysis_results_view.clear_view()
+
+        if hasattr(self, "fix_suggestion_code_view"):
+            self.fix_suggestion_code_view.clear()
 
     def _update_summary(self) -> None:
         """Update the summary label with current results data."""
@@ -477,6 +488,25 @@ class TestResultsView(QWidget):
 
             # Emit signal
             self.test_selected.emit(self.selected_test)
+
+    @pyqtSlot(FixSuggestion)
+    def _on_view_code_requested(self, fix_suggestion: FixSuggestion) -> None:
+        logger.debug(
+            f"TestResultsView: Received request to view code for suggestion: {fix_suggestion.suggestion[:30]}..."
+        )
+        self.fix_suggestion_code_view.load_fix_suggestion(fix_suggestion)
+
+        # Switch to the "Code Preview" tab
+        code_preview_tab_index = -1
+        for i in range(self.details_tabs.count()):
+            if self.details_tabs.widget(i) == self.fix_suggestion_code_view:
+                code_preview_tab_index = i
+                break
+
+        if code_preview_tab_index != -1:
+            self.details_tabs.setCurrentIndex(code_preview_tab_index)
+        else:
+            logger.error("Could not find 'Code Preview' tab.")
 
     @pyqtSlot()
     def _on_group_selection_changed(self) -> None:
