@@ -1,6 +1,6 @@
 # Task ID: 17
 # Title: Implement Session Management
-# Status: in-progress
+# Status: done
 # Dependencies: 7, 9, 10
 # Priority: low
 # Description: Create functionality to save and restore analysis sessions.

@@ -412,6 +412,23 @@ class MainWindow(QMainWindow):
         self.analyze_action.setStatusTip("Analyze test failures")
         # self.analyze_action.triggered.connect(self.on_analyze) # Now handled by MainController
 
+        # Report actions
+        self.generate_report_action = QAction("&Generate Report...", self)
+        self.generate_report_action.setShortcut(QKeySequence("Ctrl+R"))
+        self.generate_report_action.setStatusTip("Generate a comprehensive analysis report")
+
+        self.quick_html_report_action = QAction("Quick &HTML Report", self)
+        self.quick_html_report_action.setStatusTip("Generate a quick HTML report")
+
+        self.export_pdf_action = QAction("Export to &PDF...", self)
+        self.export_pdf_action.setStatusTip("Export results to PDF format")
+
+        self.export_json_action = QAction("Export to &JSON...", self)
+        self.export_json_action.setStatusTip("Export results to JSON format")
+
+        self.export_csv_action = QAction("Export to &CSV...", self)
+        self.export_csv_action.setStatusTip("Export results to CSV format")
+
         # Help actions
         self.about_action = QAction("&About", self)
         self.about_action.setShortcut(QKeySequence("F1"))
@@ -458,6 +475,18 @@ class MainWindow(QMainWindow):
         self.tools_menu.addAction(self.run_tests_action)
         self.tools_menu.addAction(self.analyze_action)
 
+        # Reports menu
+        self.reports_menu = self.menuBar().addMenu("&Reports")
+        self.reports_menu.addAction(self.generate_report_action)
+        self.reports_menu.addAction(self.quick_html_report_action)
+        self.reports_menu.addSeparator()
+
+        # Export submenu
+        self.export_menu = self.reports_menu.addMenu("&Export")
+        self.export_menu.addAction(self.export_pdf_action)
+        self.export_menu.addAction(self.export_json_action)
+        self.export_menu.addAction(self.export_csv_action)
+
         # Help menu
         self.help_menu = self.menuBar().addMenu("&Help")
         self.help_menu.addAction(self.about_action)
@@ -471,6 +500,8 @@ class MainWindow(QMainWindow):
         self.main_toolbar.addAction(self.open_action)
         self.main_toolbar.addAction(self.run_tests_action)
         self.main_toolbar.addAction(self.analyze_action)
+        self.main_toolbar.addSeparator()
+        self.main_toolbar.addAction(self.generate_report_action)
         self.main_toolbar.addSeparator()
         self.main_toolbar.addAction(self.settings_action)
 

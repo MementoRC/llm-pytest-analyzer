@@ -17,6 +17,7 @@ from .analysis_controller import AnalysisController
 from .base_controller import BaseController
 from .file_controller import FileController
 from .project_controller import ProjectController
+from .report_controller import ReportController
 from .session_controller import SessionController
 from .settings_controller import SettingsController
 from .test_discovery_controller import TestDiscoveryController
@@ -79,6 +80,7 @@ class MainController(BaseController):
             analyzer_service=self.analyzer_service,  # type: ignore
             parent=self,
         )
+        self.report_controller = ReportController(parent=self.main_window)
 
         # Initialize Workflow System
         self.workflow_state_machine = WorkflowStateMachine(parent=self)
@@ -131,6 +133,15 @@ class MainController(BaseController):
             self.session_controller.save_current_session
         )  # type: ignore
 
+        # Report Actions
+        self.main_window.generate_report_action.triggered.connect(
+            self.report_controller.show_report_dialog
+        )  # type: ignore
+        self.main_window.quick_html_report_action.triggered.connect(self._on_quick_html_report)  # type: ignore
+        self.main_window.export_pdf_action.triggered.connect(self._on_export_pdf)  # type: ignore
+        self.main_window.export_json_action.triggered.connect(self._on_export_json)  # type: ignore
+        self.main_window.export_csv_action.triggered.connect(self._on_export_csv)  # type: ignore
+
         # --- View Signals to Controllers ---
         file_selection_view = self.main_window.file_selection_view  # type: ignore
         file_selection_view.file_selected.connect(self.file_controller.on_file_selected)
@@ -147,6 +158,7 @@ class MainController(BaseController):
 
         # --- Controller Signals to Model/View Updates (and Workflow Coordinator) ---
         self.file_controller.results_loaded.connect(self.test_results_model.set_results)
+        self.file_controller.results_loaded.connect(self.report_controller.set_test_results)
         # Status messages are now handled by WorkflowGuide
 
         # TestDiscoveryController -> TestDiscoveryView
@@ -165,6 +177,14 @@ class MainController(BaseController):
         # Connect TestExecutionController signal to TestResultsController slot
         self.test_execution_controller.test_execution_completed.connect(
             self.test_results_controller.auto_load_test_results
+        )
+
+        # Connect test results model signals to report controller
+        self.test_results_model.results_updated.connect(
+            lambda: self.report_controller.set_test_results(self.test_results_model.results)
+        )
+        self.test_results_model.suggestions_updated.connect(
+            lambda: self.report_controller.set_analysis_results(self._get_analysis_results())
         )
 
         # SettingsController -> MainController for LLM updates
@@ -495,3 +515,44 @@ class MainController(BaseController):
         """Handle bookmark removal."""
         logger.info(f"Bookmark removed for test: {test_name}")
         # Could update UI indicators here
+
+    def _on_quick_html_report(self) -> None:
+        """Handle quick HTML report generation."""
+        from ..models.report import ReportFormat, ReportType
+
+        self.report_controller.generate_quick_report(
+            report_type=ReportType.SUMMARY, format=ReportFormat.HTML
+        )
+
+    def _on_export_pdf(self) -> None:
+        """Handle PDF export."""
+        from ..models.report import ReportFormat
+
+        self.report_controller.export_to_format(ReportFormat.PDF)
+
+    def _on_export_json(self) -> None:
+        """Handle JSON export."""
+        from ..models.report import ReportFormat
+
+        self.report_controller.export_to_format(ReportFormat.JSON)
+
+    def _on_export_csv(self) -> None:
+        """Handle CSV export."""
+        from ..models.report import ReportFormat
+
+        self.report_controller.export_to_format(ReportFormat.CSV)
+
+    def _get_analysis_results(self) -> List[Any]:
+        """Get analysis results from test results model."""
+        analysis_results = []
+        for result in self.test_results_model.results:
+            if hasattr(result, "suggestions") and result.suggestions:
+                analysis_results.append(
+                    {
+                        "test_name": result.name,
+                        "suggestions": result.suggestions,
+                        "failure_details": getattr(result, "failure_details", None),
+                        "analysis_status": getattr(result, "analysis_status", None),
+                    }
+                )
+        return analysis_results
