@@ -143,17 +143,17 @@ class PytestAnalyzerApp(QApplication):
             "core_settings/llm_model_anthropic", self.core_settings.llm_model_anthropic
         )
         self.core_settings.llm_cache_enabled = self.settings.value(
-            "core_settings/llm_cache_enabled", self.core_settings.llm_cache_enabled, type=bool
+            "core_settings/llm_cache_enabled", self.core_settings.llm_cache_enabled, value_type=bool
         )
         self.core_settings.llm_cache_ttl_seconds = self.settings.value(
             "core_settings/llm_cache_ttl_seconds",
             self.core_settings.llm_cache_ttl_seconds,
-            type=int,
+            value_type=int,
         )
 
         # Test Execution Settings
         self.core_settings.pytest_timeout = self.settings.value(
-            "core_settings/pytest_timeout", self.core_settings.pytest_timeout, type=int
+            "core_settings/pytest_timeout", self.core_settings.pytest_timeout, value_type=int
         )
         pytest_args_str = self.settings.value("core_settings/pytest_args", "")
         if pytest_args_str:  # Check if the setting exists and is not empty
@@ -161,38 +161,38 @@ class PytestAnalyzerApp(QApplication):
         # else: pytest_args is already default from Settings()
 
         self.core_settings.max_memory_mb = self.settings.value(
-            "core_settings/max_memory_mb", self.core_settings.max_memory_mb, type=int
+            "core_settings/max_memory_mb", self.core_settings.max_memory_mb, value_type=int
         )
         self.core_settings.parser_timeout = self.settings.value(
-            "core_settings/parser_timeout", self.core_settings.parser_timeout, type=int
+            "core_settings/parser_timeout", self.core_settings.parser_timeout, value_type=int
         )
         self.core_settings.analyzer_timeout = self.settings.value(
-            "core_settings/analyzer_timeout", self.core_settings.analyzer_timeout, type=int
+            "core_settings/analyzer_timeout", self.core_settings.analyzer_timeout, value_type=int
         )
         self.core_settings.batch_size = self.settings.value(
-            "core_settings/batch_size", self.core_settings.batch_size, type=int
+            "core_settings/batch_size", self.core_settings.batch_size, value_type=int
         )
         self.core_settings.max_concurrency = self.settings.value(
-            "core_settings/max_concurrency", self.core_settings.max_concurrency, type=int
+            "core_settings/max_concurrency", self.core_settings.max_concurrency, value_type=int
         )
 
         # Analysis Settings
         self.core_settings.max_failures = self.settings.value(
-            "core_settings/max_failures", self.core_settings.max_failures, type=int
+            "core_settings/max_failures", self.core_settings.max_failures, value_type=int
         )
         self.core_settings.max_suggestions = self.settings.value(
-            "core_settings/max_suggestions", self.core_settings.max_suggestions, type=int
+            "core_settings/max_suggestions", self.core_settings.max_suggestions, value_type=int
         )
         self.core_settings.max_suggestions_per_failure = self.settings.value(
             "core_settings/max_suggestions_per_failure",
             self.core_settings.max_suggestions_per_failure,
-            type=int,
+            value_type=int,
         )
         self.core_settings.min_confidence = self.settings.value(
-            "core_settings/min_confidence", self.core_settings.min_confidence, type=float
+            "core_settings/min_confidence", self.core_settings.min_confidence, value_type=float
         )
         self.core_settings.auto_apply = self.settings.value(
-            "core_settings/auto_apply", self.core_settings.auto_apply, type=bool
+            "core_settings/auto_apply", self.core_settings.auto_apply, value_type=bool
         )
 
         # GUI Preferences (Core part)
@@ -205,13 +205,13 @@ class PytestAnalyzerApp(QApplication):
 
         # Git Integration Settings
         self.core_settings.check_git = self.settings.value(
-            "core_settings/check_git", self.core_settings.check_git, type=bool
+            "core_settings/check_git", self.core_settings.check_git, value_type=bool
         )
         self.core_settings.auto_init_git = self.settings.value(
-            "core_settings/auto_init_git", self.core_settings.auto_init_git, type=bool
+            "core_settings/auto_init_git", self.core_settings.auto_init_git, value_type=bool
         )
         self.core_settings.use_git_branches = self.settings.value(
-            "core_settings/use_git_branches", self.core_settings.use_git_branches, type=bool
+            "core_settings/use_git_branches", self.core_settings.use_git_branches, value_type=bool
         )
 
     def _init_resources(self) -> None:
