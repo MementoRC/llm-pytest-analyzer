@@ -1,6 +1,6 @@
 # Task ID: 12
 # Title: Implement Side-by-Side Diff View
-# Status: in-progress
+# Status: done
 # Dependencies: 10, 11
 # Priority: high
 # Description: Create a side-by-side diff view to compare original code with suggested fixes.
