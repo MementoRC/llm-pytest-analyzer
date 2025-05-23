@@ -5,7 +5,10 @@ from typing import TYPE_CHECKING, Any, List, Optional
 from PyQt6.QtCore import QObject, pyqtSlot
 
 from ...core.models.pytest_failure import PytestFailure
-from ..models.test_results_model import TestResult  # Assuming TestResult might be used
+from ..models.test_results_model import (  # Assuming TestResult might be used
+    AnalysisStatus,
+    TestResult,
+)
 from .workflow_guide import WorkflowGuide
 from .workflow_state_machine import WorkflowState, WorkflowStateMachine
 
@@ -66,7 +69,9 @@ class WorkflowCoordinator(QObject):
         # TestDiscoveryController signals
         self.test_discovery_controller.discovery_started.connect(self._handle_discovery_started)
         self.test_discovery_controller.tests_discovered.connect(self._handle_tests_discovered)
-        self.test_discovery_controller.discovery_failed.connect(self._handle_discovery_failed)
+        self.test_discovery_controller.discovery_finished.connect(
+            self._handle_discovery_outcome_message
+        )
 
         # TestExecutionController signals
         # TaskManager's task_started is used by TestExecutionController to show its view.
@@ -83,7 +88,7 @@ class WorkflowCoordinator(QObject):
         # AnalysisController signals
         # Similar to test execution, we need to know when analysis task starts.
         # AnalysisController.on_analyze() submits a task. We can listen to task_manager.task_started.
-        self.analysis_controller.test_results_model.analysis_status_changed.connect(
+        self.analysis_controller.test_results_model.analysis_status_updated.connect(
             self._handle_analysis_status_changed_for_workflow
         )
         # A more direct signal from AnalysisController like `analysis_task_submitted` or `analysis_completed` would be ideal.
@@ -146,13 +151,22 @@ class WorkflowCoordinator(QObject):
     def _handle_discovery_started(self, message: str) -> None:
         self.state_machine.to_tests_discovering()
 
-    @pyqtSlot(list, Path)
-    def _handle_tests_discovered(self, discovered_tests: list, source_path: Path) -> None:
+    @pyqtSlot(list)
+    def _handle_tests_discovered(self, discovered_tests: list) -> None:
         self.state_machine.to_tests_discovered(test_count=len(discovered_tests))
 
     @pyqtSlot(str)
-    def _handle_discovery_failed(self, error_message: str) -> None:
-        self.state_machine.to_error(f"Test discovery failed: {error_message}")
+    def _handle_discovery_outcome_message(self, message: str) -> None:
+        """Handles the discovery_finished signal from TestDiscoveryController."""
+        # Check if the message indicates a failure
+        if message.lower().startswith("discovery failed") or message.lower().startswith(
+            "test discovery failed"
+        ):
+            # The message from TestDiscoveryController is already formatted for error display
+            self.state_machine.to_error(message)
+        # If it's a success message (e.g., "Test discovery complete..."),
+        # the _handle_tests_discovered slot (connected to tests_discovered signal)
+        # should have already handled the state transition. No action needed here for success.
 
     @pyqtSlot(str, str)
     def _handle_task_started_for_workflow(self, task_id: str, description: str) -> None:
@@ -241,43 +255,62 @@ class WorkflowCoordinator(QObject):
         # Let's assume AnalysisController's model `analysis_status_changed` can be used.
         pass  # This will be handled by specific task type handlers or model change listeners.
 
-    @pyqtSlot(str, str, object)  # test_name, status, suggestions
-    def _handle_analysis_status_changed_for_workflow(
-        self, test_name: str, status_str: str, suggestions: Optional[List[Any]]
-    ) -> None:
-        # This signal comes from TestResultsModel.
-        # If all relevant tests are analyzed and some have suggestions:
-        if self.state_machine.current_state == WorkflowState.ANALYSIS_RUNNING:
-            # Check if all pending analyses are done. This is complex.
-            # A simpler trigger: if *any* test gets suggestions, move to FIXES_AVAILABLE.
-            # Or, wait for the analysis task to complete (via TaskManager.task_completed).
+    @pyqtSlot(str)  # test_name
+    def _handle_analysis_status_changed_for_workflow(self, test_name: str) -> None:
+        # This signal comes from TestResultsModel when a test's analysis status is updated.
+        if self.state_machine.current_state != WorkflowState.ANALYSIS_RUNNING:
+            # Only process this if we are in the ANALYSIS_RUNNING state.
+            # Other state transitions (e.g., task completion) should handle other scenarios.
+            return
 
-            # Let's refine: when an *analysis task* (batch) completes,
-            # AnalysisController updates the model. After that, we check.
-            # The `task_manager.task_completed` signal is connected to `AnalysisController._handle_task_completion`.
-            # After that method runs, if suggestions were found, we should transition.
-            # So, AnalysisController should emit a signal.
+        test_result_item: Optional[TestResult] = None
+        for res in self.analysis_controller.test_results_model.results:
+            if res.name == test_name:
+                test_result_item = res
+                break
 
-            # For now, let's assume if *any* test gets suggestions, we can consider fixes available.
-            # This is a simplification. A batch completion signal is better.
-            if status_str == "suggestions_available" and suggestions:
-                # This might fire multiple times. We need a more robust trigger.
-                # For now, if we are in ANALYSIS_RUNNING and get this, transition.
-                # The number of suggestions would ideally be the total from the batch.
-                all_suggestions_count = 0
-                for res in self.analysis_controller.test_results_model.results:
-                    if res.suggestions:
-                        all_suggestions_count += len(res.suggestions)
+        if not test_result_item:
+            logger.warning(f"Received analysis status update for unknown test: {test_name}")
+            return
 
-                if all_suggestions_count > 0:
-                    self.state_machine.to_fixes_available(suggestion_count=all_suggestions_count)
-            elif status_str == "analyzed_no_suggestions":
-                # If all analyses are done and no suggestions, what state?
-                # Potentially back to RESULTS_AVAILABLE or a new "ANALYSIS_COMPLETE_NO_FIXES" state.
-                # For now, if an analysis task completes and no suggestions, we might stay in RESULTS_AVAILABLE
-                # or go to a specific "no fixes" state.
-                # This needs a signal from AnalysisController indicating batch completion.
-                pass
+        current_analysis_status = test_result_item.analysis_status
+        suggestions = test_result_item.suggestions
+
+        # This slot might be called for each test that gets analyzed.
+        # We want to transition to FIXES_AVAILABLE if *any* test has suggestions
+        # and we are in the ANALYSIS_RUNNING state.
+        # The transition should ideally happen once the overall analysis task is complete.
+        # However, if we want to react as soon as the first suggestion is available:
+        if current_analysis_status == AnalysisStatus.SUGGESTIONS_AVAILABLE and suggestions:
+            # To avoid multiple transitions if many tests get suggestions,
+            # we could check if we've already transitioned or rely on the analysis task completion.
+            # For now, let's assume this signal means at least one suggestion is ready.
+            # The state machine's `to_fixes_available` should be idempotent or handle multiple calls.
+
+            # Recalculate total suggestions to pass to the state machine
+            all_suggestions_count = 0
+            for res_item in self.analysis_controller.test_results_model.results:
+                if res_item.suggestions:
+                    all_suggestions_count += len(res_item.suggestions)
+
+            if all_suggestions_count > 0:
+                # Transition if we are still in ANALYSIS_RUNNING.
+                # The state machine itself might prevent redundant transitions.
+                self.state_machine.to_fixes_available(suggestion_count=all_suggestions_count)
+
+        # If a test is analyzed and has no suggestions, or analysis failed for it,
+        # we don't necessarily change the overall workflow state based on a single test.
+        # The overall state change (e.g., to RESULTS_AVAILABLE if all analysis is done with no suggestions)
+        # should be triggered by the completion of the analysis *task* (batch).
+        # This slot primarily reacts to the *presence* of suggestions to enable the "Fixes Available" state.
+        elif current_analysis_status == AnalysisStatus.ANALYZED_NO_SUGGESTIONS:
+            # Potentially, if all tests are analyzed and none have suggestions,
+            # the analysis task completion handler would transition to an appropriate state.
+            pass
+        elif current_analysis_status == AnalysisStatus.ANALYSIS_FAILED:
+            # Similar to above, individual analysis failure might not change workflow state
+            # unless it's a global failure handled by task_failed.
+            pass
 
     # Placeholder for FixController signal handlers
     # def _handle_fix_applied(self, task_id: str, application_result: dict) -> None:

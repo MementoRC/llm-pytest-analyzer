@@ -1,18 +1,48 @@
 # Task ID: 2
-# Title: Implement Background Task Management
-# Status: done
+# Title: Define Protocol Interfaces
+# Status: pending
 # Dependencies: 1
 # Priority: high
-# Description: Create a background task management system using Qt QThread to handle long-running operations without freezing the UI.
+# Description: Create clear interfaces using Python's Protocol type for all major components
 # Details:
-Implement a TaskManager class that handles background processing using Qt's QThread mechanism. Include:
-- Task queue management
-- Progress reporting through Qt signals/slots
-- Cancellation support for long-running operations
-- Error handling and user feedback
-- Thread-safe communication with the main UI thread
+Define Protocol classes for all major components in the system: Extractor, Analyzer, Suggester, Applier, and LLM Service. Use Python's typing.Protocol to define these interfaces.
 
-Create a WorkerThread class that can execute arbitrary tasks and report progress. Implement proper thread synchronization and error handling.
+Example implementation:
+```python
+from typing import Protocol, List, Optional
+from dataclasses import dataclass
+
+@dataclass
+class TestFailure:
+    test_name: str
+    error_message: str
+    traceback: str
+
+class Extractor(Protocol):
+    def extract_failures(self, test_output: str) -> List[TestFailure]:
+        ...
+
+class Analyzer(Protocol):
+    def analyze_failure(self, failure: TestFailure) -> str:
+        ...
+
+class Suggester(Protocol):
+    def suggest_fix(self, analysis: str, failure: TestFailure) -> str:
+        ...
+
+class Applier(Protocol):
+    def apply_fix(self, suggestion: str, file_path: str) -> bool:
+        ...
+
+class LLMService(Protocol):
+    def generate_completion(self, prompt: str) -> str:
+        ...
+
+    async def generate_completion_async(self, prompt: str) -> str:
+        ...
+```
+
+Ensure all interfaces have proper docstrings explaining their purpose and contract.
 
 # Test Strategy:
-Test thread creation, task execution, progress reporting, and cancellation. Verify thread safety with concurrent operations. Test error handling and recovery. Ensure UI remains responsive during long-running tasks.
+Create test cases that verify implementations conform to the protocols. Use mypy or similar static type checkers to verify protocol conformance. Write documentation tests that demonstrate proper usage of each interface.

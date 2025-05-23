@@ -1,18 +1,45 @@
 # Task ID: 4
-# Title: Implement Test Discovery and Selection UI
-# Status: done
-# Dependencies: 3
-# Priority: high
-# Description: Create a tree view interface for discovering and selecting tests to run.
+# Title: Implement Analyzer Component
+# Status: pending
+# Dependencies: 2, 3
+# Priority: medium
+# Description: Refactor the test failure analysis logic into a dedicated component with proper interfaces
 # Details:
-Implement a test selection interface with:
-- Tree view of discovered tests organized by modules/classes
-- Checkbox selection for individual tests/suites
-- Filter functionality by test names, files, or directories
-- Support for pytest markers and custom filters
-- Context menu for common actions
+Create concrete implementations of the Analyzer protocol. The analyzer should analyze test failures and provide context for suggesting fixes. Implement proper error handling and logging.
 
-Use Qt's QTreeView with a custom model to represent the test hierarchy. Store selection state and restore it across sessions. Connect selection changes to the TestExecutionController.
+Example implementation:
+```python
+import logging
+from typing import Optional
+from .interfaces import Analyzer, TestFailure, LLMService
+
+class LLMBasedAnalyzer(Analyzer):
+    def __init__(self, llm_service: LLMService, logger: Optional[logging.Logger] = None):
+        self.llm_service = llm_service
+        self.logger = logger or logging.getLogger(__name__)
+
+    def analyze_failure(self, failure: TestFailure) -> str:
+        self.logger.info(f"Analyzing failure for test: {failure.test_name}")
+
+        try:
+            prompt = f"""Analyze the following pytest test failure and explain what might be causing it:
+
+Test name: {failure.test_name}
+Error message: {failure.error_message}
+Traceback:
+{failure.traceback}
+
+Provide a detailed analysis of what's causing this failure:"""
+
+            analysis = self.llm_service.generate_completion(prompt)
+            self.logger.debug(f"Generated analysis: {analysis[:100]}...")
+            return analysis
+        except Exception as e:
+            self.logger.error(f"Error analyzing test failure: {str(e)}")
+            raise
+```
+
+Ensure the implementation handles different types of test failures and provides useful analysis.
 
 # Test Strategy:
-Test UI rendering of test hierarchy. Verify selection persistence across sessions. Test filter functionality with various criteria. Ensure proper handling of large test suites with lazy loading.
+Create unit tests with mock LLMService to verify the analyzer correctly formats prompts and handles responses. Test error handling by simulating LLM service failures. Verify that the analyzer correctly logs operations and errors.

@@ -1,18 +1,62 @@
 # Task ID: 6
-# Title: Implement Live Test Output Display
-# Status: done
-# Dependencies: 3, 5
+# Title: Implement Applier Component
+# Status: pending
+# Dependencies: 2, 5
 # Priority: medium
-# Description: Create a dedicated tab to display live output from test execution.
+# Description: Refactor the fix application logic into a dedicated component with proper interfaces
 # Details:
-Implement a test output display with:
-- Real-time capture and display of stdout/stderr
-- Syntax highlighting for Python code and test output
-- Auto-scrolling with option to pause
-- Output filtering options
-- Copy to clipboard functionality
+Create concrete implementations of the Applier protocol. The applier should apply suggested fixes to the code. Implement proper error handling, logging, and file backup mechanisms.
 
-Use a QTextEdit with custom formatting for different output types. Implement efficient text handling to avoid UI freezing with large outputs. Connect to output signals from the TestExecutionController.
+Example implementation:
+```python
+import logging
+import os
+import re
+from typing import Optional
+from .interfaces import Applier
+
+class FileSystemApplier(Applier):
+    def __init__(self, logger: Optional[logging.Logger] = None):
+        self.logger = logger or logging.getLogger(__name__)
+
+    def apply_fix(self, suggestion: str, file_path: str) -> bool:
+        self.logger.info(f"Applying fix to file: {file_path}")
+
+        if not os.path.exists(file_path):
+            self.logger.error(f"File not found: {file_path}")
+            return False
+
+        try:
+            # Create backup of the file
+            backup_path = f"{file_path}.bak"
+            with open(file_path, 'r') as src, open(backup_path, 'w') as dst:
+                dst.write(src.read())
+
+            # Extract code changes from suggestion
+            code_pattern = r"```python\n([\s\S]+?)\n```"
+            code_match = re.search(code_pattern, suggestion)
+
+            if not code_match:
+                self.logger.warning("No code block found in suggestion")
+                return False
+
+            new_code = code_match.group(1)
+
+            # Apply changes (simplified example - in reality would need to be more sophisticated)
+            with open(file_path, 'w') as f:
+                f.write(new_code)
+
+            self.logger.info(f"Successfully applied fix to {file_path}")
+            return True
+        except Exception as e:
+            self.logger.error(f"Error applying fix: {str(e)}")
+            # Restore from backup if it exists
+            if os.path.exists(backup_path):
+                os.replace(backup_path, file_path)
+            return False
+```
+
+Ensure the implementation safely applies changes and includes rollback mechanisms.
 
 # Test Strategy:
-Test output capture with various test scenarios. Verify performance with large output volumes. Test auto-scrolling and pause functionality. Ensure proper formatting and highlighting of different output types.
+Create unit tests with temporary files to verify the applier correctly applies changes. Test error handling by simulating file system errors. Verify that backups are created and restored properly in case of failures. Test with various suggestion formats.

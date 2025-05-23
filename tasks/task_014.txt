@@ -1,18 +1,123 @@
 # Task ID: 14
-# Title: Implement Git Integration
-# Status: done
-# Dependencies: 13
+# Title: Implement Configuration Management
+# Status: pending
+# Dependencies: None
 # Priority: medium
-# Description: Add Git integration for tracking and committing applied fixes.
+# Description: Create a configuration management system for the application
 # Details:
-Enhance the FixController with Git integration:
-- Detect Git repositories
-- Show file status (modified, staged, etc.)
-- Create commits for applied fixes
-- Support for custom commit messages
-- Basic branch management
+Implement a configuration management system. Support loading configuration from files, environment variables, and command-line arguments.
 
-Use GitPython or similar library for Git operations. Implement proper error handling for Git commands. Use the background task system for Git operations to avoid blocking the UI.
+Example implementation:
+```python
+import os
+import json
+import logging
+from typing import Dict, Any, Optional
+from dataclasses import dataclass, field
+
+@dataclass
+class LLMConfig:
+    api_key: str = ""
+    model: str = "gpt-4"
+    max_retries: int = 3
+    timeout: int = 30
+
+@dataclass
+class LoggingConfig:
+    log_level: str = "INFO"
+    log_file: Optional[str] = None
+    telemetry_file: Optional[str] = None
+
+@dataclass
+class AppConfig:
+    llm: LLMConfig = field(default_factory=LLMConfig)
+    logging: LoggingConfig = field(default_factory=LoggingConfig)
+    templates_path: Optional[str] = None
+
+class ConfigManager:
+    def __init__(self, logger: Optional[logging.Logger] = None):
+        self.logger = logger or logging.getLogger(__name__)
+        self.config = AppConfig()
+
+    def load_from_file(self, file_path: str) -> None:
+        self.logger.info(f"Loading configuration from file: {file_path}")
+
+        if not os.path.exists(file_path):
+            self.logger.warning(f"Configuration file not found: {file_path}")
+            return
+
+        try:
+            with open(file_path, 'r') as f:
+                config_data = json.load(f)
+
+            # Update LLM config
+            if "llm" in config_data:
+                llm_config = config_data["llm"]
+                if "api_key" in llm_config:
+                    self.config.llm.api_key = llm_config["api_key"]
+                if "model" in llm_config:
+                    self.config.llm.model = llm_config["model"]
+                if "max_retries" in llm_config:
+                    self.config.llm.max_retries = llm_config["max_retries"]
+                if "timeout" in llm_config:
+                    self.config.llm.timeout = llm_config["timeout"]
+
+            # Update logging config
+            if "logging" in config_data:
+                logging_config = config_data["logging"]
+                if "log_level" in logging_config:
+                    self.config.logging.log_level = logging_config["log_level"]
+                if "log_file" in logging_config:
+                    self.config.logging.log_file = logging_config["log_file"]
+                if "telemetry_file" in logging_config:
+                    self.config.logging.telemetry_file = logging_config["telemetry_file"]
+
+            # Update other config
+            if "templates_path" in config_data:
+                self.config.templates_path = config_data["templates_path"]
+
+            self.logger.info("Configuration loaded successfully")
+        except Exception as e:
+            self.logger.error(f"Error loading configuration: {str(e)}")
+
+    def load_from_env(self) -> None:
+        self.logger.info("Loading configuration from environment variables")
+
+        # LLM config
+        if "PYTEST_ANALYZER_API_KEY" in os.environ:
+            self.config.llm.api_key = os.environ["PYTEST_ANALYZER_API_KEY"]
+        if "PYTEST_ANALYZER_MODEL" in os.environ:
+            self.config.llm.model = os.environ["PYTEST_ANALYZER_MODEL"]
+        if "PYTEST_ANALYZER_MAX_RETRIES" in os.environ:
+            try:
+                self.config.llm.max_retries = int(os.environ["PYTEST_ANALYZER_MAX_RETRIES"])
+            except ValueError:
+                self.logger.warning("Invalid value for PYTEST_ANALYZER_MAX_RETRIES")
+        if "PYTEST_ANALYZER_TIMEOUT" in os.environ:
+            try:
+                self.config.llm.timeout = int(os.environ["PYTEST_ANALYZER_TIMEOUT"])
+            except ValueError:
+                self.logger.warning("Invalid value for PYTEST_ANALYZER_TIMEOUT")
+
+        # Logging config
+        if "PYTEST_ANALYZER_LOG_LEVEL" in os.environ:
+            self.config.logging.log_level = os.environ["PYTEST_ANALYZER_LOG_LEVEL"]
+        if "PYTEST_ANALYZER_LOG_FILE" in os.environ:
+            self.config.logging.log_file = os.environ["PYTEST_ANALYZER_LOG_FILE"]
+        if "PYTEST_ANALYZER_TELEMETRY_FILE" in os.environ:
+            self.config.logging.telemetry_file = os.environ["PYTEST_ANALYZER_TELEMETRY_FILE"]
+
+        # Other config
+        if "PYTEST_ANALYZER_TEMPLATES_PATH" in os.environ:
+            self.config.templates_path = os.environ["PYTEST_ANALYZER_TEMPLATES_PATH"]
+
+        self.logger.info("Environment configuration loaded successfully")
+
+    def get_config(self) -> AppConfig:
+        return self.config
+```
+
+Ensure the implementation supports loading configuration from multiple sources with appropriate precedence.
 
 # Test Strategy:
-Test Git operations with various repository states. Verify commit creation and message formatting. Test error handling for Git operations. Ensure proper detection of Git repositories.
+Create unit tests to verify configuration loading from files and environment variables. Test with various configuration formats and values. Verify that configuration precedence works correctly. Test error handling for invalid configuration files and values.

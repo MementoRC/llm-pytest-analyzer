@@ -1,18 +1,93 @@
 # Task ID: 13
-# Title: Integrate FixApplier for Code Modifications
-# Status: done
-# Dependencies: 10, 12
-# Priority: high
-# Description: Integrate the existing FixApplier component to apply suggested fixes to source files.
+# Title: Implement Logging and Telemetry
+# Status: pending
+# Dependencies: None
+# Priority: medium
+# Description: Enhance logging with consistent levels and messages, and add telemetry for important operations
 # Details:
-Implement the FixController to:
-- Connect to the existing FixApplier components
-- Apply selected fixes to source files
-- Handle file backup and restoration
-- Track applied changes
-- Support batch fix application
+Implement a consistent logging and telemetry system. Create a logging configuration, telemetry events, and performance monitoring.
 
-Implement proper error handling for file operations. Create a change history mechanism to track applied fixes. Use the background task system for file operations.
+Example implementation:
+```python
+import logging
+import time
+import json
+from typing import Dict, Any, Optional, Callable
+from functools import wraps
+
+class LoggingManager:
+    def __init__(self, log_level: int = logging.INFO, log_file: Optional[str] = None):
+        self.log_level = log_level
+        self.log_file = log_file
+        self._configure_logging()
+
+    def _configure_logging(self) -> None:
+        root_logger = logging.getLogger()
+        root_logger.setLevel(self.log_level)
+
+        # Clear existing handlers
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
+
+        # Console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(self.log_level)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        console_handler.setFormatter(formatter)
+        root_logger.addHandler(console_handler)
+
+        # File handler if specified
+        if self.log_file:
+            file_handler = logging.FileHandler(self.log_file)
+            file_handler.setLevel(self.log_level)
+            file_handler.setFormatter(formatter)
+            root_logger.addHandler(file_handler)
+
+    def get_logger(self, name: str) -> logging.Logger:
+        return logging.getLogger(name)
+
+class TelemetryManager:
+    def __init__(self, logger: Optional[logging.Logger] = None,
+                 telemetry_file: Optional[str] = None):
+        self.logger = logger or logging.getLogger(__name__)
+        self.telemetry_file = telemetry_file
+
+    def record_event(self, event_type: str, data: Dict[str, Any]) -> None:
+        event = {
+            "timestamp": time.time(),
+            "type": event_type,
+            "data": data
+        }
+
+        self.logger.debug(f"Telemetry event: {event_type}")
+
+        if self.telemetry_file:
+            try:
+                with open(self.telemetry_file, 'a') as f:
+                    f.write(json.dumps(event) + '\n')
+            except Exception as e:
+                self.logger.warning(f"Failed to write telemetry event: {str(e)}")
+
+    def measure_performance(self, operation_name: str):
+        def decorator(func):
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                start_time = time.time()
+                result = func(*args, **kwargs)
+                end_time = time.time()
+                duration = end_time - start_time
+
+                self.record_event("performance", {
+                    "operation": operation_name,
+                    "duration": duration
+                })
+
+                return result
+            return wrapper
+        return decorator
+```
+
+Ensure the implementation provides consistent logging and telemetry throughout the codebase.
 
 # Test Strategy:
-Test fix application with various code changes. Verify file backup and restoration. Test error handling during file operations. Ensure changes are correctly applied to source files.
+Create unit tests to verify logging configuration and telemetry recording. Test the performance measurement decorator with various functions. Verify that telemetry events are properly recorded to the specified file. Test error handling when the telemetry file is not writable.

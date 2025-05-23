@@ -37,10 +37,16 @@ class MainController(BaseController):
     """Main orchestration controller for the GUI."""
 
     def __init__(self, main_window: "MainWindow", app: "PytestAnalyzerApp", parent: QObject = None):
-        # Initialize TaskManager first as it's needed by BaseController's __init__
+        # Call super().__init__ first. This ensures that the QObject part of this
+        # MainController instance is properly initialized before 'self' is used
+        # as a parent for other QObjects. BaseController.__init__ will be called,
+        # and its self.task_manager attribute will be initially set to None.
+        super().__init__(parent=parent)
+
+        # Now, create the TaskManager. 'self' can now be safely used as its parent.
+        # This line also sets the 'self.task_manager' attribute (which is defined
+        # in BaseController and used by it) to the new TaskManager instance.
         self.task_manager = TaskManager(parent=self)
-        # Call super().__init__ once, passing the task_manager
-        super().__init__(parent, task_manager=self.task_manager)
 
         # Assign other MainController specific attributes
         self.main_window = main_window
@@ -187,9 +193,9 @@ class MainController(BaseController):
             lambda: self.report_controller.set_analysis_results(self._get_analysis_results())
         )
 
-        # SettingsController -> MainController for LLM updates
-        self.settings_controller.llm_settings_changed.connect(self._on_llm_settings_changed)
-        self._update_llm_status_label()
+        # SettingsController -> MainController for core settings updates
+        self.settings_controller.core_settings_changed.connect(self._on_core_settings_changed)
+        self._update_llm_status_label()  # Still relevant as LLM settings are part of core settings
 
         # ProjectController connections
         self.project_controller.project_changed.connect(self._on_project_changed)
@@ -381,28 +387,31 @@ class MainController(BaseController):
         self.main_window.llm_status_label.setText(status_text)  # type: ignore
         self.logger.debug(f"LLM status label updated: {status_text}")
 
-    @pyqtSlot()
-    def _on_llm_settings_changed(self) -> None:
-        """Handles changes to LLM settings."""
+    @pyqtSlot("PyQt_PyObject")  # Argument type hint for CoreSettings
+    def _on_core_settings_changed(self, updated_settings: "CoreSettings") -> None:
+        """Handles changes to core application settings."""
         self.logger.info(
-            "LLM settings changed. Re-initializing analysis service and clearing cache."
+            "Core settings changed. Re-initializing analysis service and clearing cache."
         )
 
-        self.analyzer_service = PytestAnalyzerService(settings=self.app.core_settings)  # type: ignore
+        # self.app.core_settings is already updated by SettingsController before this signal is emitted.
+        # updated_settings parameter is the new settings object.
+        # We re-initialize services based on self.app.core_settings which should be the same as updated_settings.
+        self.analyzer_service = PytestAnalyzerService(settings=self.app.core_settings)
 
         self.analysis_controller.analyzer_service = self.analyzer_service
         self.test_discovery_controller.analyzer_service = self.analyzer_service
-        self.test_execution_controller.analyzer_service = self.analyzer_service  # type: ignore
+        self.test_execution_controller.analyzer_service = self.analyzer_service
 
         if hasattr(self.analysis_controller, "suggestion_cache"):
             self.analysis_controller.suggestion_cache.clear()
             self.logger.info("Analysis suggestion cache cleared.")
 
-        self._update_llm_status_label()
+        self._update_llm_status_label()  # LLM status might have changed
         QMessageBox.information(
             self.main_window,  # type: ignore
             "Settings Changed",
-            "LLM settings have been updated. The analysis service has been re-initialized.",
+            "Core settings have been updated. Services have been re-initialized.",
         )
 
     @pyqtSlot(str, str)

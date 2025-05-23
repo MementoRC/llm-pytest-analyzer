@@ -1,18 +1,77 @@
 # Task ID: 8
-# Title: Integrate LLMSuggester for Failure Analysis
-# Status: done
-# Dependencies: 1, 2, 7
-# Priority: high
-# Description: Integrate the existing LLMSuggester component to analyze test failures.
+# Title: Implement PromptBuilder Component
+# Status: pending
+# Dependencies: 7
+# Priority: medium
+# Description: Create a PromptBuilder component for constructing prompts for the LLM service
 # Details:
-Implement the AnalysisController to:
-- Connect to the existing LLMSuggester components
-- Trigger automatic analysis of failed tests
-- Handle LLM API communication in background threads
-- Process and store analysis results
-- Handle API errors and rate limiting
+Implement a component for building prompts for the LLM service. Support templates, context management, and prompt optimization.
 
-Use the background task system to perform analysis without blocking the UI. Implement caching to avoid redundant API calls. Handle authentication and API key management securely.
+Example implementation:
+```python
+import logging
+from typing import Dict, Any, Optional
+from string import Template
+
+class PromptBuilder:
+    def __init__(self, templates_path: Optional[str] = None, logger: Optional[logging.Logger] = None):
+        self.logger = logger or logging.getLogger(__name__)
+        self.templates: Dict[str, Template] = {}
+
+        # Default templates
+        self.templates["analyze"] = Template("""Analyze the following pytest test failure and explain what might be causing it:
+
+Test name: ${test_name}
+Error message: ${error_message}
+Traceback:
+${traceback}
+
+Provide a detailed analysis of what's causing this failure:""")
+
+        self.templates["suggest"] = Template("""Based on the following analysis of a pytest test failure, suggest a specific code fix:
+
+Test name: ${test_name}
+Error message: ${error_message}
+Traceback:
+${traceback}
+
+Analysis:
+${analysis}
+
+Provide a specific code fix that would resolve this issue:""")
+
+        # Load custom templates if provided
+        if templates_path:
+            self._load_templates(templates_path)
+
+    def _load_templates(self, templates_path: str) -> None:
+        # Implementation to load templates from files
+        pass
+
+    def build_prompt(self, template_name: str, context: Dict[str, Any]) -> str:
+        self.logger.debug(f"Building prompt using template: {template_name}")
+
+        if template_name not in self.templates:
+            self.logger.error(f"Template not found: {template_name}")
+            raise KeyError(f"Template not found: {template_name}")
+
+        try:
+            prompt = self.templates[template_name].substitute(context)
+            self.logger.debug(f"Built prompt: {prompt[:50]}...")
+            return prompt
+        except KeyError as e:
+            self.logger.error(f"Missing context variable: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Error building prompt: {str(e)}")
+            raise
+
+    def register_template(self, name: str, template_string: str) -> None:
+        self.logger.debug(f"Registering template: {name}")
+        self.templates[name] = Template(template_string)
+```
+
+Ensure the implementation supports loading templates from files and customizing templates at runtime.
 
 # Test Strategy:
-Test integration with LLMSuggester using mock failures. Verify API communication and error handling. Test caching mechanism for repeated analyses. Ensure proper handling of rate limits and API errors.
+Create unit tests to verify template substitution works correctly. Test error handling for missing templates and context variables. Verify that custom templates can be registered and used. Test loading templates from files.

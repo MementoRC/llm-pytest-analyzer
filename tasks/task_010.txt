@@ -1,18 +1,89 @@
 # Task ID: 10
-# Title: Implement Fix Suggestion Display
-# Status: done
-# Dependencies: 8, 9
+# Title: Implement State Machine Base Class
+# Status: pending
+# Dependencies: None
 # Priority: high
-# Description: Create a UI component to display LLM-generated fix suggestions with code highlighting and diff view.
+# Description: Create a state machine base class for managing complex processes
 # Details:
-Implement a fix suggestion display with:
-- Rich text display of suggested fixes
-- Code highlighting for Python syntax
-- Diff view showing proposed changes
-- Navigation between multiple suggestions
-- Suggestion ranking/scoring display
+Implement a base class for state machines to manage complex processes. Support state transitions, event handling, and error recovery.
 
-Use a custom widget combining QTextEdit and a diff viewer component. Implement syntax highlighting using QSyntaxHighlighter. Connect to the AnalysisController to receive fix suggestions.
+Example implementation:
+```python
+import logging
+from typing import Dict, Any, List, Optional, Set, Callable, TypeVar, Generic
+from enum import Enum
+
+T = TypeVar('T', bound=Enum)
+
+class StateMachine(Generic[T]):
+    def __init__(self, initial_state: T, logger: Optional[logging.Logger] = None):
+        self.current_state = initial_state
+        self.logger = logger or logging.getLogger(__name__)
+        self.transitions: Dict[T, Set[T]] = {}  # Valid state transitions
+        self.handlers: Dict[T, Callable[[], None]] = {}  # State handlers
+        self.error_handlers: Dict[T, Callable[[Exception], None]] = {}  # Error handlers
+        self.context: Dict[str, Any] = {}  # Shared context
+
+    def add_transition(self, from_state: T, to_state: T) -> None:
+        self.logger.debug(f"Adding transition: {from_state} -> {to_state}")
+
+        if from_state not in self.transitions:
+            self.transitions[from_state] = set()
+
+        self.transitions[from_state].add(to_state)
+
+    def add_handler(self, state: T, handler: Callable[[], None]) -> None:
+        self.logger.debug(f"Adding handler for state: {state}")
+        self.handlers[state] = handler
+
+    def add_error_handler(self, state: T, handler: Callable[[Exception], None]) -> None:
+        self.logger.debug(f"Adding error handler for state: {state}")
+        self.error_handlers[state] = handler
+
+    def transition_to(self, new_state: T) -> bool:
+        self.logger.info(f"Attempting transition: {self.current_state} -> {new_state}")
+
+        # Check if transition is valid
+        if self.current_state in self.transitions and new_state in self.transitions[self.current_state]:
+            self.current_state = new_state
+            self.logger.info(f"Transitioned to state: {new_state}")
+            return True
+        else:
+            self.logger.warning(f"Invalid transition: {self.current_state} -> {new_state}")
+            return False
+
+    def run(self) -> None:
+        self.logger.info(f"Starting state machine in state: {self.current_state}")
+
+        while True:
+            if self.current_state not in self.handlers:
+                self.logger.warning(f"No handler for state: {self.current_state}")
+                break
+
+            try:
+                self.handlers[self.current_state]()  # Execute handler for current state
+            except Exception as e:
+                self.logger.error(f"Error in state {self.current_state}: {str(e)}")
+
+                # Execute error handler if available
+                if self.current_state in self.error_handlers:
+                    try:
+                        self.error_handlers[self.current_state](e)
+                    except Exception as err_e:
+                        self.logger.error(f"Error in error handler: {str(err_e)}")
+                        break
+                else:
+                    break
+
+            # If no more transitions, we're done
+            if self.current_state not in self.transitions or not self.transitions[self.current_state]:
+                self.logger.info(f"Reached terminal state: {self.current_state}")
+                break
+
+        self.logger.info(f"State machine execution completed in state: {self.current_state}")
+```
+
+Ensure the implementation supports complex state transitions, error handling, and context sharing between states.
 
 # Test Strategy:
-Test rendering of various fix suggestions. Verify diff view accuracy. Test navigation between multiple suggestions. Ensure proper highlighting of code changes.
+Create unit tests to verify state transitions, handler execution, and error handling. Test with simple state machines to verify the base functionality. Test error recovery mechanisms. Verify that invalid transitions are properly rejected.

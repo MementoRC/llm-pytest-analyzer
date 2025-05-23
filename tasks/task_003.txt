@@ -1,18 +1,53 @@
 # Task ID: 3
-# Title: Integrate PytestAnalyzerService for Test Execution
-# Status: done
-# Dependencies: 1, 2
-# Priority: high
-# Description: Integrate the existing PytestAnalyzerService with the GUI to enable test execution directly from the interface.
+# Title: Implement Extractor Component
+# Status: pending
+# Dependencies: 2
+# Priority: medium
+# Description: Refactor the test failure extraction logic into a dedicated component with proper interfaces
 # Details:
-Connect the TestExecutionController to the existing PytestAnalyzerService. Implement methods to:
-- Discover available tests in a project
-- Execute selected tests
-- Capture test output in real-time
-- Track test execution progress
-- Handle test execution errors
+Create concrete implementations of the Extractor protocol. The extractor should parse pytest output and extract test failures. Implement proper error handling and logging.
 
-Use the background task system to run tests without blocking the UI. Implement proper signal connections to update the UI with test progress and results.
+Example implementation:
+```python
+from typing import List, Optional
+import re
+import logging
+from .interfaces import Extractor, TestFailure
+
+class PytestExtractor(Extractor):
+    def __init__(self, logger: Optional[logging.Logger] = None):
+        self.logger = logger or logging.getLogger(__name__)
+
+    def extract_failures(self, test_output: str) -> List[TestFailure]:
+        self.logger.debug(f"Extracting failures from {len(test_output)} bytes of test output")
+        failures = []
+
+        # Regex pattern to match pytest failures
+        failure_pattern = r"E\s+(.+?)\n([\s\S]+?)(?=\n\n|$)"
+
+        try:
+            for match in re.finditer(failure_pattern, test_output):
+                error_message = match.group(1)
+                traceback = match.group(2)
+
+                # Extract test name from traceback
+                test_name_match = re.search(r"([\w\.]+)::([\w\.]+)", traceback)
+                test_name = test_name_match.group(0) if test_name_match else "Unknown test"
+
+                failures.append(TestFailure(
+                    test_name=test_name,
+                    error_message=error_message,
+                    traceback=traceback
+                ))
+
+            self.logger.info(f"Extracted {len(failures)} test failures")
+            return failures
+        except Exception as e:
+            self.logger.error(f"Error extracting failures: {str(e)}")
+            raise
+```
+
+Ensure the implementation handles different pytest output formats and edge cases.
 
 # Test Strategy:
-Test integration with PytestAnalyzerService using mock test suites. Verify test discovery, execution, and result capture. Test error handling during test execution. Ensure progress tracking accurately reflects test execution state.
+Create unit tests with sample pytest outputs of varying formats. Test error handling by providing malformed inputs. Verify that all extracted failures contain the correct information. Test with both successful and failing test outputs.

@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ..core.analyzer_service import PytestAnalyzerService
+from .controllers.main_controller import MainController
 from .models.test_results_model import (
     TestResultsModel,
 )
@@ -118,6 +119,9 @@ class MainWindow(QMainWindow):
         self._create_menus()
         self._create_toolbars()
         self._create_statusbar()
+
+        # Initialize MainController
+        self.main_controller = MainController(main_window=self, app=self.app)
 
         # Restore window state if available
         self._restore_state()
