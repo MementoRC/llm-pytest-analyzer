@@ -16,6 +16,7 @@ from ..workflow import (
 from .analysis_controller import AnalysisController
 from .base_controller import BaseController
 from .file_controller import FileController
+from .project_controller import ProjectController
 from .settings_controller import SettingsController
 from .test_discovery_controller import TestDiscoveryController
 from .test_execution_controller import TestExecutionController
@@ -65,6 +66,7 @@ class MainController(BaseController):
             app=self.app,
             parent=self,  # type: ignore
         )
+        self.project_controller = ProjectController(parent=self)
         self.test_discovery_controller = TestDiscoveryController(
             self.analyzer_service, parent=self, task_manager=self.task_manager
         )
@@ -108,6 +110,14 @@ class MainController(BaseController):
         self.main_window.analyze_action.triggered.connect(self.analysis_controller.on_analyze)  # type: ignore
         self.main_window.settings_action.triggered.connect(self.settings_controller.on_settings)  # type: ignore
 
+        # Project Management Actions
+        self.main_window.open_project_action.triggered.connect(
+            self.project_controller.show_project_selection
+        )  # type: ignore
+        self.main_window.new_project_action.triggered.connect(
+            self.project_controller.show_project_selection
+        )  # type: ignore
+
         # --- View Signals to Controllers ---
         file_selection_view = self.main_window.file_selection_view  # type: ignore
         file_selection_view.file_selected.connect(self.file_controller.on_file_selected)
@@ -147,6 +157,16 @@ class MainController(BaseController):
         # SettingsController -> MainController for LLM updates
         self.settings_controller.llm_settings_changed.connect(self._on_llm_settings_changed)
         self._update_llm_status_label()
+
+        # ProjectController connections
+        self.project_controller.project_changed.connect(self._on_project_changed)
+        self.project_controller.settings_updated.connect(self._on_project_settings_updated)
+        self.project_controller.status_message_updated.connect(self._update_status_message)
+
+        # Recent projects menu updates
+        self.project_controller.project_manager.recent_projects_updated.connect(
+            self.main_window.update_recent_projects_menu
+        )
 
         # --- Workflow System Connections ---
         self.workflow_guide.guidance_updated.connect(self._update_status_bar_guidance)
@@ -386,3 +406,40 @@ class MainController(BaseController):
 
         # Update status bar (already handled by WorkflowGuide -> _update_status_bar_guidance)
         # Potentially update other UI elements, e.g., highlighting current step in a visual guide
+
+    def _on_project_changed(self, project) -> None:
+        """Handle project change."""
+        from ..models.project import Project
+
+        if isinstance(project, Project):
+            # Update window title
+            self.main_window.setWindowTitle(f"Pytest Analyzer - {project.name}")
+
+            # Update core settings to use project settings
+            self.core_settings = project.settings
+            self.analyzer_service = PytestAnalyzerService(settings=project.settings)
+
+            # Update workflow state
+            self.workflow_state_machine.transition_to(WorkflowState.IDLE)
+
+            logger.info(f"Project changed to: {project.name}")
+
+    def _on_project_settings_updated(self, settings) -> None:
+        """Handle project settings update."""
+        # Update core settings reference
+        self.core_settings = settings
+
+        # Recreate analyzer service with new settings
+        self.analyzer_service = PytestAnalyzerService(settings=settings)
+
+        # Update controllers that depend on settings
+        self.analysis_controller.analyzer_service = self.analyzer_service
+        self.test_discovery_controller.analyzer_service = self.analyzer_service
+        self.test_execution_controller.analyzer_service = self.analyzer_service
+
+        logger.info("Project settings updated")
+
+    def _update_status_message(self, message: str) -> None:
+        """Update status bar message."""
+        if hasattr(self.main_window, "status_label"):
+            self.main_window.status_label.setText(message)

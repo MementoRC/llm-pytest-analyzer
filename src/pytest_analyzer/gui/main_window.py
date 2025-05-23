@@ -188,6 +188,47 @@ class MainWindow(QMainWindow):
         # This will be connected by the main controller
         logger.debug("Refresh requested via keyboard shortcut")
 
+    def update_recent_projects_menu(self, recent_paths: list) -> None:
+        """Update the recent projects menu with the given paths."""
+        if not self.recent_projects_menu:
+            return
+
+        # Clear existing actions
+        self.recent_projects_menu.clear()
+
+        if not recent_paths:
+            self.recent_projects_menu.setEnabled(False)
+            return
+
+        self.recent_projects_menu.setEnabled(True)
+
+        # Add actions for each recent project
+        for i, path in enumerate(recent_paths[:10]):  # Limit to 10 recent projects
+            if path.exists():
+                action = QAction(f"&{i + 1} {path.name}", self)
+                action.setStatusTip(f"Open project: {path}")
+                action.setData(path)  # Store path in action data
+                action.triggered.connect(
+                    lambda checked, p=path: self._on_recent_project_selected(p)
+                )
+                self.recent_projects_menu.addAction(action)
+
+        if self.recent_projects_menu.actions():
+            self.recent_projects_menu.addSeparator()
+            clear_action = QAction("&Clear Recent Projects", self)
+            clear_action.triggered.connect(self._on_clear_recent_projects)
+            self.recent_projects_menu.addAction(clear_action)
+
+    def _on_recent_project_selected(self, path) -> None:
+        """Handle recent project selection."""
+        # This will be connected by the main controller via a signal
+        logger.debug(f"Recent project selected: {path}")
+
+    def _on_clear_recent_projects(self) -> None:
+        """Handle clear recent projects action."""
+        # This will be connected by the main controller via a signal
+        logger.debug("Clear recent projects requested")
+
     @property
     def analyzer_service(self):
         """Lazy-loaded analyzer service."""
@@ -326,6 +367,17 @@ class MainWindow(QMainWindow):
         self.open_action.setStatusTip("Open a test file or directory")
         # self.open_action.triggered.connect(self.on_open) # Now handled by MainController
 
+        # Project actions
+        self.open_project_action = QAction("Open &Project...", self)
+        self.open_project_action.setShortcut(QKeySequence("Ctrl+Shift+O"))
+        self.open_project_action.setStatusTip("Open or select a project")
+
+        self.new_project_action = QAction("&New Project...", self)
+        self.new_project_action.setShortcut(QKeySequence("Ctrl+Shift+N"))
+        self.new_project_action.setStatusTip("Create a new project")
+
+        self.recent_projects_menu = None  # Will be created in _create_menus
+
         self.exit_action = QAction("E&xit", self)
         self.exit_action.setShortcut(QKeySequence.StandardKey.Quit)
         self.exit_action.setStatusTip("Exit the application")
@@ -357,6 +409,20 @@ class MainWindow(QMainWindow):
     def _create_menus(self) -> None:
         """Create the application menus."""
         self.file_menu = self.menuBar().addMenu("&File")
+
+        # Project submenu
+        self.project_menu = self.file_menu.addMenu("&Project")
+        self.project_menu.addAction(self.new_project_action)
+        self.project_menu.addAction(self.open_project_action)
+        self.project_menu.addSeparator()
+
+        # Recent projects submenu
+        self.recent_projects_menu = self.project_menu.addMenu("&Recent Projects")
+        self.recent_projects_menu.setEnabled(
+            False
+        )  # Will be enabled when there are recent projects
+
+        self.file_menu.addSeparator()
         self.file_menu.addAction(self.open_action)
         self.file_menu.addSeparator()
         self.file_menu.addAction(self.exit_action)
