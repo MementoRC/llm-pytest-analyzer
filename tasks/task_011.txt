@@ -1,6 +1,6 @@
 # Task ID: 11
 # Title: Implement Embedded Code Editor
-# Status: pending
+# Status: in-progress
 # Dependencies: 1
 # Priority: high
 # Description: Create an embedded code editor for viewing and modifying code with syntax highlighting.
