@@ -186,7 +186,7 @@
       "dependencies": [
         13
       ],
-      "status": "pending",
+      "status": "in-progress",
       "subtasks": []
     },
     {
@@ -260,7 +260,7 @@
         10,
         13
       ],
-      "status": "in-progress",
+      "status": "done",
       "subtasks": []
     },
     {
