@@ -5,9 +5,10 @@ This module contains the AnalysisResultsView widget for displaying
 LLM analysis results for test failures.
 """
 
+import hashlib
 import logging
 from html import escape
-from typing import Optional
+from typing import Dict, Optional
 
 from PyQt6.QtCore import QUrl, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import (  # QDesktopServices imported as per user spec
@@ -45,6 +46,10 @@ class AnalysisResultsView(QWidget):
         super().__init__(parent)
         self.results_model = model
         self.current_test: Optional[TestResult] = None
+
+        # HTML content cache for performance
+        self._html_cache: Dict[str, str] = {}
+        self._cache_max_size = 100  # Maximum cached HTML contents
 
         self._init_ui()
         self._connect_signals()
@@ -164,7 +169,43 @@ class AnalysisResultsView(QWidget):
         self.text_browser.setHtml(html_content)
         self._update_button_states()
 
+    def _get_cache_key(self, test_result: TestResult) -> str:
+        """Generate a cache key for the test result HTML."""
+        # Create hash from test name, status, and suggestions
+        content = f"{test_result.name}:{test_result.analysis_status.name}"
+        if test_result.suggestions:
+            suggestions_str = "|".join(
+                [
+                    f"{s.suggestion}:{s.confidence}:{s.explanation or ''}"
+                    for s in test_result.suggestions
+                ]
+            )
+            content += f":{suggestions_str}"
+
+        return hashlib.md5(content.encode()).hexdigest()
+
     def _generate_html_content(self, test_result: TestResult) -> str:
+        """Generate HTML content with caching for performance."""
+        # Check cache first
+        cache_key = self._get_cache_key(test_result)
+        if cache_key in self._html_cache:
+            logger.debug(f"Using cached HTML for test: {test_result.name}")
+            return self._html_cache[cache_key]
+
+        # Generate new HTML content
+        html_content = self._generate_html_content_impl(test_result)
+
+        # Cache the result (with size limit)
+        if len(self._html_cache) >= self._cache_max_size:
+            # Remove oldest entries (simple FIFO eviction)
+            oldest_key = next(iter(self._html_cache))
+            del self._html_cache[oldest_key]
+
+        self._html_cache[cache_key] = html_content
+        logger.debug(f"Cached HTML for test: {test_result.name}")
+        return html_content
+
+    def _generate_html_content_impl(self, test_result: TestResult) -> str:
         # Basic CSS
         css = """
         <style>

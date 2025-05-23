@@ -7,8 +7,9 @@ for the Pytest Analyzer GUI.
 
 import logging
 import sys
+import time
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from PyQt6.QtCore import QSettings, Qt
 from PyQt6.QtWidgets import QApplication
@@ -17,6 +18,63 @@ from ..utils.settings import Settings
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+
+class SettingsCache:
+    """Cache for QSettings to reduce I/O operations."""
+
+    def __init__(self, settings: QSettings, ttl_seconds: int = 300):
+        self.settings = settings
+        self.ttl_seconds = ttl_seconds
+        self._cache: Dict[str, tuple[Any, float]] = {}  # key -> (value, timestamp)
+
+    def value(self, key: str, default_value: Any = None, value_type: Any = None) -> Any:
+        """Get value from cache or QSettings."""
+        now = time.time()
+
+        # Check cache first
+        if key in self._cache:
+            cached_value, timestamp = self._cache[key]
+            if now - timestamp < self.ttl_seconds:
+                return cached_value
+
+        # Load from QSettings and cache it
+        if value_type is not None:
+            value = self.settings.value(key, default_value, type=value_type)
+        else:
+            value = self.settings.value(key, default_value)
+        self._cache[key] = (value, now)
+        return value
+
+    def setValue(self, key: str, value: Any) -> None:
+        """Set value in QSettings and update cache."""
+        self.settings.setValue(key, value)
+        self._cache[key] = (value, time.time())
+
+    def contains(self, key: str) -> bool:
+        """Check if key exists (cached check)."""
+        now = time.time()
+
+        # Check cache first
+        if key in self._cache:
+            _, timestamp = self._cache[key]
+            if now - timestamp < self.ttl_seconds:
+                return True
+
+        # Check QSettings and cache result
+        exists = self.settings.contains(key)
+        if exists:
+            # Cache that it exists (we don't cache the value yet)
+            self._cache[key] = (None, now)
+        return exists
+
+    def clear_cache(self) -> None:
+        """Clear the cache."""
+        self._cache.clear()
+
+    def sync(self) -> None:
+        """Sync QSettings."""
+        self.settings.sync()
 
 
 class PytestAnalyzerApp(QApplication):
@@ -55,8 +113,9 @@ class PytestAnalyzerApp(QApplication):
 
     def _init_settings(self) -> None:
         """Initialize application settings."""
-        # Create QSettings for GUI-specific settings
-        self.settings = QSettings()
+        # Create QSettings for GUI-specific settings with caching
+        self._qsettings = QSettings()
+        self.settings = SettingsCache(self._qsettings, ttl_seconds=300)  # 5 minute cache
 
         # Load core settings
         self.core_settings = Settings()

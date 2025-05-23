@@ -9,7 +9,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import QSettings, QSize, Qt, pyqtSlot
-from PyQt6.QtGui import QAction
+from PyQt6.QtGui import QAction, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QLabel,
     QMainWindow,
@@ -26,17 +26,51 @@ from ..core.analyzer_service import PytestAnalyzerService
 from .models.test_results_model import (
     TestResultsModel,
 )
-from .views.file_selection_view import FileSelectionView
-from .views.test_discovery_view import TestDiscoveryView
-from .views.test_execution_progress_view import TestExecutionProgressView  # Added
-from .views.test_output_view import TestOutputView  # Added
-from .views.test_results_view import TestResultsView
+
+# Views will be imported lazily when needed
+from .views.test_execution_progress_view import TestExecutionProgressView  # Always needed
 
 if TYPE_CHECKING:
     from .app import PytestAnalyzerApp
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+
+class LazyTabWidget(QTabWidget):
+    """A tab widget that creates tabs only when they are first accessed."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._lazy_tabs = {}  # tab_index: (title, factory_func)
+        self._created_tabs = set()  # track which tabs have been created
+        self.currentChanged.connect(self._on_tab_changed)
+
+    def add_lazy_tab(self, factory_func, title: str) -> int:
+        """Add a tab that will be created lazily when first accessed."""
+        tab_index = self.addTab(QWidget(), title)  # Add placeholder widget
+        self._lazy_tabs[tab_index] = (title, factory_func)
+        return tab_index
+
+    def _on_tab_changed(self, index: int):
+        """Create tab content when tab is first accessed."""
+        if index in self._lazy_tabs and index not in self._created_tabs:
+            title, factory_func = self._lazy_tabs[index]
+            try:
+                widget = factory_func()
+                self.removeTab(index)  # Remove placeholder
+                self.insertTab(index, widget, title)
+                self.setCurrentIndex(index)  # Restore selection
+                self._created_tabs.add(index)
+                logger.debug(f"Lazily created tab: {title}")
+            except Exception as e:
+                logger.error(f"Failed to create lazy tab '{title}': {e}")
+
+    def get_widget(self, index: int):
+        """Get widget at index, creating it if necessary."""
+        if index in self._lazy_tabs and index not in self._created_tabs:
+            self._on_tab_changed(index)
+        return self.widget(index)
 
 
 class MainWindow(QMainWindow):
@@ -57,12 +91,26 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.app = app
-        self.analyzer_service = PytestAnalyzerService(settings=app.core_settings)
-        self.test_results_model = TestResultsModel()
+        # Defer service creation until needed
+        self._analyzer_service = None
+        self._test_results_model = None
+
+        # Track lazy-loaded views
+        self._file_selection_view = None
+        self._test_discovery_view = None
+        self._test_results_view = None
+        self._test_output_view = None
 
         # Set window properties
         self.setWindowTitle("Pytest Analyzer")
         self.resize(1200, 800)
+        self.setMinimumSize(800, 600)
+
+        # Set window icon and properties for better UX
+        self.setWindowRole("pytest-analyzer-main")
+
+        # Enable window state saving
+        self.setObjectName("MainWindow")
 
         # Initialize UI components
         self._init_ui()
@@ -74,7 +122,144 @@ class MainWindow(QMainWindow):
         # Restore window state if available
         self._restore_state()
 
+        # Setup keyboard shortcuts
+        self._setup_shortcuts()
+
         logger.info("MainWindow initialized")
+
+    def _setup_shortcuts(self) -> None:
+        """Setup keyboard shortcuts for better accessibility."""
+        # Tab navigation shortcuts
+        next_tab_shortcut = QShortcut(QKeySequence("Ctrl+Tab"), self)
+        next_tab_shortcut.activated.connect(self._next_tab)
+
+        prev_tab_shortcut = QShortcut(QKeySequence("Ctrl+Shift+Tab"), self)
+        prev_tab_shortcut.activated.connect(self._prev_tab)
+
+        # Selection tabs shortcuts
+        tab1_shortcut = QShortcut(QKeySequence("Ctrl+1"), self)
+        tab1_shortcut.activated.connect(lambda: self.selection_tabs.setCurrentIndex(0))
+
+        tab2_shortcut = QShortcut(QKeySequence("Ctrl+2"), self)
+        tab2_shortcut.activated.connect(lambda: self.selection_tabs.setCurrentIndex(1))
+
+        # Analysis tabs shortcuts
+        results_shortcut = QShortcut(QKeySequence("Ctrl+3"), self)
+        results_shortcut.activated.connect(lambda: self.analysis_tabs.setCurrentIndex(0))
+
+        output_shortcut = QShortcut(QKeySequence("Ctrl+4"), self)
+        output_shortcut.activated.connect(lambda: self.analysis_tabs.setCurrentIndex(1))
+
+        # Refresh/reload shortcut
+        refresh_shortcut = QShortcut(QKeySequence("F5"), self)
+        refresh_shortcut.activated.connect(self._refresh_current_view)
+
+        logger.debug("Keyboard shortcuts configured")
+
+    def _next_tab(self) -> None:
+        """Navigate to next tab in current tab widget."""
+        focused_widget = self.focusWidget()
+        if hasattr(focused_widget, "parent"):
+            # Find which tab widget has focus and navigate
+            parent = focused_widget
+            while parent:
+                if isinstance(parent, (QTabWidget, LazyTabWidget)):
+                    current = parent.currentIndex()
+                    next_index = (current + 1) % parent.count()
+                    parent.setCurrentIndex(next_index)
+                    break
+                parent = parent.parent()
+
+    def _prev_tab(self) -> None:
+        """Navigate to previous tab in current tab widget."""
+        focused_widget = self.focusWidget()
+        if hasattr(focused_widget, "parent"):
+            parent = focused_widget
+            while parent:
+                if isinstance(parent, (QTabWidget, LazyTabWidget)):
+                    current = parent.currentIndex()
+                    prev_index = (current - 1) % parent.count()
+                    parent.setCurrentIndex(prev_index)
+                    break
+                parent = parent.parent()
+
+    def _refresh_current_view(self) -> None:
+        """Refresh the currently active view."""
+        # This will be connected by the main controller
+        logger.debug("Refresh requested via keyboard shortcut")
+
+    @property
+    def analyzer_service(self):
+        """Lazy-loaded analyzer service."""
+        if self._analyzer_service is None:
+            self._analyzer_service = PytestAnalyzerService(settings=self.app.core_settings)
+            logger.debug("Created analyzer service")
+        return self._analyzer_service
+
+    @property
+    def test_results_model(self):
+        """Lazy-loaded test results model."""
+        if self._test_results_model is None:
+            self._test_results_model = TestResultsModel()
+            logger.debug("Created test results model")
+        return self._test_results_model
+
+    def _create_file_selection_view(self):
+        """Factory function for file selection view."""
+        if self._file_selection_view is None:
+            from .views.file_selection_view import FileSelectionView
+
+            self._file_selection_view = FileSelectionView()
+            logger.debug("Created file selection view")
+        return self._file_selection_view
+
+    def _create_test_discovery_view(self):
+        """Factory function for test discovery view."""
+        if self._test_discovery_view is None:
+            from .views.test_discovery_view import TestDiscoveryView
+
+            self._test_discovery_view = TestDiscoveryView()
+            logger.debug("Created test discovery view")
+        return self._test_discovery_view
+
+    def _create_test_results_view(self):
+        """Factory function for test results view."""
+        if self._test_results_view is None:
+            from .views.test_results_view import TestResultsView
+
+            self._test_results_view = TestResultsView()
+            self._test_results_view.set_results_model(self.test_results_model)
+            logger.debug("Created test results view")
+        return self._test_results_view
+
+    def _create_test_output_view(self):
+        """Factory function for test output view."""
+        if self._test_output_view is None:
+            from .views.test_output_view import TestOutputView
+
+            self._test_output_view = TestOutputView()
+            logger.debug("Created test output view")
+        return self._test_output_view
+
+    @property
+    def file_selection_view(self):
+        """Get file selection view, creating if needed."""
+        return self._create_file_selection_view()
+
+    @property
+    def test_discovery_view(self):
+        """Get test discovery view, creating if needed."""
+        return self._create_test_discovery_view()
+
+    @property
+    def test_results_view(self):
+        """Get test results view, creating if needed."""
+        return self._create_test_results_view()
+
+    @property
+    def test_output_view(self):
+        """Get test output view, creating if needed."""
+        return self._create_test_output_view()
 
     def _init_ui(self) -> None:
         """Initialize the UI components."""
@@ -96,35 +281,22 @@ class MainWindow(QMainWindow):
         self.test_selection_layout.setContentsMargins(0, 0, 0, 0)
         self.test_selection_widget.setMinimumWidth(350)  # Adjusted min width
 
-        # Create TabWidget for selection views
-        self.selection_tabs = QTabWidget()
-
-        # Create file selection view
-        self.file_selection_view = FileSelectionView()
-        self.selection_tabs.addTab(self.file_selection_view, "Select Files/Reports")
-
-        # Create test discovery view
-        self.test_discovery_view = TestDiscoveryView()
-        self.selection_tabs.addTab(self.test_discovery_view, "Discover Tests")
+        # Create lazy TabWidget for selection views
+        self.selection_tabs = LazyTabWidget()
+        self.selection_tabs.add_lazy_tab(self._create_file_selection_view, "Select Files/Reports")
+        self.selection_tabs.add_lazy_tab(self._create_test_discovery_view, "Discover Tests")
 
         self.test_selection_layout.addWidget(self.selection_tabs)
-
-        # Create test results view
-        self.test_results_view = TestResultsView()
-        self.test_results_view.set_results_model(self.test_results_model)
-        # Connections for test_selected and group_selected will be handled by MainController
 
         # Create a QTabWidget for the analysis area (results and output)
         self.analysis_widget = QWidget()
         self.analysis_layout = QVBoxLayout(self.analysis_widget)
         self.analysis_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.analysis_tabs = QTabWidget()
-        self.analysis_tabs.addTab(self.test_results_view, "Test Results")
-
-        # Create test output view and add it as a tab
-        self.test_output_view = TestOutputView()
-        self.analysis_tabs.addTab(self.test_output_view, "Live Test Output")
+        # Create lazy TabWidget for analysis views
+        self.analysis_tabs = LazyTabWidget()
+        self.analysis_tabs.add_lazy_tab(self._create_test_results_view, "Test Results")
+        self.analysis_tabs.add_lazy_tab(self._create_test_output_view, "Live Test Output")
 
         self.analysis_layout.addWidget(self.analysis_tabs)
 
@@ -149,30 +321,36 @@ class MainWindow(QMainWindow):
     def _create_actions(self) -> None:
         """Create actions for menus and toolbars."""
         # File actions
-        self.open_action = QAction("Open", self)
+        self.open_action = QAction("&Open", self)
+        self.open_action.setShortcut(QKeySequence.StandardKey.Open)
         self.open_action.setStatusTip("Open a test file or directory")
         # self.open_action.triggered.connect(self.on_open) # Now handled by MainController
 
-        self.exit_action = QAction("Exit", self)
+        self.exit_action = QAction("E&xit", self)
+        self.exit_action.setShortcut(QKeySequence.StandardKey.Quit)
         self.exit_action.setStatusTip("Exit the application")
         self.exit_action.triggered.connect(self.close)
 
         # Edit actions
-        self.settings_action = QAction("Settings", self)
+        self.settings_action = QAction("&Settings", self)
+        self.settings_action.setShortcut(QKeySequence("Ctrl+,"))
         self.settings_action.setStatusTip("Edit application settings")
         # self.settings_action.triggered.connect(self.on_settings) # Now handled by MainController
 
         # Tools actions
-        self.run_tests_action = QAction("Run Tests", self)
+        self.run_tests_action = QAction("&Run Tests", self)
+        self.run_tests_action.setShortcut(QKeySequence("F5"))
         self.run_tests_action.setStatusTip("Run the selected tests")
         # self.run_tests_action.triggered.connect(self.on_run_tests) # Now handled by MainController
 
-        self.analyze_action = QAction("Analyze", self)
+        self.analyze_action = QAction("&Analyze", self)
+        self.analyze_action.setShortcut(QKeySequence("F6"))
         self.analyze_action.setStatusTip("Analyze test failures")
         # self.analyze_action.triggered.connect(self.on_analyze) # Now handled by MainController
 
         # Help actions
-        self.about_action = QAction("About", self)
+        self.about_action = QAction("&About", self)
+        self.about_action.setShortcut(QKeySequence("F1"))
         self.about_action.setStatusTip("Show information about Pytest Analyzer")
         # self.about_action.triggered.connect(self.on_about) # Now handled by MainController
 
@@ -216,11 +394,25 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
 
+        # Main status label
         self.status_label = QLabel("Ready")
         self.status_bar.addWidget(self.status_label)
 
-        self.llm_status_label = QLabel("LLM: Not configured")  # Placeholder
+        # Add permanent widgets for useful information
+        self.progress_label = QLabel("")
+        self.status_bar.addPermanentWidget(self.progress_label)
+
+        # Test count indicator
+        self.test_count_label = QLabel("Tests: 0")
+        self.status_bar.addPermanentWidget(self.test_count_label)
+
+        # LLM status indicator
+        self.llm_status_label = QLabel("LLM: Not configured")
         self.status_bar.addPermanentWidget(self.llm_status_label)
+
+        # Memory usage indicator (optional)
+        self.memory_label = QLabel("")
+        self.status_bar.addPermanentWidget(self.memory_label)
 
     def _restore_state(self) -> None:
         """Restore window state from settings."""

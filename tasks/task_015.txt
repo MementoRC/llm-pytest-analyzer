@@ -1,6 +1,6 @@
 # Task ID: 15
 # Title: Implement Settings Dialog
-# Status: in-progress
+# Status: done
 # Dependencies: 1
 # Priority: medium
 # Description: Create a comprehensive settings dialog for configuring application preferences.
