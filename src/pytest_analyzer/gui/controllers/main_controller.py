@@ -521,7 +521,7 @@ class MainController(BaseController):
         from ..models.report import ReportFormat, ReportType
 
         self.report_controller.generate_quick_report(
-            report_type=ReportType.SUMMARY, format=ReportFormat.HTML
+            report_type=ReportType.SUMMARY, report_format=ReportFormat.HTML
         )
 
     def _on_export_pdf(self) -> None:
