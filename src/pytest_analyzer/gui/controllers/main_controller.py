@@ -17,6 +17,7 @@ from .analysis_controller import AnalysisController
 from .base_controller import BaseController
 from .file_controller import FileController
 from .project_controller import ProjectController
+from .session_controller import SessionController
 from .settings_controller import SettingsController
 from .test_discovery_controller import TestDiscoveryController
 from .test_execution_controller import TestExecutionController
@@ -67,6 +68,7 @@ class MainController(BaseController):
             parent=self,  # type: ignore
         )
         self.project_controller = ProjectController(parent=self)
+        self.session_controller = SessionController(parent=self)
         self.test_discovery_controller = TestDiscoveryController(
             self.analyzer_service, parent=self, task_manager=self.task_manager
         )
@@ -118,6 +120,17 @@ class MainController(BaseController):
             self.project_controller.show_project_selection
         )  # type: ignore
 
+        # Session Management Actions
+        self.main_window.manage_sessions_action.triggered.connect(
+            self.session_controller.show_session_management
+        )  # type: ignore
+        self.main_window.new_session_action.triggered.connect(
+            lambda: self.session_controller.create_new_session()
+        )  # type: ignore
+        self.main_window.save_session_action.triggered.connect(
+            self.session_controller.save_current_session
+        )  # type: ignore
+
         # --- View Signals to Controllers ---
         file_selection_view = self.main_window.file_selection_view  # type: ignore
         file_selection_view.file_selected.connect(self.file_controller.on_file_selected)
@@ -167,6 +180,12 @@ class MainController(BaseController):
         self.project_controller.project_manager.recent_projects_updated.connect(
             self.main_window.update_recent_projects_menu
         )
+
+        # SessionController connections
+        self.session_controller.session_changed.connect(self._on_session_changed)
+        self.session_controller.status_message_updated.connect(self._update_status_message)
+        self.session_controller.bookmark_added.connect(self._on_bookmark_added)
+        self.session_controller.bookmark_removed.connect(self._on_bookmark_removed)
 
         # --- Workflow System Connections ---
         self.workflow_guide.guidance_updated.connect(self._update_status_bar_guidance)
@@ -443,3 +462,36 @@ class MainController(BaseController):
         """Update status bar message."""
         if hasattr(self.main_window, "status_label"):
             self.main_window.status_label.setText(message)
+
+    def _on_session_changed(self, session_data) -> None:
+        """Handle session change."""
+        from ..models.session import SessionData
+
+        if isinstance(session_data, SessionData):
+            # Update window title to include session name
+            current_title = self.main_window.windowTitle()
+            if " - Session:" in current_title:
+                base_title = current_title.split(" - Session:")[0]
+            else:
+                base_title = current_title
+
+            new_title = f"{base_title} - Session: {session_data.metadata.name}"
+            self.main_window.setWindowTitle(new_title)
+
+            # Update session with current test results if any
+            if hasattr(self.test_results_model, "results") and self.test_results_model.results:
+                self.session_controller.update_session_with_test_results(
+                    self.test_results_model.results
+                )
+
+            logger.info(f"Session changed to: {session_data.metadata.name}")
+
+    def _on_bookmark_added(self, test_name: str, bookmark_type: str) -> None:
+        """Handle bookmark addition."""
+        logger.info(f"Bookmark added for test: {test_name} ({bookmark_type})")
+        # Could update UI indicators here
+
+    def _on_bookmark_removed(self, test_name: str) -> None:
+        """Handle bookmark removal."""
+        logger.info(f"Bookmark removed for test: {test_name}")
+        # Could update UI indicators here

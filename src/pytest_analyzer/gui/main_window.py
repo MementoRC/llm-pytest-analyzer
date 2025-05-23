@@ -378,6 +378,18 @@ class MainWindow(QMainWindow):
 
         self.recent_projects_menu = None  # Will be created in _create_menus
 
+        # Session actions
+        self.manage_sessions_action = QAction("&Manage Sessions...", self)
+        self.manage_sessions_action.setShortcut(QKeySequence("Ctrl+Shift+S"))
+        self.manage_sessions_action.setStatusTip("Manage analysis sessions")
+
+        self.new_session_action = QAction("&New Session", self)
+        self.new_session_action.setStatusTip("Create a new analysis session")
+
+        self.save_session_action = QAction("&Save Session", self)
+        self.save_session_action.setShortcut(QKeySequence.StandardKey.Save)
+        self.save_session_action.setStatusTip("Save current session")
+
         self.exit_action = QAction("E&xit", self)
         self.exit_action.setShortcut(QKeySequence.StandardKey.Quit)
         self.exit_action.setStatusTip("Exit the application")
@@ -421,6 +433,15 @@ class MainWindow(QMainWindow):
         self.recent_projects_menu.setEnabled(
             False
         )  # Will be enabled when there are recent projects
+
+        self.file_menu.addSeparator()
+
+        # Session submenu
+        self.session_menu = self.file_menu.addMenu("&Session")
+        self.session_menu.addAction(self.new_session_action)
+        self.session_menu.addAction(self.save_session_action)
+        self.session_menu.addSeparator()
+        self.session_menu.addAction(self.manage_sessions_action)
 
         self.file_menu.addSeparator()
         self.file_menu.addAction(self.open_action)
