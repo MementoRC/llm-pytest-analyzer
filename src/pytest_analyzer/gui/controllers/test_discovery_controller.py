@@ -18,6 +18,7 @@ class TestDiscoveryController(BaseController):
     """Controller for discovering tests using 'pytest --collect-only'."""
 
     tests_discovered = pyqtSignal(list)  # Emits List[PytestFailure] (node IDs)
+    discovery_task_started = pyqtSignal(str)  # Emits task_id
     discovery_started = pyqtSignal(str)  # Emits a message
     discovery_finished = pyqtSignal(str)  # Emits a message (success or failure)
 
@@ -81,6 +82,7 @@ class TestDiscoveryController(BaseController):
 
         if task_id:
             self._current_discovery_task_id = task_id
+            self.discovery_task_started.emit(task_id)
             self.logger.info(f"Test discovery task submitted with ID: {task_id}")
             # Global task started message will be handled by MainController
         else:

@@ -7,6 +7,12 @@ from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
 from ...core.analyzer_service import PytestAnalyzerService
 from ..background.task_manager import TaskManager
+from ..workflow import (
+    WorkflowCoordinator,
+    WorkflowGuide,
+    WorkflowState,
+    WorkflowStateMachine,
+)
 from .analysis_controller import AnalysisController
 from .base_controller import BaseController
 from .file_controller import FileController
@@ -16,13 +22,10 @@ from .test_execution_controller import TestExecutionController
 from .test_results_controller import TestResultsController
 
 if TYPE_CHECKING:
-    from ...utils.settings import Settings as CoreSettings
+    from ...utils.settings import Settings as CoreSettings  # type: ignore
     from ..app import PytestAnalyzerApp
     from ..main_window import MainWindow
     from ..models.test_results_model import TestResultsModel
-    from ..views.file_selection_view import FileSelectionView
-    from ..views.test_discovery_view import TestDiscoveryView
-    from ..views.test_results_view import TestResultsView
 
 logger = logging.getLogger(__name__)
 
@@ -41,103 +44,99 @@ class MainController(BaseController):
         self.app = app
         self.core_settings: CoreSettings = app.core_settings
         self.analyzer_service: PytestAnalyzerService = main_window.analyzer_service
-        self.test_results_model: TestResultsModel = main_window.test_results_model
+        self.test_results_model: TestResultsModel = main_window.test_results_model  # type: ignore
 
         # Initialize sub-controllers, passing TaskManager
-        # BaseController's __init__ for these sub-controllers will correctly receive the task_manager
         self.file_controller = FileController(
-            self.test_results_model, parent=self, task_manager=self.task_manager
+            self.test_results_model,
+            parent=self,  # type: ignore
         )
         self.test_results_controller = TestResultsController(
-            self.test_results_model, parent=self, task_manager=self.task_manager
+            self.test_results_model,
+            parent=self,  # type: ignore
         )
         self.analysis_controller = AnalysisController(
             self.analyzer_service,
-            self.test_results_model,
+            self.test_results_model,  # type: ignore
             parent=self,
             task_manager=self.task_manager,
         )
         self.settings_controller = SettingsController(
-            app=self.app, parent=self, task_manager=self.task_manager
+            app=self.app,
+            parent=self,  # type: ignore
         )
         self.test_discovery_controller = TestDiscoveryController(
             self.analyzer_service, parent=self, task_manager=self.task_manager
         )
-        # Instantiate TestExecutionController
         self.test_execution_controller = TestExecutionController(
-            progress_view=self.main_window.test_execution_progress_view,
-            output_view=self.main_window.test_output_view,  # Pass the output view
-            task_manager=self.task_manager,
-            analyzer_service=self.analyzer_service,
+            progress_view=self.main_window.test_execution_progress_view,  # type: ignore
+            output_view=self.main_window.test_output_view,  # type: ignore
+            task_manager=self.task_manager,  # type: ignore
+            analyzer_service=self.analyzer_service,  # type: ignore
+            parent=self,
+        )
+
+        # Initialize Workflow System
+        self.workflow_state_machine = WorkflowStateMachine(parent=self)
+        self.workflow_guide = WorkflowGuide(parent=self)
+        self.workflow_coordinator = WorkflowCoordinator(
+            state_machine=self.workflow_state_machine,
+            guide=self.workflow_guide,
+            file_controller=self.file_controller,
+            test_discovery_controller=self.test_discovery_controller,
+            test_execution_controller=self.test_execution_controller,
+            analysis_controller=self.analysis_controller,
+            # fix_controller=self.fix_controller, # Add when available
+            task_manager=self.task_manager,  # type: ignore
             parent=self,
         )
 
         self._connect_signals()
         self.logger.info("MainController initialized and signals connected.")
+        self.workflow_state_machine.to_idle()  # Initialize workflow state
 
     def _connect_signals(self) -> None:
         """Connect signals and slots between components."""
         # --- MainWindow Actions to Controllers ---
-        self.main_window.open_action.triggered.connect(self.on_open)
-        self.main_window.about_action.triggered.connect(
-            self.main_window.on_about
-        )  # Can remain direct or move to a controller
-        self.main_window.exit_action.triggered.connect(self.main_window.close)
+        self.main_window.open_action.triggered.connect(self.on_open)  # type: ignore
+        self.main_window.about_action.triggered.connect(  # type: ignore
+            self.main_window.on_about  # type: ignore
+        )
+        self.main_window.exit_action.triggered.connect(self.main_window.close)  # type: ignore
 
-        # self.main_window.run_tests_action.triggered.connect(self.analysis_controller.on_run_tests)
-        # Connect Run Tests action to TestExecutionController or a new MainController slot
-        self.main_window.run_tests_action.triggered.connect(self.on_run_tests_action_triggered)
-
-        self.main_window.analyze_action.triggered.connect(self.analysis_controller.on_analyze)
-        self.main_window.settings_action.triggered.connect(self.settings_controller.on_settings)
+        self.main_window.run_tests_action.triggered.connect(self.on_run_tests_action_triggered)  # type: ignore
+        self.main_window.analyze_action.triggered.connect(self.analysis_controller.on_analyze)  # type: ignore
+        self.main_window.settings_action.triggered.connect(self.settings_controller.on_settings)  # type: ignore
 
         # --- View Signals to Controllers ---
-        # FileSelectionView -> FileController
-        file_selection_view: FileSelectionView = self.main_window.file_selection_view
+        file_selection_view = self.main_window.file_selection_view  # type: ignore
         file_selection_view.file_selected.connect(self.file_controller.on_file_selected)
         file_selection_view.report_type_changed.connect(self.file_controller.on_report_type_changed)
 
-        # TestResultsView -> TestResultsController
-        test_results_view: TestResultsView = self.main_window.test_results_view
-        # These connections were previously in MainWindow, now correctly here
+        test_results_view = self.main_window.test_results_view  # type: ignore
         test_results_view.test_selected.connect(self.test_results_controller.on_test_selected)
         test_results_view.group_selected.connect(self.test_results_controller.on_group_selected)
 
-        test_discovery_view: TestDiscoveryView = self.main_window.test_discovery_view
+        test_discovery_view = self.main_window.test_discovery_view  # type: ignore
         test_discovery_view.discover_tests_requested.connect(
             self.test_discovery_controller.request_discover_tests
         )
-        # TestDiscoveryView.selection_changed could be connected if needed by a controller
 
-        # --- Controller Signals to Model/View Updates ---
-        # FileController -> TestResultsModel
+        # --- Controller Signals to Model/View Updates (and Workflow Coordinator) ---
         self.file_controller.results_loaded.connect(self.test_results_model.set_results)
-        # FileController -> MainWindow Status Label
-        self.file_controller.status_message_updated.connect(self.main_window.status_label.setText)
+        # Status messages are now handled by WorkflowGuide
 
-        # TestResultsController -> MainWindow Status Label
-        self.test_results_controller.status_message_updated.connect(
-            self.main_window.status_label.setText
-        )
-
-        # TestDiscoveryController -> TestDiscoveryView and MainWindow Status
+        # TestDiscoveryController -> TestDiscoveryView
         self.test_discovery_controller.tests_discovered.connect(
             test_discovery_view.update_test_tree
         )
-        self.test_discovery_controller.discovery_started.connect(
-            lambda msg: self.main_window.status_label.setText(f"Discovery: {msg}")
-        )
-        self.test_discovery_controller.discovery_finished.connect(
-            lambda msg: self.main_window.status_label.setText(f"Discovery: {msg}")
-        )
+        # Discovery status messages also handled by WorkflowGuide via WorkflowCoordinator
 
-        # --- TaskManager Global Signals to MainWindow Status Updates & TestExecutionController ---
-        # TestExecutionController will handle its specific tasks.
-        # MainController handles generic status updates for other tasks.
-        self.task_manager.task_started.connect(self._on_global_task_started)
-        self.task_manager.task_progress.connect(self._on_global_task_progress)
-        self.task_manager.task_completed.connect(self._on_global_task_completed)
-        self.task_manager.task_failed.connect(self._on_global_task_failed)
+        # --- TaskManager Global Signals (primarily for non-workflow specific status updates) ---
+        self.task_manager.task_started.connect(self._on_global_task_started)  # type: ignore
+        self.task_manager.task_progress.connect(self._on_global_task_progress)  # type: ignore
+        self.task_manager.task_completed.connect(self._on_global_task_completed)  # type: ignore
+        self.task_manager.task_failed.connect(self._on_global_task_failed)  # type: ignore
         self._task_descriptions: dict[str, str] = {}
 
         # Connect TestExecutionController signal to TestResultsController slot
@@ -147,7 +146,11 @@ class MainController(BaseController):
 
         # SettingsController -> MainController for LLM updates
         self.settings_controller.llm_settings_changed.connect(self._on_llm_settings_changed)
-        self._update_llm_status_label()  # Initial status update
+        self._update_llm_status_label()
+
+        # --- Workflow System Connections ---
+        self.workflow_guide.guidance_updated.connect(self._update_status_bar_guidance)
+        self.workflow_state_machine.state_changed.connect(self._on_workflow_state_changed)
 
     def _get_task_description(self, task_id: str) -> str:
         """Retrieves the cached description for a task, or a fallback."""
@@ -156,53 +159,63 @@ class MainController(BaseController):
     @pyqtSlot(str, str)
     def _on_global_task_started(self, task_id: str, description: str) -> None:
         self._task_descriptions[task_id] = description
-        # TestExecutionController also listens to task_started and will manage its view.
-        # MainController provides a general status update.
-        if not self.test_execution_controller.is_test_execution_task(task_id, description):
-            self.main_window.status_label.setText(
+        # WorkflowCoordinator will handle state changes for workflow-related tasks.
+        # This global handler can provide generic feedback if not handled by workflow/specific controller.
+        if not self.test_execution_controller.is_test_execution_task(
+            task_id, description
+        ) and self.workflow_state_machine.current_state not in [
+            WorkflowState.TESTS_RUNNING,
+            WorkflowState.ANALYSIS_RUNNING,
+            WorkflowState.TESTS_DISCOVERING,
+        ]:
+            self.main_window.status_label.setText(  # type: ignore
                 f"Task started: {description} ({task_id[:8]}...)."
             )
-        # Else, TestExecutionController is handling the display for this task.
 
     @pyqtSlot(str, int, str)
     def _on_global_task_progress(self, task_id: str, percentage: int, message: str) -> None:
-        # TestExecutionController handles progress for its specific task.
-        # MainController provides general status update for other tasks.
-        # We need to check if the TestExecutionController is currently tracking this task_id.
-        if task_id != self.test_execution_controller._current_task_id:
+        if (
+            task_id != self.test_execution_controller._current_task_id
+            and self.workflow_state_machine.current_state
+            not in [
+                WorkflowState.TESTS_RUNNING,
+                WorkflowState.ANALYSIS_RUNNING,
+                WorkflowState.TESTS_DISCOVERING,
+            ]
+        ):
             task_desc = self._get_task_description(task_id)
-            self.main_window.status_label.setText(
+            self.main_window.status_label.setText(  # type: ignore
                 f"Task '{task_desc}' progress: {percentage}% - {message}"
             )
-        # Else, TestExecutionController's view is showing progress.
 
     @pyqtSlot(str, object)
     def _on_global_task_completed(self, task_id: str, result: Any) -> None:
         task_desc = self._get_task_description(task_id)
-        self._task_descriptions.pop(task_id, None)  # Clean up cached description
+        self._task_descriptions.pop(task_id, None)
 
         if (
             task_id != self.test_execution_controller._current_task_id
-        ):  # Check if it was handled by TEC
-            # If TestExecutionController was tracking it, it would have set _current_task_id to None on completion.
-            # So, if _current_task_id is still this task_id, it means TEC's _handle_task_completed hasn't run yet or this is a different task.
-            # This logic might need refinement if signal order is an issue.
-            # A simpler approach: if it's NOT a test execution task that TEC would have picked up.
-            # This requires knowing the description again, or checking if TEC *was* tracking it.
-            # For now, let's assume TEC clears its _current_task_id promptly.
-            self.main_window.status_label.setText(f"Task '{task_desc}' completed.")
+            and self.workflow_state_machine.current_state
+            not in [
+                WorkflowState.RESULTS_AVAILABLE,
+                WorkflowState.FIXES_AVAILABLE,
+                WorkflowState.TESTS_DISCOVERED,
+            ]
+        ):
+            # Avoid overriding workflow messages
+            self.main_window.status_label.setText(f"Task '{task_desc}' completed.")  # type: ignore
 
     @pyqtSlot(str, str)
     def _on_global_task_failed(self, task_id: str, error_message: str) -> None:
         task_desc = self._get_task_description(task_id)
-        self._task_descriptions.pop(task_id, None)  # Clean up cached description
+        self._task_descriptions.pop(task_id, None)
 
-        if (
-            task_id != self.test_execution_controller._current_task_id
-        ):  # Check if it was handled by TEC
-            self.main_window.status_label.setText(f"Task '{task_desc}' failed.")
+        # WorkflowCoordinator will handle setting ERROR state for workflow tasks.
+        # This is a fallback for other tasks or if coordinator doesn't catch it.
+        if self.workflow_state_machine.current_state != WorkflowState.ERROR:
+            # self.main_window.status_label.setText(f"Task '{task_desc}' failed.") # Workflow guide will show error
             QMessageBox.warning(
-                self.main_window,
+                self.main_window,  # type: ignore
                 "Task Error",
                 f"Task '{task_desc}' failed:\n\n{error_message.splitlines()[0]}",
             )
@@ -211,11 +224,12 @@ class MainController(BaseController):
     def on_open(self) -> None:
         """Handle the Open action from MainWindow."""
         self.logger.info("Open action triggered.")
-        # Use core_settings for default directory if available
-        default_dir = str(self.core_settings.project_root) if self.core_settings else ""
+        default_dir = (
+            str(self.core_settings.project_root) if self.core_settings.project_root else ""
+        )  # type: ignore
 
         file_path_str, _ = QFileDialog.getOpenFileName(
-            self.main_window,
+            self.main_window,  # type: ignore
             "Open File",
             default_dir,
             "Python Files (*.py);;JSON Files (*.json);;XML Files (*.xml);;All Files (*)",
@@ -224,9 +238,16 @@ class MainController(BaseController):
         if file_path_str:
             path = Path(file_path_str)
             self.logger.info(f"File dialog selected: {path}")
-            self.file_controller.on_file_selected(path)  # Delegate to FileController
+            # FileController's on_file_selected will emit results_loaded,
+            # which WorkflowCoordinator listens to.
+            self.file_controller.on_file_selected(path)
         else:
             self.logger.info("File dialog cancelled.")
+            # Optionally, if in IDLE state, emit guidance again or do nothing
+            if self.workflow_state_machine.current_state == WorkflowState.IDLE:
+                self.workflow_guide.update_guidance(
+                    WorkflowState.IDLE, self.workflow_state_machine.context
+                )
 
     @pyqtSlot()
     def on_run_tests_action_triggered(self) -> None:
@@ -237,37 +258,37 @@ class MainController(BaseController):
         """
         self.logger.info("'Run Tests' action triggered by user.")
 
-        source_path = self.test_results_model.source_file
-        source_type = self.test_results_model.source_type
+        source_path = self.test_results_model.source_file  # type: ignore
+        source_type = self.test_results_model.source_type  # type: ignore
 
         if source_path and (source_type == "py" or source_type == "directory"):
-            self.logger.info(f"Preparing to run tests for: {source_path} (type: {source_type})")
+            self.logger.info(f"Preparing to run tests for: {source_path} (type: {source_type})")  # type: ignore
             test_path_to_run = str(source_path)
-            pytest_arguments: List[str] = []  # Placeholder for future UI to set arguments
+            pytest_arguments: List[str] = []
 
-            # TestExecutionController will show progress and output.
-            # Results will be auto-loaded via signal/slot connection.
             task_id = self.test_execution_controller.start_test_run(
                 test_path_to_run, pytest_arguments
             )
             if task_id:
-                self.main_window.status_label.setText(
-                    f"Test execution started for {source_path.name}..."
-                )
+                # WorkflowCoordinator will transition state to TESTS_RUNNING
+                # and WorkflowGuide will update status.
                 self.logger.info(f"Test execution task submitted with ID: {task_id}")
             else:
-                # This case should be rare if submit_background_task itself doesn't fail badly
                 QMessageBox.warning(
-                    self.main_window,
+                    self.main_window,  # type: ignore
                     "Run Tests Error",
-                    f"Failed to submit test execution task for {source_path.name}.",
+                    f"Failed to submit test execution task for {source_path.name}.",  # type: ignore
                 )
                 self.logger.error(
-                    f"Failed to get task_id from start_test_run for {source_path.name}"
+                    f"Failed to get task_id from start_test_run for {source_path.name}"  # type: ignore
+                )
+                self.workflow_state_machine.to_error(
+                    f"Failed to submit test execution task for {source_path.name}",  # type: ignore
+                    self.workflow_state_machine.current_state,
                 )
         else:
             QMessageBox.warning(
-                self.main_window,
+                self.main_window,  # type: ignore
                 "Run Tests",
                 "Please select a Python test file or directory first "
                 "(e.g., via File menu or File Selection tab).",
@@ -278,27 +299,27 @@ class MainController(BaseController):
 
     def _update_llm_status_label(self) -> None:
         """Updates the LLM status label in the main window's status bar."""
-        provider = self.core_settings.llm_provider
+        provider = self.core_settings.llm_provider  # type: ignore
         api_key_present = False
         model_name = ""
 
-        if provider == "openai":
-            if self.core_settings.llm_api_key_openai:
+        if provider == "openai":  # type: ignore
+            if self.core_settings.llm_api_key_openai:  # type: ignore
                 api_key_present = True
-            model_name = self.core_settings.llm_model_openai
-        elif provider == "anthropic":
-            if self.core_settings.llm_api_key_anthropic:
+            model_name = self.core_settings.llm_model_openai  # type: ignore
+        elif provider == "anthropic":  # type: ignore
+            if self.core_settings.llm_api_key_anthropic:  # type: ignore
                 api_key_present = True
-            model_name = self.core_settings.llm_model_anthropic
+            model_name = self.core_settings.llm_model_anthropic  # type: ignore
 
         status_text = "LLM: Disabled"
-        if provider != "none":
+        if provider != "none":  # type: ignore
             if api_key_present:
-                status_text = f"LLM: {provider.capitalize()} ({model_name}) - Ready"
+                status_text = f"LLM: {provider.capitalize()} ({model_name}) - Ready"  # type: ignore
             else:
-                status_text = f"LLM: {provider.capitalize()} - API Key Missing"
+                status_text = f"LLM: {provider.capitalize()} - API Key Missing"  # type: ignore
 
-        self.main_window.llm_status_label.setText(status_text)
+        self.main_window.llm_status_label.setText(status_text)  # type: ignore
         self.logger.debug(f"LLM status label updated: {status_text}")
 
     @pyqtSlot()
@@ -308,11 +329,11 @@ class MainController(BaseController):
             "LLM settings changed. Re-initializing analysis service and clearing cache."
         )
 
-        self.analyzer_service = PytestAnalyzerService(settings=self.app.core_settings)
+        self.analyzer_service = PytestAnalyzerService(settings=self.app.core_settings)  # type: ignore
 
         self.analysis_controller.analyzer_service = self.analyzer_service
         self.test_discovery_controller.analyzer_service = self.analyzer_service
-        self.test_execution_controller.analyzer_service = self.analyzer_service
+        self.test_execution_controller.analyzer_service = self.analyzer_service  # type: ignore
 
         if hasattr(self.analysis_controller, "suggestion_cache"):
             self.analysis_controller.suggestion_cache.clear()
@@ -320,7 +341,48 @@ class MainController(BaseController):
 
         self._update_llm_status_label()
         QMessageBox.information(
-            self.main_window,
+            self.main_window,  # type: ignore
             "Settings Changed",
             "LLM settings have been updated. The analysis service has been re-initialized.",
         )
+
+    @pyqtSlot(str, str)
+    def _update_status_bar_guidance(self, message: str, tooltip: str) -> None:
+        """Updates the main status label with guidance from WorkflowGuide."""
+        self.main_window.status_label.setText(message)  # type: ignore
+        self.main_window.status_label.setToolTip(tooltip)  # type: ignore
+
+    @pyqtSlot(str, str)
+    def _on_workflow_state_changed(self, old_state_str: str, new_state_str: str) -> None:
+        """Handles UI updates when the workflow state changes."""
+        try:
+            new_state = WorkflowState(new_state_str)
+            self.logger.info(f"Workflow state changed from {old_state_str} to {new_state}")
+        except ValueError:
+            self.logger.error(f"Received invalid new state string: {new_state_str}")
+            return
+
+        # Enable/disable actions based on the new state
+        # File actions
+        # self.main_window.open_action is always enabled
+
+        # Tools actions
+        can_run_tests = new_state in [
+            WorkflowState.FILE_SELECTED,
+            WorkflowState.TESTS_DISCOVERED,
+            WorkflowState.RESULTS_AVAILABLE,  # Allow re-run
+            WorkflowState.FIXES_APPLIED,  # Allow re-run
+        ]
+        self.main_window.run_tests_action.setEnabled(can_run_tests)  # type: ignore
+
+        can_analyze = (
+            new_state == WorkflowState.RESULTS_AVAILABLE
+            and self.workflow_state_machine.context.get("failure_count", 0) > 0
+        )
+        self.main_window.analyze_action.setEnabled(can_analyze)  # type: ignore
+
+        # Add logic for other actions like "Apply Fixes" when FixController is integrated
+        # e.g., self.main_window.apply_fixes_action.setEnabled(new_state == WorkflowState.FIXES_AVAILABLE)
+
+        # Update status bar (already handled by WorkflowGuide -> _update_status_bar_guidance)
+        # Potentially update other UI elements, e.g., highlighting current step in a visual guide
