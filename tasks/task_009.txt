@@ -1,18 +1,87 @@
 # Task ID: 9
-# Title: Implement Analysis Results Display
-# Status: done
-# Dependencies: 8
-# Priority: high
-# Description: Create a dedicated panel to display LLM analysis results for failed tests.
+# Title: Implement ResponseParser Component
+# Status: pending
+# Dependencies: 7
+# Priority: medium
+# Description: Create a ResponseParser component for parsing responses from the LLM service
 # Details:
-Implement an analysis results display with:
-- Rich text formatting for analysis explanations
-- Code highlighting for relevant code snippets
-- Collapsible sections for detailed analysis
-- Manual re-analysis trigger button
-- Loading indicators during analysis
+Implement a component for parsing responses from the LLM service. Support extracting structured data, code blocks, and handling various response formats.
 
-Use QTextBrowser or similar widget with HTML formatting. Connect to signals from the AnalysisController to update the display. Implement proper state management for analysis status.
+Example implementation:
+```python
+import logging
+import re
+from typing import Dict, Any, List, Optional, Union
+
+class ResponseParser:
+    def __init__(self, logger: Optional[logging.Logger] = None):
+        self.logger = logger or logging.getLogger(__name__)
+
+    def extract_code_blocks(self, response: str) -> List[str]:
+        self.logger.debug("Extracting code blocks from response")
+
+        code_pattern = r"```(?:python)?\n([\s\S]+?)\n```"
+        code_blocks = re.findall(code_pattern, response)
+
+        self.logger.debug(f"Extracted {len(code_blocks)} code blocks")
+        return code_blocks
+
+    def extract_json(self, response: str) -> Optional[Dict[str, Any]]:
+        self.logger.debug("Extracting JSON from response")
+
+        json_pattern = r"```json\n([\s\S]+?)\n```"
+        json_match = re.search(json_pattern, response)
+
+        if not json_match:
+            self.logger.warning("No JSON block found in response")
+            return None
+
+        import json
+        try:
+            json_str = json_match.group(1)
+            json_data = json.loads(json_str)
+            self.logger.debug(f"Extracted JSON data with keys: {list(json_data.keys())}")
+            return json_data
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Error parsing JSON: {str(e)}")
+            return None
+
+    def parse_structured_response(self, response: str, expected_sections: List[str]) -> Dict[str, str]:
+        self.logger.debug(f"Parsing structured response with sections: {expected_sections}")
+
+        result = {}
+        current_section = None
+        current_content = []
+
+        for line in response.split('\n'):
+            # Check if line is a section header
+            for section in expected_sections:
+                if line.strip().lower() == section.lower() + ':' or line.strip().lower() == '## ' + section.lower():
+                    # Save previous section if it exists
+                    if current_section:
+                        result[current_section] = '\n'.join(current_content).strip()
+                        current_content = []
+                    current_section = section
+                    break
+            else:
+                # If not a section header and we're in a section, add to content
+                if current_section:
+                    current_content.append(line)
+
+        # Save the last section
+        if current_section and current_content:
+            result[current_section] = '\n'.join(current_content).strip()
+
+        # Check if all expected sections were found
+        missing_sections = [s for s in expected_sections if s not in result]
+        if missing_sections:
+            self.logger.warning(f"Missing sections in response: {missing_sections}")
+
+        self.logger.debug(f"Parsed {len(result)} sections from response")
+        return result
+```
+
+Ensure the implementation can handle various response formats and extract structured data reliably.
 
 # Test Strategy:
-Test display rendering with various analysis results. Verify formatting and highlighting. Test manual re-analysis functionality. Ensure proper state handling during analysis loading.
+Create unit tests with sample LLM responses to verify extraction of code blocks, JSON data, and structured sections. Test error handling for malformed responses. Verify that the parser correctly identifies missing sections and handles edge cases.

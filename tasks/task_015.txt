@@ -1,18 +1,115 @@
 # Task ID: 15
-# Title: Implement Settings Dialog
-# Status: done
-# Dependencies: 1
-# Priority: medium
-# Description: Create a comprehensive settings dialog for configuring application preferences.
+# Title: Create Backward Compatibility Layer
+# Status: pending
+# Dependencies: 1, 2, 3, 4, 5, 6, 7, 11
+# Priority: high
+# Description: Ensure backward compatibility with existing code
 # Details:
-Implement a settings dialog with sections for:
-- LLM provider configuration (OpenAI, Anthropic, etc.)
-- API keys and authentication
-- Test execution settings (timeout, parallel execution)
-- GUI preferences (theme, layout)
-- Git integration settings
+Implement a backward compatibility layer to ensure existing code continues to work with the refactored components. Create adapter classes and facade patterns as needed.
 
-Use QSettings for persistent storage. Implement validation for required settings. Create a clean, organized UI with tabs or categories. Connect to the SettingsController for managing configuration.
+Example implementation:
+```python
+import logging
+from typing import Optional, List, Dict, Any
+
+# Import new components
+from .di_container import DIContainer
+from .interfaces import Extractor, Analyzer, Suggester, Applier, LLMService, TestFailure
+from .state_machine import AnalyzerStateMachine, AnalysisState
+
+# Legacy class to maintain backward compatibility
+class PytestAnalyzer:
+    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4", logger: Optional[logging.Logger] = None):
+        self.logger = logger or logging.getLogger(__name__)
+        self.logger.info("Initializing PytestAnalyzer with backward compatibility")
+
+        # Set up DI container
+        self.container = DIContainer()
+
+        # Configure and register services
+        from .config_manager import ConfigManager
+        config_manager = ConfigManager(logger=self.logger)
+        config_manager.load_from_env()
+
+        # Override with constructor parameters if provided
+        config = config_manager.get_config()
+        if api_key:
+            config.llm.api_key = api_key
+        if model:
+            config.llm.model = model
+
+        # Register LLM service
+        from .llm_service import OpenAIService
+        llm_service = OpenAIService(
+            api_key=config.llm.api_key,
+            model=config.llm.model,
+            max_retries=config.llm.max_retries,
+            timeout=config.llm.timeout,
+            logger=self.logger
+        )
+        self.container.register(LLMService, llm_service)
+
+        # Register other components
+        from .extractor import PytestExtractor
+        from .analyzer import LLMBasedAnalyzer
+        from .suggester import LLMBasedSuggester
+        from .applier import FileSystemApplier
+
+        self.container.register(Extractor, PytestExtractor(logger=self.logger))
+        self.container.register(Analyzer, LLMBasedAnalyzer(llm_service, logger=self.logger))
+        self.container.register(Suggester, LLMBasedSuggester(llm_service, logger=self.logger))
+        self.container.register(Applier, FileSystemApplier(logger=self.logger))
+
+    def analyze_test_failures(self, test_output: str, file_path: str) -> Dict[str, Any]:
+        """Legacy method to analyze test failures and suggest fixes"""
+        self.logger.info("Analyzing test failures using state machine")
+
+        # Create and run state machine
+        state_machine = AnalyzerStateMachine(
+            extractor=self.container.resolve(Extractor),
+            analyzer=self.container.resolve(Analyzer),
+            suggester=self.container.resolve(Suggester),
+            applier=self.container.resolve(Applier),
+            logger=self.logger
+        )
+
+        state_machine.start(test_output, file_path)
+
+        # Convert state machine results to legacy format
+        result = {
+            "failures": [],
+            "analyses": [],
+            "suggestions": [],
+            "applied": []
+        }
+
+        if "failures" in state_machine.context:
+            result["failures"] = [
+                {"test_name": f.test_name, "error_message": f.error_message, "traceback": f.traceback}
+                for f in state_machine.context["failures"]
+            ]
+
+        if "analyses" in state_machine.context:
+            result["analyses"] = state_machine.context["analyses"]
+
+        if "suggestions" in state_machine.context:
+            result["suggestions"] = state_machine.context["suggestions"]
+
+        if "applied" in state_machine.context:
+            result["applied"] = state_machine.context["applied"]
+
+        if state_machine.current_state == AnalysisState.ERROR and "error" in state_machine.context:
+            result["error"] = state_machine.context["error"]
+
+        return result
+
+    def analyze_and_fix(self, test_output: str, file_path: str) -> bool:
+        """Legacy method to analyze and automatically fix test failures"""
+        result = self.analyze_test_failures(test_output, file_path)
+        return all(result.get("applied", [False]))
+```
+
+Ensure the implementation maintains the same API and behavior as the original code while using the new architecture internally.
 
 # Test Strategy:
-Test settings persistence across application restarts. Verify validation of required fields. Test loading and applying settings. Ensure proper handling of sensitive data like API keys.
+Create integration tests that verify the backward compatibility layer works with existing code. Test with the same inputs and expected outputs as the original code. Verify that the new implementation produces the same results as the original. Test error handling and edge cases to ensure consistent behavior.

@@ -1,18 +1,48 @@
 # Task ID: 5
-# Title: Implement Test Execution Progress Tracking
-# Status: done
-# Dependencies: 3
-# Priority: high
-# Description: Create a progress tracking interface to display real-time test execution status.
+# Title: Implement Suggester Component
+# Status: pending
+# Dependencies: 2, 4
+# Priority: medium
+# Description: Refactor the fix suggestion logic into a dedicated component with proper interfaces
 # Details:
-Implement a progress tracking UI with:
-- Overall progress bar showing test execution percentage
-- Current test name display
-- Elapsed time and estimated time remaining
-- Test counts (passed, failed, skipped)
-- Cancel button for stopping test execution
+Create concrete implementations of the Suggester protocol. The suggester should generate fix suggestions based on the analysis. Implement proper error handling and logging.
 
-Connect progress tracking to signals from the TestExecutionController. Update the UI in real-time as tests execute. Implement proper state management for test execution status.
+Example implementation:
+```python
+import logging
+from typing import Optional
+from .interfaces import Suggester, TestFailure, LLMService
+
+class LLMBasedSuggester(Suggester):
+    def __init__(self, llm_service: LLMService, logger: Optional[logging.Logger] = None):
+        self.llm_service = llm_service
+        self.logger = logger or logging.getLogger(__name__)
+
+    def suggest_fix(self, analysis: str, failure: TestFailure) -> str:
+        self.logger.info(f"Suggesting fix for test: {failure.test_name}")
+
+        try:
+            prompt = f"""Based on the following analysis of a pytest test failure, suggest a specific code fix:
+
+Test name: {failure.test_name}
+Error message: {failure.error_message}
+Traceback:
+{failure.traceback}
+
+Analysis:
+{analysis}
+
+Provide a specific code fix that would resolve this issue:"""
+
+            suggestion = self.llm_service.generate_completion(prompt)
+            self.logger.debug(f"Generated suggestion: {suggestion[:100]}...")
+            return suggestion
+        except Exception as e:
+            self.logger.error(f"Error suggesting fix: {str(e)}")
+            raise
+```
+
+Ensure the implementation generates useful and specific fix suggestions.
 
 # Test Strategy:
-Test progress updates with mock test execution. Verify accuracy of progress calculation. Test cancellation functionality. Ensure UI updates correctly with rapid test execution.
+Create unit tests with mock LLMService to verify the suggester correctly formats prompts and handles responses. Test error handling by simulating LLM service failures. Verify that the suggester correctly logs operations and errors.
