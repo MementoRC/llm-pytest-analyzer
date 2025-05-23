@@ -9,7 +9,7 @@ import logging
 from html import escape
 from typing import Optional
 
-from PyQt6.QtCore import pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QUrl, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import (  # QDesktopServices imported as per user spec
     QAction,
 )
@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ...core.models.pytest_failure import FixSuggestion  # Ensure this is imported
 from ..models.test_results_model import (
     AnalysisStatus,
     TestResult,
@@ -38,6 +39,7 @@ class AnalysisResultsView(QWidget):
     """
 
     reanalyze_requested = pyqtSignal(TestResult)
+    view_code_requested = pyqtSignal(FixSuggestion)  # New signal
 
     def __init__(self, model: TestResultsModel, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -46,6 +48,7 @@ class AnalysisResultsView(QWidget):
 
         self._init_ui()
         self._connect_signals()
+        self.text_browser.anchorClicked.connect(self._on_anchor_clicked)  # Connect new slot
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -112,6 +115,32 @@ class AnalysisResultsView(QWidget):
                 (tr for tr in self.results_model.results if tr.name == updated_test_name), None
             )
             self.update_view_for_test(updated_test_object)
+
+    @pyqtSlot(QUrl)
+    def _on_anchor_clicked(self, url: QUrl) -> None:
+        scheme = url.scheme()
+        if scheme == "viewcode":
+            if self.current_test and self.current_test.suggestions:
+                try:
+                    suggestion_index = int(url.path())
+                    if 0 <= suggestion_index < len(self.current_test.suggestions):
+                        fix_suggestion = self.current_test.suggestions[suggestion_index]
+                        # Ensure code_changes is not None before emitting
+                        if fix_suggestion.code_changes is not None:  # Check for None explicitly
+                            logger.info(
+                                f"View code requested for suggestion {suggestion_index} of test {self.current_test.name}"
+                            )
+                            self.view_code_requested.emit(fix_suggestion)
+                        else:
+                            logger.warning(
+                                f"View code clicked for suggestion {suggestion_index} but it has no code_changes (was None)."
+                            )
+                    else:
+                        logger.warning(f"Invalid suggestion index from anchor: {suggestion_index}")
+                except ValueError:
+                    logger.error(f"Could not parse suggestion index from anchor: {url.path()}")
+        # else:
+        #    QDesktopServices.openUrl(url) # Default behavior for other links (already handled by setOpenExternalLinks)
 
     def update_view_for_test(self, test_result: Optional[TestResult]) -> None:
         self.current_test = test_result
@@ -232,20 +261,13 @@ class AnalysisResultsView(QWidget):
                         html_parts.append("<details><summary>Explanation</summary>")
                         html_parts.append(f"<p>{escaped_explanation}</p></details>")
 
-                    if fix_suggestion.code_changes:
-                        html_parts.append("<details open><summary>Suggested Code Changes</summary>")
-                        # Assuming code_changes is Dict[str, str] or str
-                        if isinstance(fix_suggestion.code_changes, dict):
-                            for file_path, code_diff in fix_suggestion.code_changes.items():
-                                html_parts.append(f"<p><em>File: {escape(file_path)}</em></p>")
-                                html_parts.append(
-                                    f"<pre><code>{escape(str(code_diff))}</code></pre>"
-                                )
-                        else:  # Treat as single block of text
-                            html_parts.append(
-                                f"<pre><code>{escape(str(fix_suggestion.code_changes))}</code></pre>"
-                            )
-                        html_parts.append("</details>")
+                    if fix_suggestion.code_changes is not None:
+                        html_parts.append(
+                            f'<p><a href="viewcode:{i}" style="text-decoration: none; background-color: #007bff; color: white; padding: 5px 10px; border-radius: 3px; font-size: 0.9em;">View Code Changes in Editor</a></p>'
+                        )
+                        # Removed the <pre> block for direct code_changes display to avoid redundancy.
+                        # The user will now click the link to see it in FixSuggestionCodeView.
+
                     html_parts.append("</div>")  # suggestion-block
         else:
             html_parts.append(

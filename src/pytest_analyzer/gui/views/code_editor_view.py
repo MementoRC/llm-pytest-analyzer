@@ -47,31 +47,9 @@ class CodeEditorView(QsciScintilla):
         # Python Lexer for syntax highlighting
         self._lexer = QsciLexerPython(self)
         self._lexer.setDefaultFont(font)  # Ensure lexer uses the same font
-
-        # Basic Python syntax coloring (can be expanded or themed)
-        self._lexer.setColor(QColor("#00007f"), QsciLexerPython.Keyword)  # Dark Blue for keywords
-        self._lexer.setColor(QColor("#007f00"), QsciLexerPython.Comment)  # Green for comments
-        self._lexer.setColor(QColor("#007f00"), QsciLexerPython.CommentBlock)
-        self._lexer.setColor(QColor("#7f007f"), QsciLexerPython.ClassName)  # Purple for class names
-        self._lexer.setColor(QColor("#000000"), QsciLexerPython.Default)  # Black for default text
-        self._lexer.setColor(QColor("#000000"), QsciLexerPython.Identifier)  # Black for identifiers
-        self._lexer.setColor(QColor("#7f0000"), QsciLexerPython.String)  # Dark Red for strings
-        self._lexer.setColor(QColor("#007f7f"), QsciLexerPython.Number)  # Teal for numbers
-        self._lexer.setColor(
-            QColor("#0000FF"), QsciLexerPython.FunctionMethodName
-        )  # Blue for functions
-        self._lexer.setColor(
-            QColor("#2040a0"), QsciLexerPython.Operator
-        )  # Darker blue for operators
-        self._lexer.setColor(
-            QColor("#FF0000"), QsciLexerPython.TripleSingleQuotedString
-        )  # Red for triple single quotes
-        self._lexer.setColor(
-            QColor("#FF0000"), QsciLexerPython.TripleDoubleQuotedString
-        )  # Red for triple double quotes
-
-        self._lexer.setPaper(QColor("#ffffff"))  # White background for text
-        self._lexer.setDefaultPaper(QColor("#ffffff"))
+        # Use default lexer colors by not setting them individually.
+        # self._lexer.setPaper(QColor("#ffffff")) # Optionally set background
+        # self._lexer.setDefaultPaper(QColor("#ffffff")) # Optionally set default background
 
         self.setLexer(self._lexer)
 
