@@ -92,6 +92,69 @@ class PytestAnalyzerApp(QApplication):
             type=int,
         )
 
+        # Test Execution Settings
+        self.core_settings.pytest_timeout = self.settings.value(
+            "core_settings/pytest_timeout", self.core_settings.pytest_timeout, type=int
+        )
+        pytest_args_str = self.settings.value("core_settings/pytest_args", "")
+        if pytest_args_str:  # Check if the setting exists and is not empty
+            self.core_settings.pytest_args = pytest_args_str.split()
+        # else: pytest_args is already default from Settings()
+
+        self.core_settings.max_memory_mb = self.settings.value(
+            "core_settings/max_memory_mb", self.core_settings.max_memory_mb, type=int
+        )
+        self.core_settings.parser_timeout = self.settings.value(
+            "core_settings/parser_timeout", self.core_settings.parser_timeout, type=int
+        )
+        self.core_settings.analyzer_timeout = self.settings.value(
+            "core_settings/analyzer_timeout", self.core_settings.analyzer_timeout, type=int
+        )
+        self.core_settings.batch_size = self.settings.value(
+            "core_settings/batch_size", self.core_settings.batch_size, type=int
+        )
+        self.core_settings.max_concurrency = self.settings.value(
+            "core_settings/max_concurrency", self.core_settings.max_concurrency, type=int
+        )
+
+        # Analysis Settings
+        self.core_settings.max_failures = self.settings.value(
+            "core_settings/max_failures", self.core_settings.max_failures, type=int
+        )
+        self.core_settings.max_suggestions = self.settings.value(
+            "core_settings/max_suggestions", self.core_settings.max_suggestions, type=int
+        )
+        self.core_settings.max_suggestions_per_failure = self.settings.value(
+            "core_settings/max_suggestions_per_failure",
+            self.core_settings.max_suggestions_per_failure,
+            type=int,
+        )
+        self.core_settings.min_confidence = self.settings.value(
+            "core_settings/min_confidence", self.core_settings.min_confidence, type=float
+        )
+        self.core_settings.auto_apply = self.settings.value(
+            "core_settings/auto_apply", self.core_settings.auto_apply, type=bool
+        )
+
+        # GUI Preferences (Core part)
+        self.core_settings.preferred_format = self.settings.value(
+            "core_settings/preferred_format", self.core_settings.preferred_format
+        )
+        self.core_settings.log_level = self.settings.value(
+            "core_settings/log_level", self.core_settings.log_level
+        )
+
+        # Git Integration Settings
+        self.core_settings.check_git = self.settings.value(
+            "core_settings/check_git", self.core_settings.check_git, type=bool
+        )
+        self.core_settings.auto_init_git = self.settings.value(
+            "core_settings/auto_init_git", self.core_settings.auto_init_git, type=bool
+        )
+        self.core_settings.use_git_branches = self.settings.value(
+            "core_settings/use_git_branches", self.core_settings.use_git_branches, type=bool
+        )
+
     def _init_resources(self) -> None:
         """Initialize application resources like icons and themes."""
         # TODO: Add proper resource loading when resources are added
@@ -145,6 +208,52 @@ class PytestAnalyzerApp(QApplication):
         )
         self.settings.sync()
         logger.info("LLM core settings saved to QSettings.")
+
+    def save_all_core_settings_to_qsettings(self) -> None:
+        """Saves all relevant core_settings to QSettings."""
+        logger.info("Saving all configurable core settings to QSettings.")
+
+        # LLM settings (uses existing method)
+        self.save_core_llm_settings()
+
+        # Test Execution Settings
+        self.settings.setValue("core_settings/pytest_timeout", self.core_settings.pytest_timeout)
+        self.settings.setValue(
+            "core_settings/pytest_args", " ".join(self.core_settings.pytest_args)
+        )
+        self.settings.setValue("core_settings/max_memory_mb", self.core_settings.max_memory_mb)
+        self.settings.setValue("core_settings/parser_timeout", self.core_settings.parser_timeout)
+        self.settings.setValue(
+            "core_settings/analyzer_timeout", self.core_settings.analyzer_timeout
+        )
+        self.settings.setValue("core_settings/batch_size", self.core_settings.batch_size)
+        self.settings.setValue("core_settings/max_concurrency", self.core_settings.max_concurrency)
+
+        # Analysis Settings
+        self.settings.setValue("core_settings/max_failures", self.core_settings.max_failures)
+        self.settings.setValue("core_settings/max_suggestions", self.core_settings.max_suggestions)
+        self.settings.setValue(
+            "core_settings/max_suggestions_per_failure",
+            self.core_settings.max_suggestions_per_failure,
+        )
+        self.settings.setValue("core_settings/min_confidence", self.core_settings.min_confidence)
+        self.settings.setValue("core_settings/auto_apply", self.core_settings.auto_apply)
+
+        # GUI Preferences (Core part)
+        self.settings.setValue(
+            "core_settings/preferred_format", self.core_settings.preferred_format
+        )
+        self.settings.setValue("core_settings/log_level", self.core_settings.log_level)
+
+        # Git Integration Settings
+        self.settings.setValue("core_settings/check_git", self.core_settings.check_git)
+        self.settings.setValue("core_settings/auto_init_git", self.core_settings.auto_init_git)
+        self.settings.setValue(
+            "core_settings/use_git_branches", self.core_settings.use_git_branches
+        )
+
+        self.settings.sync()
+        logger.info("All configurable core settings saved to QSettings.")
 
 
 def create_app(argv: Optional[List[str]] = None) -> PytestAnalyzerApp:
