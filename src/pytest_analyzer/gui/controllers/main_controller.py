@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
 from ...core.analyzer_service import PytestAnalyzerService
 from ..background.task_manager import TaskManager
+from ..models.test_results_model import TestResult  # Added import
 from ..workflow import (
     WorkflowCoordinator,
     WorkflowGuide,
@@ -29,6 +30,8 @@ if TYPE_CHECKING:
     from ..app import PytestAnalyzerApp
     from ..main_window import MainWindow
     from ..models.test_results_model import TestResultsModel
+
+    # Removed TestResult from here if it was, ensure it's imported above for runtime use
 
 logger = logging.getLogger(__name__)
 
@@ -163,8 +166,11 @@ class MainController(BaseController):
         )
 
         # --- Controller Signals to Model/View Updates (and Workflow Coordinator) ---
-        self.file_controller.results_loaded.connect(self.test_results_model.set_results)
-        self.file_controller.results_loaded.connect(self.report_controller.set_test_results)
+        # Connections for FileController's new specific signals
+        self.file_controller.report_parsed.connect(self._on_report_parsed_update_models)
+        self.file_controller.python_file_opened.connect(self._on_source_selected_for_discovery)
+        self.file_controller.python_file_opened.connect(self._on_python_file_opened_for_editor)
+        self.file_controller.directory_opened.connect(self._on_source_selected_for_discovery)
         # Status messages are now handled by WorkflowGuide
 
         # TestDiscoveryController -> TestDiscoveryView
@@ -216,6 +222,58 @@ class MainController(BaseController):
         # --- Workflow System Connections ---
         self.workflow_guide.guidance_updated.connect(self._update_status_bar_guidance)
         self.workflow_state_machine.state_changed.connect(self._on_workflow_state_changed)
+
+    @pyqtSlot(list, Path, str)
+    def _on_report_parsed_update_models(
+        self, results: List[TestResult], source_file: Path, source_type: str
+    ) -> None:
+        """
+        Handles parsed test results from a report file (JSON/XML).
+        Updates the TestResultsModel and ReportController.
+        """
+        self.logger.info(
+            f"Received {len(results)} parsed results from {source_file.name} ({source_type}). Updating models."
+        )
+        self.test_results_model.set_results(results)  # type: ignore
+        self.report_controller.set_test_results(results)
+
+    @pyqtSlot(Path)
+    def _on_source_selected_for_discovery(self, source_path: Path) -> None:
+        """
+        Handles selection of a Python file or directory as a test source.
+        Prepares the TestDiscoveryView by clearing any previous test tree.
+        """
+        self.logger.info(
+            f"Source selected for discovery: {source_path}. Clearing TestDiscoveryView tree."
+        )
+        test_discovery_view = self.main_window.test_discovery_view  # type: ignore
+        if test_discovery_view:
+            # Assuming update_test_tree with an empty list clears the view.
+            # This prepares the view for a new discovery action.
+            test_discovery_view.update_test_tree([])
+        else:
+            self.logger.warning("TestDiscoveryView not available to clear tree.")
+
+    @pyqtSlot(Path)
+    def _on_python_file_opened_for_editor(self, file_path: Path) -> None:
+        """
+        Handles Python file opening for the code editor.
+        Loads the file content into the CodeEditorView and switches to the Code Editor tab.
+        """
+        self.logger.info(f"Loading Python file into code editor: {file_path}")
+        code_editor_view = self.main_window.code_editor_view  # type: ignore
+        if code_editor_view:
+            success = code_editor_view.load_file(file_path)
+            if success:
+                # Switch to the Code Editor tab
+                self.main_window.analysis_tabs.setCurrentIndex(
+                    2
+                )  # Code Editor is the 3rd tab (index 2)
+                self.logger.info(f"File {file_path.name} loaded successfully in code editor")
+            else:
+                self.logger.error(f"Failed to load file {file_path.name} in code editor")
+        else:
+            self.logger.warning("CodeEditorView not available to load file.")
 
     def _get_task_description(self, task_id: str) -> str:
         """Retrieves the cached description for a task, or a fallback."""
@@ -565,3 +623,10 @@ class MainController(BaseController):
                     }
                 )
         return analysis_results
+
+    def cleanup_on_close(self) -> None:
+        """Clean up resources when the application is closing."""
+        self.logger.info("MainController cleanup initiated")
+        if self.task_manager:
+            self.task_manager.cleanup_all_tasks()
+        self.logger.info("MainController cleanup complete")

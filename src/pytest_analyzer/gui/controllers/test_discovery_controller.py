@@ -1,5 +1,5 @@
 import logging
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import QMessageBox
@@ -15,10 +15,10 @@ logger = logging.getLogger(__name__)
 
 
 class TestDiscoveryController(BaseController):
-    """Controller for discovering tests using 'pytest --collect-only'."""
+    """Controller for discovering test files using synchronous filesystem scanning."""
 
     tests_discovered = pyqtSignal(list)  # Emits List[PytestFailure] (node IDs)
-    discovery_task_started = pyqtSignal(str)  # Emits task_id
+    discovery_task_started = pyqtSignal(str)  # Emits task_id (no longer emitted)
     discovery_started = pyqtSignal(str)  # Emits a message
     discovery_finished = pyqtSignal(str)  # Emits a message (success or failure)
 
@@ -26,99 +26,117 @@ class TestDiscoveryController(BaseController):
         self,
         analyzer_service: "PytestAnalyzerService",
         parent: Optional[QObject] = None,
-        task_manager: Optional["TaskManager"] = None,
+        task_manager: Optional[
+            "TaskManager"
+        ] = None,  # Kept for BaseController compatibility if needed
     ):
-        super().__init__(parent, task_manager=task_manager)
+        super().__init__(parent, task_manager=task_manager)  # Pass task_manager to BaseController
         self.analyzer_service = analyzer_service
-        self._current_discovery_task_id: Optional[str] = None
+        # _current_discovery_task_id is no longer needed for synchronous operation
 
-        if self.task_manager:
-            self.task_manager.task_completed.connect(self._handle_task_completion)
-            self.task_manager.task_failed.connect(self._handle_task_failure)
+        # Task manager signal connections are removed as tasks are no longer used here.
 
     @pyqtSlot()
     def request_discover_tests(self) -> None:
-        """Initiates test discovery in the background."""
-        if self._current_discovery_task_id and self.task_manager:
-            # Optionally, cancel the previous task or inform the user
-            self.logger.info("Test discovery is already in progress.")
-            # self.task_manager.cancel_task(self._current_discovery_task_id)
-            # For now, let's just prevent concurrent discoveries from this controller
-            QMessageBox.information(
-                None, "Test Discovery", "A discovery process is already running."
-            )
-            return
+        """Initiates synchronous test file discovery using filesystem scan."""
+        # Synchronous operation, no check for existing discovery needed.
 
-        self.logger.info("Requesting test discovery.")
-        self.discovery_started.emit("Starting test discovery...")
+        self.logger.info("Requesting synchronous test file discovery.")
+        self.discovery_started.emit("Starting test file discovery...")
 
-        # Determine the path to run discovery on (e.g., project root)
-        # Assuming project_root is a Path object
         project_root_path = self.analyzer_service.settings.project_root
         if not project_root_path:
-            self.logger.error("Project root not set in settings. Cannot discover tests.")
+            self.logger.error("Project root not set in settings. Cannot discover test files.")
             self.discovery_finished.emit("Discovery failed: Project root not configured.")
             QMessageBox.critical(
                 None, "Discovery Error", "Project root is not configured in settings."
             )
             return
 
-        test_path = str(project_root_path)
-        self.logger.info(f"Discovering tests in: {test_path}")
+        # Common directories to exclude from test discovery
+        # These are relative to the project_root_path
+        excluded_dirs = [
+            ".pixi/",
+            ".venv/",
+            "venv/",  # Common alternative for virtual envs
+            ".env/",
+            "env/",
+            ".hatch/",
+            ".git/",
+            "__pycache__/",
+            ".pytest_cache/",
+            ".tox/",
+            "node_modules/",
+            "dist/",
+            "build/",
+            ".coverage/",
+            ".mypy_cache/",
+            ".ruff_cache/",
+            "site-packages/",  # Often inside venvs but can be elsewhere
+            "docs/",  # Typically not containing tests
+            "examples/",  # Often not part of main test suite
+        ]
 
-        args = (test_path,)
-        # run_pytest_only expects pytest_args, quiet, progress, task_id
-        kwargs = {
-            "pytest_args": ["--collect-only", "-q"],  # -q for less verbose collection
-            "quiet": True,  # Suppress run_pytest_only's own potential console output
-        }
+        # Ensure project_root_path is a Path object.
+        from pathlib import Path
 
-        task_id = self.submit_background_task(
-            callable_task=self.analyzer_service.run_pytest_only,
-            args=args,
-            kwargs=kwargs,
-            use_progress_bridge=True,  # So progress updates from service are caught
-        )
+        if not isinstance(project_root_path, Path):
+            project_root_path = Path(project_root_path)
 
-        if task_id:
-            self._current_discovery_task_id = task_id
-            self.discovery_task_started.emit(task_id)
-            self.logger.info(f"Test discovery task submitted with ID: {task_id}")
-            # Global task started message will be handled by MainController
-        else:
-            self.logger.error("Failed to submit test discovery task.")
-            self.discovery_finished.emit("Discovery failed: Could not start background task.")
-            QMessageBox.warning(
-                None, "Discovery Error", "Failed to start the test discovery process."
+        discovered_items: List[PytestFailure] = []
+        try:
+            self.logger.info(f"Scanning for test files in {project_root_path}")
+
+            # Using a set to avoid duplicates if rglob patterns overlap
+            # or due to symlinks pointing within the same scanned area.
+            test_file_paths = set()
+            test_file_paths.update(project_root_path.rglob("test_*.py"))
+            test_file_paths.update(project_root_path.rglob("*_test.py"))
+
+            for file_path in test_file_paths:
+                if not file_path.is_file():
+                    continue
+
+                relative_file_path_str = str(file_path.relative_to(project_root_path))
+
+                # Check against excluded directories
+                is_excluded = False
+                for excluded_dir_pattern in excluded_dirs:
+                    # Ensure pattern ends with a slash for directory matching,
+                    # or handle exact file matches if patterns are specific.
+                    # Current patterns like ".venv/" imply directory exclusion.
+                    if relative_file_path_str.startswith(excluded_dir_pattern):
+                        is_excluded = True
+                        break
+
+                if is_excluded:
+                    self.logger.debug(f"Excluding file due to rule: {file_path}")
+                    continue
+
+                # Create a minimal PytestFailure object for the discovered file
+                # Use the relative file path as the node ID to match pytest conventions
+                failure_item = PytestFailure(
+                    test_name=relative_file_path_str,  # Use relative file path as node ID
+                    test_file=relative_file_path_str,
+                    error_type="discovered_file",  # Indicates this is from discovery
+                    error_message="",  # No error for discovered files
+                    traceback="",  # No traceback for discovered files
+                    line_number=None,
+                )
+                discovered_items.append(failure_item)
+
+            self.logger.info(f"Discovered {len(discovered_items)} test files.")
+            self.tests_discovered.emit(discovered_items)
+            self.discovery_finished.emit(
+                f"Test file discovery complete. Found {len(discovered_items)} files."
             )
 
-    @pyqtSlot(str, object)
-    def _handle_task_completion(self, task_id: str, result: Any) -> None:
-        if task_id == self._current_discovery_task_id:
-            self.logger.info(f"Test discovery task {task_id} completed.")
-            self._current_discovery_task_id = None
+        except Exception as e:
+            self.logger.exception("Error during synchronous test file discovery:")
+            self.discovery_finished.emit(f"Discovery failed: {e}")
+            QMessageBox.critical(
+                None, "Discovery Error", f"An error occurred during test file discovery:\n{e}"
+            )
 
-            if isinstance(result, list) and (not result or isinstance(result[0], PytestFailure)):
-                collected_items: List[PytestFailure] = result
-                self.logger.info(f"Discovered {len(collected_items)} test items.")
-                self.tests_discovered.emit(collected_items)
-                self.discovery_finished.emit(
-                    f"Test discovery complete. Found {len(collected_items)} items."
-                )
-            else:
-                self.logger.error(
-                    f"Discovery task {task_id} returned unexpected result type: {type(result)}"
-                )
-                self.discovery_finished.emit("Discovery failed: Unexpected result from collection.")
-                QMessageBox.warning(
-                    None, "Discovery Error", "Test discovery process returned an unexpected result."
-                )
-
-    @pyqtSlot(str, str)
-    def _handle_task_failure(self, task_id: str, error_message: str) -> None:
-        if task_id == self._current_discovery_task_id:
-            self.logger.error(f"Test discovery task {task_id} failed: {error_message}")
-            self._current_discovery_task_id = None
-            self.discovery_finished.emit(f"Test discovery failed: {error_message.splitlines()[0]}")
-            # Global task failed message will be handled by MainController, which shows a QMessageBox
-            # QMessageBox.critical(None, "Discovery Error", f"Test discovery process failed:\n{error_message.splitlines()[0]}")
+    # _handle_task_completion and _handle_task_failure are no longer needed
+    # as the operation is synchronous and doesn't use the TaskManager directly.

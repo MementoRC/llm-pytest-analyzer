@@ -79,14 +79,24 @@ class TestDiscoveryView(QWidget):
         Parses a pytest node ID into file, class (optional), and function/method.
         Example: "test_module.py::TestClass::test_method" -> ("test_module.py", "TestClass", "test_method")
         Example: "test_module.py::test_function" -> ("test_module.py", None, "test_function")
+        Example: "tests/test_module.py" (file path only) -> ("tests/test_module.py", None, "test_module.py")
         """
         parts = node_id.split("::")
         file_path = parts[0]
+
         if len(parts) == 2:  # test_file.py::test_function
             return file_path, None, parts[1]
         if len(parts) == 3:  # test_file.py::TestClass::test_method
             return file_path, parts[1], parts[2]
-        logger.warning(f"Could not parse node ID: {node_id}")
+        if len(parts) == 1:  # Just a file path (e.g., "tests/test_module.py")
+            # For file-only node IDs, use the file path as-is and extract basename for display
+            from pathlib import Path
+
+            path_obj = Path(node_id)
+            display_name = path_obj.name  # Just the filename for display
+            return file_path, None, display_name
+        # Unexpected format, but handle gracefully
+        logger.debug(f"Unusual node ID format: {node_id}")
         return node_id, None, node_id  # Fallback
 
     def update_test_tree(self, collected_items: List[PytestFailure]) -> None:

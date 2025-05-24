@@ -61,10 +61,9 @@ class WorkflowCoordinator(QObject):
         self.state_machine.state_changed.connect(self._on_state_changed_update_guide)
 
         # FileController signals
-        self.file_controller.results_loaded.connect(self._handle_results_loaded)  # For reports
-        # Need a signal from FileController when a .py file or directory is selected but not yet run
-        # For now, using results_loaded with empty list for .py/directory selection
-        # A more specific signal like `source_selected_for_run` might be better.
+        self.file_controller.python_file_opened.connect(self._handle_python_file_opened)
+        self.file_controller.directory_opened.connect(self._handle_directory_opened)
+        self.file_controller.report_parsed.connect(self._handle_report_parsed)
 
         # TestDiscoveryController signals
         self.test_discovery_controller.discovery_started.connect(self._handle_discovery_started)
@@ -123,29 +122,35 @@ class WorkflowCoordinator(QObject):
         except ValueError:
             logger.error(f"Invalid state value received: {new_state_val}")
 
+    @pyqtSlot(Path)
+    def _handle_python_file_opened(self, path: Path) -> None:
+        """Handles selection of a Python test file."""
+        self.state_machine.to_file_selected(file_path=path, file_type="py")
+
+    @pyqtSlot(Path)
+    def _handle_directory_opened(self, path: Path) -> None:
+        """Handles selection of a test directory."""
+        self.state_machine.to_file_selected(file_path=path, file_type="directory")
+
     @pyqtSlot(list, Path, str)
-    def _handle_results_loaded(
+    def _handle_report_parsed(
         self, results: List[Any], source_file: Path, source_type: str
     ) -> None:
-        """Handles loading of test results from reports or initial selection of .py/dir."""
-        if source_type in ("json", "xml"):  # Report loaded
-            failure_count = sum(
-                1
-                for r in results
-                if hasattr(r, "status")
-                and r.status
-                in ("failed", "error", TestResult.TestStatus.FAILED, TestResult.TestStatus.ERROR)
-            )
-            self.state_machine.to_results_available(
-                result_count=len(results),
-                failure_count=failure_count,
-                file_path=source_file,
-                file_type=source_type,
-            )
-        elif source_type in ("py", "directory"):  # .py file or directory selected
-            self.state_machine.to_file_selected(file_path=source_file, file_type=source_type)
-            # If it's a .py file, we might auto-trigger discovery or wait for user.
-            # For now, just FILE_SELECTED. User can click "Discover" or "Run".
+        """Handles loading of test results from parsed report files (JSON/XML)."""
+        # This method assumes source_type will be "json" or "xml" as per FileController's new signals
+        failure_count = sum(
+            1
+            for r in results
+            if hasattr(r, "status")
+            and r.status
+            in ("failed", "error", TestResult.TestStatus.FAILED, TestResult.TestStatus.ERROR)
+        )
+        self.state_machine.to_results_available(
+            result_count=len(results),
+            failure_count=failure_count,
+            file_path=source_file,
+            file_type=source_type,
+        )
 
     @pyqtSlot(str)
     def _handle_discovery_started(self, message: str) -> None:
@@ -190,7 +195,9 @@ class WorkflowCoordinator(QObject):
         # This signal comes from TestExecutionController after its _handle_task_completed.
         # The result (pytest_failures) is already processed by TestResultsController
         # to update the model. We can get counts from the model or the list.
-        total_results = self.analysis_controller.test_results_model.rowCount()  # Approximation
+        total_results = (
+            self.analysis_controller.test_results_model.total_count
+        )  # Get total result count
         failure_count = len(pytest_failures)
         self.state_machine.to_results_available(
             result_count=total_results,  # This might not be accurate if model isn't fully updated yet

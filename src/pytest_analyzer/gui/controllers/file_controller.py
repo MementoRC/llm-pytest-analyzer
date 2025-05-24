@@ -16,9 +16,11 @@ logger = logging.getLogger(__name__)
 class FileController(BaseController):
     """Handles file selection, loading, and report parsing."""
 
-    results_loaded = pyqtSignal(
+    python_file_opened = pyqtSignal(Path)
+    directory_opened = pyqtSignal(Path)
+    report_parsed = pyqtSignal(
         list, Path, str
-    )  # results: List[TestResult], source_file: Path, source_type: str
+    )  # results: List[TestResult], source_file: Path, source_type: str (json/xml)
     status_message_updated = pyqtSignal(str)
 
     def __init__(self, test_results_model: TestResultsModel, parent: QObject = None):
@@ -65,10 +67,9 @@ class FileController(BaseController):
         self.test_results_model.source_file = path
         self.test_results_model.source_type = "py"  # Indicates a single python file as source
 
-        # Emit results_loaded with empty list to signal source change and clear views
-        self.results_loaded.emit([], path, "py")
+        self.python_file_opened.emit(path)
         self.status_message_updated.emit(
-            f"Selected test file: {path.name}. Press 'Run Tests' to execute."
+            f"Selected test file: {path.name}. Press 'Refresh Tests' to discover or 'Run Tests' to execute."
         )
 
     def _load_directory(self, path: Path) -> None:
@@ -84,10 +85,9 @@ class FileController(BaseController):
         self.test_results_model.source_file = path
         self.test_results_model.source_type = "directory"
 
-        # Emit results_loaded with empty list to signal source change and clear views
-        self.results_loaded.emit([], path, "directory")
+        self.directory_opened.emit(path)
         self.status_message_updated.emit(
-            f"Selected directory: {path.name}. Press 'Run Tests' to execute."
+            f"Selected directory: {path.name}. Press 'Refresh Tests' to discover or 'Run Tests' to execute."
         )
 
     def _load_json_report(self, path: Path) -> None:
@@ -125,7 +125,7 @@ class FileController(BaseController):
                         test_result.failure_details = failure_details
                     results.append(test_result)
 
-            self.results_loaded.emit(results, path, "json")
+            self.report_parsed.emit(results, path, "json")
             self.status_message_updated.emit(f"Loaded {len(results)} test results from {path.name}")
             self.logger.info(f"Loaded {len(results)} test results from {path}")
 
@@ -194,7 +194,7 @@ class FileController(BaseController):
                             test_result.failure_details = failure_details
                         results.append(test_result)
 
-            self.results_loaded.emit(results, path, "xml")
+            self.report_parsed.emit(results, path, "xml")
             self.status_message_updated.emit(f"Loaded {len(results)} test results from {path.name}")
             self.logger.info(f"Loaded {len(results)} test results from {path}")
 

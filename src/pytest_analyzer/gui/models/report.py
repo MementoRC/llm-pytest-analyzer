@@ -110,6 +110,9 @@ class ReportGenerator(QObject):
         self.templates_dir = Path(__file__).parent.parent / "templates" / "reports"
         self.templates_dir.mkdir(parents=True, exist_ok=True)
 
+        # Initialize templates dictionary
+        self._templates = {}
+
         # Initialize default templates
         self._create_default_templates()
 
@@ -301,6 +304,23 @@ class ReportGenerator(QObject):
                 }
                 results_data.append(result_dict)
 
+        # Convert stats to JSON-serializable format
+        stats_dict = asdict(stats)
+        if "generation_time" in stats_dict:
+            stats_dict["generation_time"] = stats.generation_time.isoformat()
+
+        # Convert config to JSON-serializable format
+        config_dict = asdict(config)
+        if "output_path" in config_dict and config_dict["output_path"]:
+            config_dict["output_path"] = str(config_dict["output_path"])
+        if "template_path" in config_dict and config_dict["template_path"]:
+            config_dict["template_path"] = str(config_dict["template_path"])
+        # Convert enum values to strings
+        if "format" in config_dict:
+            config_dict["format"] = config.format.value
+        if "report_type" in config_dict:
+            config_dict["report_type"] = config.report_type.value
+
         # Prepare report data
         report_data = {
             "metadata": {
@@ -311,8 +331,8 @@ class ReportGenerator(QObject):
                 "generator": "Pytest Analyzer GUI",
                 "version": "1.0",
             },
-            "statistics": asdict(stats),
-            "configuration": asdict(config),
+            "statistics": stats_dict,
+            "configuration": config_dict,
             "test_results": results_data,
             "session_data": session_data.to_dict() if session_data else None,
         }

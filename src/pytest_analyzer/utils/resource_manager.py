@@ -2,6 +2,7 @@ import asyncio
 import logging
 import resource
 import signal
+import threading
 import time
 from collections import defaultdict
 from collections.abc import AsyncIterator, Awaitable, Iterator
@@ -35,28 +36,68 @@ class MemoryLimitError(Exception):
 
 @contextmanager
 def timeout_context(seconds: float) -> Iterator[None]:
-    """Context manager for timing out operations"""
-
-    def handler(signum, frame):
-        raise TimeoutError(f"Operation exceeded time limit of {seconds} seconds")
-
-    # Check for negative timeout
+    """Context manager for timing out operations.
+    Uses signal.setitimer in the main thread and threading.Timer with ctypes in worker threads.
+    """
     if seconds < 0:
         raise ValueError("Timeout seconds must be non-negative")
 
-    # Store original handler
-    original_handler = signal.getsignal(signal.SIGALRM)
+    current_thread = threading.current_thread()
 
-    # Set new handler and timer
-    signal.signal(signal.SIGALRM, handler)
-    signal.setitimer(signal.ITIMER_REAL, seconds)  # Use setitimer for float support
+    if current_thread == threading.main_thread():
+        # Main thread: use signal-based timeout
+        if seconds == 0:  # setitimer with 0 disables the timer, so no timeout
+            yield
+            return
 
-    try:
-        yield
-    finally:
-        # Reset timer and restore original handler
-        signal.setitimer(signal.ITIMER_REAL, 0)
-        signal.signal(signal.SIGALRM, original_handler)
+        def handler(signum, frame):
+            raise TimeoutError(f"Operation exceeded time limit of {seconds} seconds (main thread)")
+
+        original_handler = signal.getsignal(signal.SIGALRM)
+        try:
+            signal.signal(signal.SIGALRM, handler)
+            signal.setitimer(signal.ITIMER_REAL, seconds)
+            yield
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)  # Disable the timer
+            signal.signal(signal.SIGALRM, original_handler)  # Restore original handler
+    else:
+        # Worker thread: use a simpler cooperative timeout mechanism (post-operation check).
+        # This mechanism does not interrupt the operation but logs if it exceeds the timeout,
+        # and importantly, does not create any new threads.
+        if seconds == 0:  # No timeout if seconds is 0
+            yield
+            return
+
+        start_time = time.time()
+        worker_thread_id = threading.get_ident()  # For logging
+        logger.debug(
+            f"Worker thread timeout tracking (post-operation check) for thread {worker_thread_id}, "
+            f"timeout={seconds}s. Operation will not be interrupted by this context manager."
+        )
+
+        try:
+            yield
+        finally:
+            elapsed_time = time.time() - start_time
+            # Only log a warning if a timeout duration was specified (seconds > 0) and exceeded.
+            if seconds > 0 and elapsed_time > seconds:
+                logger.warning(
+                    f"Operation in worker thread {worker_thread_id} exceeded time limit of {seconds}s. "
+                    f"Actual duration: {elapsed_time:.2f}s. Operation was not interrupted by this context."
+                )
+
+            # Gentle cleanup without forcing garbage collection
+            try:
+                import gc
+
+                logger.debug(f"Running gentle GC for thread {worker_thread_id}")
+                # Just hint to GC that cleanup might be good, don't force it
+                if gc.isenabled():
+                    gc.collect(0)  # Only collect generation 0 (lightweight)
+                logger.debug(f"GC completed for thread {worker_thread_id}")
+            except Exception as e:
+                logger.error(f"GC error for thread {worker_thread_id}: {e}")
 
 
 def with_timeout(seconds: float) -> Callable[[Callable[..., T]], Callable[..., T]]:

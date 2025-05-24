@@ -1,3 +1,4 @@
+import ast
 import asyncio
 import logging
 import os
@@ -1391,6 +1392,138 @@ class PytestAnalyzerService:
 
             # Return results from context (even if partial due to errors)
             return context.all_suggestions
+
+    def discover_tests_filesystem(
+        self,
+        project_root: Path,
+        excluded_dirs: List[str],
+        progress: Optional[Progress] = None,
+        parent_task_id: Optional[TaskID] = None,
+    ) -> List[PytestFailure]:
+        """
+        Discovers tests by scanning Python files and parsing their AST.
+        This is a lightweight alternative to 'pytest --collect-only'.
+
+        Args:
+            project_root: The root directory of the project to scan.
+            excluded_dirs: A list of directory paths (relative to project_root) to exclude.
+            progress: Optional rich.progress.Progress object for reporting.
+            parent_task_id: Optional rich.progress.TaskID for parent task.
+
+        Returns:
+            A list of PytestFailure objects representing discovered tests.
+        """
+        discovered_tests: List[PytestFailure] = []
+
+        discovery_progress_id: Optional[TaskID] = None
+        if progress and parent_task_id:
+            discovery_progress_id = progress.add_task(
+                "Discovering tests (filesystem scan)...",
+                total=None,  # Indeterminate for now
+                parent=parent_task_id,
+            )
+
+        logger.info(f"Starting filesystem test discovery in: {project_root}")
+
+        # Normalize excluded_dirs to ensure they end with a separator for proper prefix matching
+        normalized_excluded_dirs = [
+            (d + os.sep) if not d.endswith(os.sep) else d for d in excluded_dirs
+        ]
+
+        file_count = 0
+        test_file_count = 0
+
+        for abs_py_file_path in project_root.rglob("*.py"):
+            file_count += 1
+            if not abs_py_file_path.is_file():
+                continue
+
+            try:
+                relative_file_path_str = str(abs_py_file_path.relative_to(project_root))
+            except ValueError:
+                # Should not happen if rglob is from project_root, but defensive
+                logger.warning(f"Could not get relative path for {abs_py_file_path}")
+                continue
+
+            # Check exclusion
+            is_excluded = False
+            for excluded_path_prefix in normalized_excluded_dirs:
+                if relative_file_path_str.startswith(excluded_path_prefix):
+                    is_excluded = True
+                    break
+            if is_excluded:
+                continue
+
+            # Check if it's a test file
+            file_name = abs_py_file_path.name
+            if not (file_name.startswith("test_") or file_name.endswith("_test.py")):
+                continue
+
+            test_file_count += 1
+
+            try:
+                with open(abs_py_file_path, encoding="utf-8") as source_file:
+                    source_code = source_file.read()
+                tree = ast.parse(source_code, filename=str(abs_py_file_path))
+
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.FunctionDef) and node.name.startswith("test_"):
+                        # Check if function is at module level (not nested in another function)
+                        # A simple check: iterate upwards in the AST tree.
+                        # For simplicity here, we assume functions directly under module or class are relevant.
+                        # This check can be refined if needed.
+                        parent = next(
+                            (p for p in ast.walk(tree) if node in getattr(p, "body", [])), None
+                        )
+                        if isinstance(parent, ast.Module):  # Top-level function
+                            nodeid = f"{relative_file_path_str}::{node.name}"
+                            discovered_tests.append(
+                                PytestFailure(
+                                    nodeid=nodeid,
+                                    outcome="discovered",  # Custom outcome
+                                    file_path=str(abs_py_file_path),
+                                    line_number=node.lineno,
+                                    error_message=None,
+                                    traceback=None,
+                                )
+                            )
+                    elif isinstance(node, ast.ClassDef) and node.name.startswith("Test"):
+                        for method_node in node.body:
+                            if isinstance(
+                                method_node, ast.FunctionDef
+                            ) and method_node.name.startswith("test_"):
+                                nodeid = (
+                                    f"{relative_file_path_str}::{node.name}::{method_node.name}"
+                                )
+                                discovered_tests.append(
+                                    PytestFailure(
+                                        nodeid=nodeid,
+                                        outcome="discovered",
+                                        file_path=str(abs_py_file_path),
+                                        line_number=method_node.lineno,
+                                        error_message=None,
+                                        traceback=None,
+                                    )
+                                )
+            except FileNotFoundError:
+                logger.warning(f"File not found during AST parsing: {abs_py_file_path}")
+            except SyntaxError:
+                logger.warning(f"Syntax error in file {abs_py_file_path}, skipping AST parsing.")
+            except Exception as e:
+                logger.error(f"Error parsing {abs_py_file_path}: {e}")
+
+        logger.info(
+            f"Filesystem discovery: Scanned {file_count} .py files, found {test_file_count} potential test files, discovered {len(discovered_tests)} test items."
+        )
+
+        if progress and discovery_progress_id is not None:
+            progress.update(
+                discovery_progress_id,
+                completed=True,
+                description=f"[green]Filesystem discovery complete. Found {len(discovered_tests)} items.",
+            )
+
+        return discovered_tests
 
     def apply_suggestion(self, suggestion: FixSuggestion) -> FixApplicationResult:
         """

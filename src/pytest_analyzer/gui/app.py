@@ -335,6 +335,28 @@ def create_app(argv: Optional[List[str]] = None) -> PytestAnalyzerApp:
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
 
+    # Set memory management for GUI process
+    try:
+        import logging
+        import resource
+
+        logger = logging.getLogger(__name__)
+
+        # Get current memory usage
+        current_mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024  # Convert to bytes
+        logger.info(f"GUI process current memory usage: {current_mem / 1024 / 1024:.1f} MB")
+
+        # Set a reasonable memory limit for the GUI process (1.5GB)
+        # This prevents runaway memory consumption while allowing normal operation
+        memory_limit = 1536 * 1024 * 1024  # 1.5GB in bytes
+        try:
+            resource.setrlimit(resource.RLIMIT_AS, (memory_limit, memory_limit))
+            logger.info(f"Set memory limit for GUI process: {memory_limit / 1024 / 1024:.1f} MB")
+        except OSError as e:
+            logger.warning(f"Could not set memory limit: {e}")
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"Memory management setup failed: {e}")
+
     # Create the application
     app = PytestAnalyzerApp(argv)
 

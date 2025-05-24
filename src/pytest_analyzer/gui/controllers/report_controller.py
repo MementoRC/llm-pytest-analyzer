@@ -111,7 +111,7 @@ class ReportController(QObject):
 
         file_path, _ = QFileDialog.getSaveFileName(
             self.parent_widget,
-            f"Export {report_format.value} Report",
+            f"Export {report_format.value.upper()} Report",
             f"pytest_export.{report_format.value.lower()}",
             filters.get(report_format, "All Files (*)"),
         )

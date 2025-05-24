@@ -45,6 +45,7 @@ class LazyTabWidget(QTabWidget):
         super().__init__(parent)
         self._lazy_tabs = {}  # tab_index: (title, factory_func)
         self._created_tabs = set()  # track which tabs have been created
+        self._is_creating_tab = False  # Flag to prevent recursive tab creation
         self.currentChanged.connect(self._on_tab_changed)
 
     def add_lazy_tab(self, factory_func, title: str) -> int:
@@ -55,17 +56,34 @@ class LazyTabWidget(QTabWidget):
 
     def _on_tab_changed(self, index: int):
         """Create tab content when tab is first accessed."""
+        if self._is_creating_tab:  # Prevent recursive calls during tab creation
+            return
+
         if index in self._lazy_tabs and index not in self._created_tabs:
-            title, factory_func = self._lazy_tabs[index]
+            # Set flag to indicate tab creation is in progress
+            self._is_creating_tab = True
             try:
+                title, factory_func = self._lazy_tabs[index]
                 widget = factory_func()
-                self.removeTab(index)  # Remove placeholder
-                self.insertTab(index, widget, title)
-                self.setCurrentIndex(index)  # Restore selection
+
+                # Temporarily block signals during the actual tab modification
+                # and setCurrentIndex call to prevent re-triggering currentChanged.
+                self.blockSignals(True)
+                try:
+                    self.removeTab(index)  # Remove placeholder
+                    self.insertTab(index, widget, title)
+                    self.setCurrentIndex(index)  # Restore selection
+                finally:
+                    # Ensure signals are unblocked even if an error occurs during tab ops
+                    self.blockSignals(False)
+
                 self._created_tabs.add(index)
                 logger.debug(f"Lazily created tab: {title}")
             except Exception as e:
                 logger.error(f"Failed to create lazy tab '{title}': {e}")
+            finally:
+                # Reset flag after creation attempt (success or failure)
+                self._is_creating_tab = False
 
     def get_widget(self, index: int):
         """Get widget at index, creating it if necessary."""
@@ -101,6 +119,7 @@ class MainWindow(QMainWindow):
         self._test_discovery_view = None
         self._test_results_view = None
         self._test_output_view = None
+        self._code_editor_view = None
 
         # Set window properties
         self.setWindowTitle("Pytest Analyzer")
@@ -286,6 +305,22 @@ class MainWindow(QMainWindow):
             logger.debug("Created test output view")
         return self._test_output_view
 
+    def _create_code_editor_view(self):
+        """Factory function for code editor view."""
+        if self._code_editor_view is None:
+            try:
+                from .views.code_editor_view import CodeEditorView
+
+                self._code_editor_view = CodeEditorView()
+                logger.debug("Created QScintilla code editor view")
+            except ImportError as e:
+                logger.warning(f"QScintilla not available, using simple editor: {e}")
+                from .views.simple_code_editor_view import SimpleCodeEditorView
+
+                self._code_editor_view = SimpleCodeEditorView()
+                logger.debug("Created simple code editor view")
+        return self._code_editor_view
+
     @property
     def file_selection_view(self):
         """Get file selection view, creating if needed."""
@@ -305,6 +340,11 @@ class MainWindow(QMainWindow):
     def test_output_view(self):
         """Get test output view, creating if needed."""
         return self._create_test_output_view()
+
+    @property
+    def code_editor_view(self):
+        """Get code editor view, creating if needed."""
+        return self._create_code_editor_view()
 
     def _init_ui(self) -> None:
         """Initialize the UI components."""
@@ -342,6 +382,7 @@ class MainWindow(QMainWindow):
         self.analysis_tabs = LazyTabWidget()
         self.analysis_tabs.add_lazy_tab(self._create_test_results_view, "Test Results")
         self.analysis_tabs.add_lazy_tab(self._create_test_output_view, "Live Test Output")
+        self.analysis_tabs.add_lazy_tab(self._create_code_editor_view, "Code Editor")
 
         self.analysis_layout.addWidget(self.analysis_tabs)
 
@@ -563,6 +604,10 @@ class MainWindow(QMainWindow):
         Args:
             event: Close event
         """
+        # Clean up background tasks and threads
+        if hasattr(self, "main_controller") and self.main_controller:
+            self.main_controller.cleanup_on_close()
+
         # Save window state
         settings = QSettings()
         settings.setValue("mainwindow/geometry", self.saveGeometry())

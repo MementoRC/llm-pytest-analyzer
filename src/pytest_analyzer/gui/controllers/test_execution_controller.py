@@ -76,7 +76,7 @@ class TestExecutionController(BaseController):
         task_id = self.submit_background_task(
             callable_task=self.analyzer_service.run_pytest_only,
             args=(test_path, effective_pytest_args),
-            kwargs={"output_callback": self._output_callback_handler},
+            kwargs={},  # No additional kwargs needed for now
             use_progress_bridge=True,  # This will pass 'progress' and 'task_id' to run_pytest_only
         )
         return task_id
