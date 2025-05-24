@@ -175,8 +175,9 @@ class JsonResultExtractor:
                 file_path_str = str(self.path_resolver.resolve_path(test["file"]))
 
             # Extract line number
-            if "line" in test:
-                line_number = test["line"]
+            line_number = test.get("line")  # Prefer "line"
+            if line_number is None:
+                line_number = test.get("lineno")  # Fallback to "lineno"
 
             # Default error details
             error_type_str: Optional[str] = None
@@ -185,84 +186,113 @@ class JsonResultExtractor:
             relevant_code_str: Optional[str] = None
 
             if outcome in ["failed", "error"]:
+                # Point 2: Extract from top-level "message" field when available.
+                if "message" in test:
+                    error_message_str = test["message"]
+
                 error_source_block = None
-                # Determine which block (setup, call, teardown) is the source of the error
                 setup_info = test.get("setup", {})
                 call_info = test.get("call", {})
                 teardown_info = test.get("teardown", {})
 
+                # Determine which block (setup, call, teardown) is the source of the error
                 if setup_info.get("outcome") == "failed":
                     error_source_block = setup_info
-                    error_type_str = "SetupError"  # Default, might be overridden by exc_info
+                    error_type_str = "SetupError"
                 elif call_info.get("outcome") == "failed" or call_info.get("outcome") == "error":
                     error_source_block = call_info
-                    # error_type_str = "CallError" # Default
                 elif teardown_info.get("outcome") == "failed":
                     error_source_block = teardown_info
-                    error_type_str = "TeardownError"  # Default
+                    error_type_str = "TeardownError"
+                # Point 3: If overall outcome is failed/error, and call_info has traceback, assume call is the source
+                elif outcome in ["failed", "error"] and call_info.get("traceback"):
+                    error_source_block = call_info
                 elif outcome == "error":  # General error not attributed to a specific phase
                     error_source_block = test  # Use top-level test dict
-                    # error_type_str = "UnknownError" # Default
 
                 if error_source_block:
                     exc_info = error_source_block.get("exc_info")
                     if exc_info and isinstance(exc_info, dict) and "type" in exc_info:
                         error_type_str = exc_info["type"]
-                        # Prefer exc_info.message if available
-                        error_message_str = exc_info.get(
-                            "message", error_source_block.get("longrepr")
-                        )
-                    else:
+                        # Only set error_message_str from exc_info if not already set from top-level test["message"]
+                        if not error_message_str:
+                            error_message_str = exc_info.get(
+                                "message", error_source_block.get("longrepr")
+                            )
+                    elif (
+                        not error_message_str
+                    ):  # If no exc_info, or exc_info missing details, and message not set
                         error_message_str = error_source_block.get("longrepr")
 
-                    # If error_type_str is still generic or None, try to parse from message
+                    # Parse error_type from message if still generic or None
                     if (
                         not error_type_str
                         or error_type_str
-                        in ["SetupError", "TeardownError", "UnknownError", "CallError"]
+                        in [
+                            "SetupError",
+                            "TeardownError",
+                            "UnknownError",
+                            "CallError",
+                        ]  # Added CallError for completeness
                     ) and error_message_str:
-                        # Parse first line of message for ErrorType:
                         first_line_of_message = error_message_str.splitlines()[0]
                         match = re.search(r"^([\w\.]+Error):", first_line_of_message)
                         if match:
                             error_type_str = match.group(1)
 
+                    # Point 3: Traceback extraction (ensured by correct error_source_block)
                     tb_list = error_source_block.get("traceback")
                     if isinstance(tb_list, list):
                         formatted_tb_lines = []
-                        for entry in tb_list:
+                        for entry_idx, entry in enumerate(tb_list):
                             if isinstance(entry, dict):
-                                line = f'  File "{entry.get("path", "")}", line {entry.get("lineno", "")}'
-                                # Update file_path_str and line_number if this is the most specific error location
-                                # This is heuristic; pytest reports test's definition line usually.
-                                # if entry.get('path') and entry.get('lineno'):
-                                #    file_path_str = str(self.path_resolver.resolve_path(entry.get('path')))
-                                #    line_number = entry.get('lineno')
-                                formatted_tb_lines.append(line)
-                                if entry.get("message"):
-                                    formatted_tb_lines.append(f"    {entry.get('message')}")
-                            else:
+                                path = entry.get("path", "")
+                                tb_lineno = entry.get("lineno")  # Use .get for safety
+                                tb_message_in_frame = entry.get("message", "")
+
+                                line_entry = f'  File "{path}", line {tb_lineno if tb_lineno is not None else ""}'
+                                formatted_tb_lines.append(line_entry)
+                                if tb_message_in_frame:
+                                    formatted_tb_lines.append(f"    {tb_message_in_frame}")
+
+                                # Point 4: Line number from call.traceback[0].lineno
+                                # Update line_number if it's not set from top-level and traceback provides one.
+                                if entry_idx == 0 and tb_lineno is not None and line_number is None:
+                                    line_number = tb_lineno
+                            else:  # Should not happen with the sample JSON structure for traceback
                                 formatted_tb_lines.append(str(entry))
                         traceback_str = "\n".join(formatted_tb_lines)
-                    elif tb_list:  # Is a string
+                    elif tb_list:  # Is a string (fallback for other formats)
                         traceback_str = str(tb_list)
 
                     if error_source_block is call_info:  # Only 'call' has 'source'
                         relevant_code_str = call_info.get("source")
 
-                # Fallback if no specific block found but outcome is error/failed
-                if not error_source_block and outcome == "error":
-                    error_message_str = test.get("longrepr", test.get("message", ""))
-                    match = (
-                        re.search(r"^([\w\.]+Error):", error_message_str.splitlines()[0])
-                        if error_message_str
-                        else None
-                    )
-                    if match:
-                        error_type_str = match.group(1)
+                # Fallback for error_message_str if still not found after processing error_source_block
+                # and not set from top-level test.get("message")
+                if not error_message_str and outcome in ["error", "failed"]:
+                    # test.get("message") was already tried. Try test.get("longrepr")
+                    error_message_str = test.get("longrepr")
+                    # Re-parse error_type if message was found here and error_type is still generic or not set
+                    if error_message_str and (
+                        not error_type_str
+                        or error_type_str
+                        in [
+                            "SetupError",
+                            "TeardownError",
+                            "UnknownError",
+                            "CallError",
+                            "Failed",
+                            "Error",
+                        ]
+                    ):
+                        first_line_of_message = error_message_str.splitlines()[0]
+                        match = re.search(r"^([\w\.]+Error):", first_line_of_message)
+                        if match:
+                            error_type_str = match.group(1)
 
                 # Ensure error_type_str is set if outcome is error/failed
-                if not error_type_str:
+                if not error_type_str and outcome in ["failed", "error"]:
                     error_type_str = outcome.capitalize()  # e.g. "Failed", "Error"
                 logger.debug(
                     f"Test {nodeid} outcome is '{outcome}'. Error details: type='{error_type_str}', message='{error_message_str}'"
