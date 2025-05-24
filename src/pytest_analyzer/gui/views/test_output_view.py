@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 class PythonTracebackHighlighter(QSyntaxHighlighter):
     def __init__(self, parent=None):
         super().__init__(parent)
+        # logger.debug("PythonTracebackHighlighter: Initializing.") # Can be noisy if many documents
         self.highlighting_rules = []
 
         # Rule for "File /path/to/file.py, line 123, in func_name"
@@ -56,6 +57,8 @@ class PythonTracebackHighlighter(QSyntaxHighlighter):
         self.highlighting_rules.append((r"^\s+.+", indented_code_format))
 
     def highlightBlock(self, text: str) -> None:
+        # This logs for every block, can be very verbose.
+        # logger.debug(f"PythonTracebackHighlighter: Highlighting block starting with: '{text[:30]}...'")
         for pattern, style_format in self.highlighting_rules:
             # Use re.finditer to find all occurrences of the pattern in the block
             for match in re.finditer(pattern, text):
@@ -70,13 +73,15 @@ class TestOutputView(QWidget):
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
+        logger.debug("TestOutputView: Initializing.")
         self._autoscroll = True
         self._raw_lines: List[str] = []
         self._init_ui()
-        # Initialize highlighter after self.output_edit is created
         self._highlighter = PythonTracebackHighlighter(self.output_edit.document())
+        logger.debug("TestOutputView: Initialization complete.")
 
     def _init_ui(self) -> None:
+        logger.debug("TestOutputView: Initializing UI.")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
@@ -119,6 +124,7 @@ class TestOutputView(QWidget):
         self.output_edit.setFont(font)
         self.output_edit.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
         layout.addWidget(self.output_edit, 1)
+        logger.debug("TestOutputView: UI initialized.")
 
     def _is_error_line(self, text: str) -> bool:
         """Checks if a line is considered an error line for filtering."""
@@ -137,6 +143,7 @@ class TestOutputView(QWidget):
         This method should be called from the GUI thread.
         Assumes `text` is a single line (ends with newline or is last line).
         """
+        logger.debug(f"TestOutputView: Appending output (first 30 chars): '{text[:30].strip()}'")
         self._raw_lines.append(text)
 
         current_filter_index = self.filter_combo.currentIndex()
@@ -158,12 +165,15 @@ class TestOutputView(QWidget):
             self.output_edit.moveCursor(QTextCursor.MoveOperation.End)
             self.output_edit.insertPlainText(text)
 
-            if self._autoscroll and at_bottom:
+            if self._autoscroll and at_bottom:  # at_bottom defined in original code
+                # logger.debug("TestOutputView: Autoscrolling to ensure cursor visible.") # Can be noisy
                 self.output_edit.ensureCursorVisible()
 
     def _on_filter_changed(self, index: int) -> None:
         """Handles changes in the filter selection."""
-        self.output_edit.clear()  # Clear existing text
+        filter_text = self.filter_combo.itemText(index)
+        logger.debug(f"TestOutputView: Filter changed. Index: {index}, Text: '{filter_text}'.")
+        self.output_edit.clear()
 
         # Try to preserve scroll position if not autoscrolling
         # This is tricky because content length changes. For simplicity,
@@ -183,21 +193,28 @@ class TestOutputView(QWidget):
                 self.output_edit.insertPlainText(line)
 
         if self._autoscroll:
+            logger.debug("TestOutputView: Autoscrolling after filter change.")
             self.output_edit.ensureCursorVisible()
+        logger.debug("TestOutputView: Output re-filtered and displayed.")
 
     def clear_output(self) -> None:
+        logger.debug("TestOutputView: Clearing output.")
         self.output_edit.clear()
         self._raw_lines.clear()
+        logger.debug("TestOutputView: Output cleared.")
 
     def copy_output(self) -> None:
+        logger.debug("TestOutputView: Copying output to clipboard.")
         clipboard = QGuiApplication.clipboard()
         if clipboard:
             clipboard.setText(self.output_edit.toPlainText())
+            logger.debug("TestOutputView: Output copied.")
         else:
             logger.warning("Could not access clipboard for TestOutputView.")
 
     def _on_autoscroll_toggled(self, checked: bool) -> None:
+        logger.debug(f"TestOutputView: Autoscroll toggled. New state: {checked}.")
         self._autoscroll = checked
         if checked:
-            # If autoscroll is re-enabled, scroll to the bottom
+            logger.debug("TestOutputView: Autoscroll enabled, ensuring cursor visible.")
             self.output_edit.ensureCursorVisible()
