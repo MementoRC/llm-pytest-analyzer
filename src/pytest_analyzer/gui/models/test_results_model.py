@@ -313,26 +313,43 @@ class TestResultsModel(QObject):
         )
         converted_test_results: List[TestResult] = []
         if not pytest_failures:
-            logger.info(f"Test run from '{executed_source_path}' reported no failures.")
-            logger.debug("TestResultsModel: No failures to convert.")
+            # This case means the test run itself might have failed to produce any test items,
+            # or it genuinely ran and found 0 tests.
+            logger.info(
+                f"Test run from '{executed_source_path}' provided no test items (PytestFailure list is empty)."
+            )
 
         for pf_failure in pytest_failures:
-            status = TestStatus.ERROR
-            if pf_failure.error_type == "AssertionError":
+            status: TestStatus
+            if pf_failure.outcome == "passed":
+                status = TestStatus.PASSED
+            elif pf_failure.outcome == "failed":
                 status = TestStatus.FAILED
+            elif pf_failure.outcome == "error":
+                status = TestStatus.ERROR
+            elif pf_failure.outcome == "skipped":
+                status = TestStatus.SKIPPED
+            else:
+                status = TestStatus.UNKNOWN
+                logger.warning(
+                    f"Unknown test outcome '{pf_failure.outcome}' for test '{pf_failure.test_name}'."
+                )
 
-            failure_details = TestFailureDetails(
-                message=pf_failure.error_message,
-                traceback=pf_failure.traceback,
-                file_path=pf_failure.test_file,
-                line_number=pf_failure.line_number,
-                error_type=pf_failure.error_type,
-            )
+            failure_details: Optional[TestFailureDetails] = None
+            if status == TestStatus.FAILED or status == TestStatus.ERROR:
+                failure_details = TestFailureDetails(
+                    message=pf_failure.error_message or "",  # Ensure not None
+                    traceback=pf_failure.traceback or "",  # Ensure not None
+                    file_path=pf_failure.test_file,
+                    line_number=pf_failure.line_number,
+                    error_type=pf_failure.error_type or status.name,  # Fallback to status name
+                )
+
             test_file_path = Path(pf_failure.test_file) if pf_failure.test_file else None
             tr = TestResult(
                 name=pf_failure.test_name,
                 status=status,
-                duration=0.0,
+                duration=0.0,  # TODO: Extract duration from JSON if available (test.duration, test.setup.duration etc.)
                 file_path=test_file_path,
                 failure_details=failure_details,
                 analysis_status=AnalysisStatus.NOT_ANALYZED,

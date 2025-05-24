@@ -196,7 +196,10 @@ class PytestOutputExtractor(Extractor):
 
         # Process each failed test
         for test_file, test_name in failed_tests:
-            # Look for a matching test section - handle both formats: test_file::test_name or just test_name
+            # Look for a matching test section - handle multiple formats:
+            # 1. test_file::test_name (standard pytest format)
+            # 2. just test_name (simplified)
+            # 3. ERROR at setup of TestClass.test_name (error format)
             test_id = f"{test_file}::{test_name}"
             test_name_only = test_name
 
@@ -204,6 +207,15 @@ class PytestOutputExtractor(Extractor):
             section = next((s for s in test_sections if test_id in s[0]), None)
             if not section:
                 section = next((s for s in test_sections if test_name_only in s[0]), None)
+
+            # If still not found, try matching test names from ERROR headers
+            if not section:
+                # Extract test name without class prefix for matching error headers
+                if "::" in test_name_only:
+                    simple_test_name = test_name_only.split("::")[-1]
+                else:
+                    simple_test_name = test_name_only
+                section = next((s for s in test_sections if simple_test_name in s[0]), None)
 
             if not section:
                 logger.warning(f"No detailed section found for test {test_id}")
@@ -293,12 +305,11 @@ class PytestOutputExtractor(Extractor):
             header, content = match.groups()
             sections.append((header.strip(), content.strip()))
 
-        # If no sections were found, try a different approach
+        # If no sections were found, try different approaches
         if not sections:
             # Check if there's a FAILURES section
             if "=== FAILURES ===" in text:
                 failures_section = text.split("=== FAILURES ===", 1)[1]
-
                 # Split the failures section by test headers (they typically look like ___ test_name ___)
                 section_splits = [s for s in failures_section.split("___") if s.strip()]
 
@@ -309,6 +320,57 @@ class PytestOutputExtractor(Extractor):
                         # The header might have test name and info
                         if header:
                             sections.append((header, content))
+
+            # Check if there's an ERRORS section
+            if "==== ERRORS ====" in text or "=== ERRORS ===" in text:
+                # Try both formats
+                errors_marker = (
+                    "==== ERRORS ====" if "==== ERRORS ====" in text else "=== ERRORS ==="
+                )
+                errors_section = text.split(errors_marker, 1)[1]
+
+                # Split by test error headers - these use a different format like:
+                # _ ERROR at setup of TestClass.test_method _
+                # The pattern needs to capture each error section between headers
+                error_lines = errors_section.split("\n")
+                current_section_lines = []
+                current_header = None
+
+                for i, line in enumerate(error_lines):
+                    # Match various underscore patterns: _, ___, _____, etc.
+                    if (
+                        "ERROR at" in line
+                        and line.strip().startswith("_")
+                        and line.strip().endswith("_")
+                    ):
+                        # Start of a new error section
+                        if current_header and current_section_lines:
+                            # Save the previous section
+                            content = "\n".join(current_section_lines).strip()
+                            if content:
+                                sections.append((current_header, content))
+
+                        # Start new section
+                        current_header = line.strip()
+                        current_section_lines = []
+                    elif current_header:
+                        # Check for section termination (start of next section or end)
+                        if line.startswith("=") and "=" in line:
+                            # This is likely a section separator, save current and stop
+                            content = "\n".join(current_section_lines).strip()
+                            if content:
+                                sections.append((current_header, content))
+                            current_header = None
+                            current_section_lines = []
+                            break
+                        # Accumulate lines for current section
+                        current_section_lines.append(line)
+
+                # Don't forget the last section
+                if current_header and current_section_lines:
+                    content = "\n".join(current_section_lines).strip()
+                    if content:
+                        sections.append((current_header, content))
 
         return sections
 

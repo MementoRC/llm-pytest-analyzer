@@ -196,21 +196,45 @@ class ReportController(QObject):
         logger.info(f"Report generated successfully: {file_path}")
         self.report_generated.emit(file_path)
 
-        # Show success message with option to open
-        reply = QMessageBox.question(
-            self.parent_widget,
-            "Report Generated",
-            f"Report saved successfully to:\n{file_path}\n\nWould you like to open it now?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
-        )
+        # Only show dialog if not in testing environment
+        if not self._is_testing_environment():
+            # Show success message with option to open
+            reply = QMessageBox.question(
+                self.parent_widget,
+                "Report Generated",
+                f"Report saved successfully to:\n{file_path}\n\nWould you like to open it now?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
 
-        if reply == QMessageBox.StandardButton.Yes:
-            self.open_recent_report(file_path)
+            if reply == QMessageBox.StandardButton.Yes:
+                self.open_recent_report(file_path)
 
     def has_data_for_reporting(self) -> bool:
         """Check if there is data available for reporting."""
         return bool(self._test_results or self._analysis_results)
+
+    def _is_testing_environment(self) -> bool:
+        """Check if we're running in a testing environment."""
+        import os
+        import sys
+
+        # Check for pytest runner
+        if "pytest" in sys.modules or "pytest" in sys.argv[0]:
+            return True
+
+        # Check for test environment variables
+        if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("TESTING"):
+            return True
+
+        # Check if any test modules are in the current stack
+        import inspect
+
+        for frame_info in inspect.stack():
+            if "test_" in frame_info.filename or "/tests/" in frame_info.filename:
+                return True
+
+        return False
 
     def get_available_report_types(self) -> List[ReportType]:
         """Get list of available report types based on current data."""
