@@ -193,28 +193,20 @@ class TestExecutionController(BaseController):
                 self.logger.debug(
                     f"TestExecutionController: Task result is List[PytestFailure] with {len(pytest_failures)} items."
                 )
+                # Calculate counts based on outcome
+                passed_count = sum(1 for pf in pytest_failures if pf.outcome == "passed")
+                failed_count = sum(1 for pf in pytest_failures if pf.outcome == "failed")
+                error_count = sum(1 for pf in pytest_failures if pf.outcome == "error")
+                skipped_count = sum(1 for pf in pytest_failures if pf.outcome == "skipped")
 
-                # Assuming 'result' is the list of PytestFailure objects from run_pytest_only
-                # We don't get total passed/skipped directly from this list.
-                # This part needs more info from pytest summary if we want accurate passed/skipped.
-                # For now, we only count failures/errors from the result.
-                for pf_idx, pf in enumerate(pytest_failures):
-                    self.logger.debug(
-                        f"TestExecutionController: Processing PytestFailure item {pf_idx + 1}: name='{pf.test_name}', error_type='{pf.error_type}'"
-                    )
-                    if pf.error_type == "AssertionError":  # Convention for failures
-                        failed_count += 1
-                    else:  # Other exceptions are errors
-                        error_count += 1
-
-                total_issues = failed_count + error_count
-                final_message = f"Test run completed. Found {total_issues} issues ({failed_count} failed, {error_count} errors)."
-                self.logger.debug(
-                    f"TestExecutionController: Calculated counts - failed: {failed_count}, error: {error_count}, total_issues: {total_issues}"
+                final_message = (
+                    f"Test run completed. Passed: {passed_count}, Failed: {failed_count}, "
+                    f"Errors: {error_count}, Skipped: {skipped_count}."
                 )
-                # To get passed/skipped, we'd need the pytest summary or a more detailed report object.
-                # The current `run_pytest_only` only returns failures.
-                # We'll leave passed/skipped as 0 for now.
+                self.logger.debug(
+                    f"TestExecutionController: Calculated counts - Passed: {passed_count}, Failed: {failed_count}, "
+                    f"Errors: {error_count}, Skipped: {skipped_count}"
+                )
             else:
                 self.logger.warning(
                     f"TestExecutionController: Task result is not List[PytestFailure]. Type: {type(result)}. Cannot determine failure counts accurately."
