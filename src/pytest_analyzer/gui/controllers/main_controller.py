@@ -336,17 +336,43 @@ class MainController(BaseController):
             success = code_editor_view.load_file(file_path)
             if success:
                 # Switch to the Code Editor tab
-                self.main_window.analysis_tabs.setCurrentIndex(
-                    2
-                )  # Code Editor is the 3rd tab (index 2)
-                self.logger.info(f"File {file_path.name} loaded successfully in code editor")
-                self.logger.debug("MainController: Switched to Code Editor tab.")
+                # Assuming analysis_tabs is accessible and 2 is the correct index for Code Editor
+                if (
+                    hasattr(self.main_window, "analysis_tabs")
+                    and self.main_window.analysis_tabs is not None
+                ):
+                    try:
+                        self.main_window.analysis_tabs.setCurrentIndex(
+                            2
+                        )  # Code Editor is the 3rd tab (index 2)
+                        self.logger.info(
+                            f"File {file_path.name} loaded successfully in code editor and tab switched."
+                        )
+                    except Exception as e_tab_switch:
+                        self.logger.error(
+                            f"Error switching to Code Editor tab: {e_tab_switch}", exc_info=True
+                        )
+                else:
+                    self.logger.warning(
+                        "analysis_tabs not available on main_window, cannot switch to Code Editor tab."
+                    )
+
+                self.logger.debug(
+                    f"MainController: File {file_path.name} loaded successfully in code editor."
+                )
             else:
                 self.logger.error(
-                    f"MainController: Failed to load file {file_path.name} in code editor"
+                    f"MainController: Failed to load file {file_path.name} in code editor using {type(code_editor_view).__name__}."
                 )
         else:
-            self.logger.warning("MainController: CodeEditorView not available to load file.")
+            self.logger.critical(
+                "MainController: CodeEditorView component is not available. Cannot load Python file."
+            )
+            QMessageBox.critical(
+                self.main_window,  # type: ignore
+                "Code Editor Error",
+                "The code editor component could not be loaded. Please check the application logs for more details. Python files cannot be opened for editing.",
+            )
         self.logger.debug("MainController: _on_python_file_opened_for_editor finished.")
 
     def _get_task_description(self, task_id: str) -> str:
