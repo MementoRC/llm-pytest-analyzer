@@ -33,6 +33,9 @@ class AnalysisController(BaseController):
         task_manager: Optional["TaskManager"] = None,  # Added task_manager
     ):
         super().__init__(parent, task_manager=task_manager)  # Pass to base
+        self.logger.debug(
+            f"AnalysisController: Initializing with service: {analyzer_service}, model: {test_results_model}, task_manager: {task_manager}"
+        )
         self.analyzer_service = analyzer_service
         self.test_results_model = test_results_model
         self.suggestion_cache: Dict[str, Tuple[float, List[FixSuggestion]]] = {}
@@ -41,26 +44,39 @@ class AnalysisController(BaseController):
             self.project_root_for_fingerprint = str(
                 self.analyzer_service.path_resolver.project_root
             )
+            self.logger.debug(
+                f"AnalysisController: Set project_root_for_fingerprint: {self.project_root_for_fingerprint}"
+            )
 
         # Connect to task manager signals if specific handling is needed here
         if self.task_manager:
             self.task_manager.task_completed.connect(self._handle_task_completion)
             self.task_manager.task_failed.connect(self._handle_task_failure)
+            self.logger.debug("AnalysisController: Connected to TaskManager signals.")
             # Progress is handled globally by MainController for now, or can be specific here too
+        else:
+            self.logger.debug("AnalysisController: No TaskManager provided.")
+        self.logger.debug("AnalysisController: Initialization complete.")
 
     @pyqtSlot()
     def on_run_tests(self) -> None:
         """Handle the Run Tests action by running tests in the background."""
+        self.logger.debug("AnalysisController: on_run_tests triggered.")
         self.logger.info("Run Tests action triggered.")
         if not self.task_manager:
+            self.logger.error("AnalysisController: TaskManager not available for on_run_tests.")
             QMessageBox.critical(None, "Error", "TaskManager not available.")
             return
 
         source_path = self.test_results_model.source_file
         source_type = self.test_results_model.source_type
+        self.logger.debug(
+            f"AnalysisController: Retrieved from model - source_path: {source_path}, source_type: {source_type}"
+        )
 
         if source_path and (source_type == "py" or source_type == "directory"):
             self.logger.info(f"Preparing to run tests for: {source_path} (type: {source_type})")
+            self.logger.debug("AnalysisController: Valid source path and type for running tests.")
 
             # Clear previous run results from the model before starting a new run
             # This ensures that the UI reflects that a new set of results is pending.
@@ -73,6 +89,7 @@ class AnalysisController(BaseController):
 
             args = (str(source_path),)  # test_path for run_pytest_only
             kwargs = {"quiet": True}  # Progress and task_id will be added by TaskManager
+            self.logger.debug(f"AnalysisController: Task args: {args}, kwargs: {kwargs}")
 
             task_id = self.submit_background_task(
                 callable_task=self.analyzer_service.run_pytest_only,
@@ -84,8 +101,12 @@ class AnalysisController(BaseController):
             )
             if task_id:
                 self.logger.info(f"Run tests task submitted with ID: {task_id} for {source_path}")
+                self.logger.debug(f"AnalysisController: Test run task submitted, ID: {task_id}")
                 # MainController's global signal handlers will show "Task started..."
             else:
+                self.logger.error(
+                    f"AnalysisController: Failed to submit test execution task for {source_path}."
+                )
                 QMessageBox.warning(
                     None, "Run Tests", f"Failed to submit test execution task for {source_path}."
                 )
@@ -97,20 +118,26 @@ class AnalysisController(BaseController):
                 "Please select a Python test file or directory first (e.g., via File menu or File Selection tab).",
             )
             self.logger.warning(
-                "Run tests action: No valid Python file or directory selected in the model."
+                "AnalysisController: Run tests action: No valid Python file or directory selected in the model."
             )
+        self.logger.debug("AnalysisController: on_run_tests finished.")
 
     @pyqtSlot()
     def on_analyze(self) -> None:
         """Handle the Analyze action by running analysis in the background."""
+        self.logger.debug("AnalysisController: on_analyze triggered.")
         self.logger.info("Analyze action triggered.")
         if not self.task_manager:
+            self.logger.error("AnalysisController: TaskManager not available for on_analyze.")
             QMessageBox.critical(None, "Error", "TaskManager not available.")
             return
 
         # Check if LLM suggester is configured
         suggester = self.analyzer_service.llm_suggester
         if not suggester._llm_request_func and not suggester._async_llm_request_func:
+            self.logger.warning(
+                "AnalysisController: LLM suggester not configured (no request func)."
+            )
             QMessageBox.warning(
                 None,
                 "LLM Not Configured",

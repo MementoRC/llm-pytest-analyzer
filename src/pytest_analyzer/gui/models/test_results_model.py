@@ -120,23 +120,31 @@ class TestResultsModel(QObject):
     def __init__(self):
         """Initialize the test results model."""
         super().__init__()
+        logger.debug("TestResultsModel: Initializing.")
 
         self.results: List[TestResult] = []
         self.groups: List[TestGroup] = []
         self.source_file: Optional[Path] = None
         self.source_type: str = ""  # "json", "xml", "py", "output"
         self.test_run_history: List[TestRunResult] = []
+        logger.debug("TestResultsModel: Initialization complete.")
 
     def clear(self) -> None:
         """Clear all test results data."""
+        logger.debug("TestResultsModel: Clearing all data.")
         self.results = []
         self.groups = []
         self.source_file = None
         self.source_type = ""
         self.test_run_history = []
+        logger.debug(
+            f"TestResultsModel: Data cleared. Results: {len(self.results)}, Groups: {len(self.groups)}, History: {len(self.test_run_history)}."
+        )
 
         # Emit signals
+        logger.debug("TestResultsModel: Emitting results_updated signal.")
         self.results_updated.emit()
+        logger.debug("TestResultsModel: Emitting groups_updated signal.")
         self.groups_updated.emit()
 
     def set_results(
@@ -150,6 +158,9 @@ class TestResultsModel(QObject):
             source_file: Source file path
             source_type: Source type
         """
+        logger.debug(
+            f"TestResultsModel: Setting results. Count: {len(results)}, Source File: {source_file}, Source Type: {source_type}."
+        )
         self.results = results
         self.source_file = source_file
         self.source_type = source_type
@@ -157,7 +168,11 @@ class TestResultsModel(QObject):
         # Loading from a file (report) resets the run history associated with a direct execution flow.
         self.test_run_history = []
         logger.info("Test run history cleared due to loading new results from file/report.")
+        logger.debug(
+            f"TestResultsModel: Results set. Current results count: {len(self.results)}, History count: {len(self.test_run_history)}."
+        )
         # Emit signal
+        logger.debug("TestResultsModel: Emitting results_updated signal.")
         self.results_updated.emit()
 
     def set_groups(self, groups: List[TestGroup]) -> None:
@@ -167,9 +182,12 @@ class TestResultsModel(QObject):
         Args:
             groups: List of test groups
         """
+        logger.debug(f"TestResultsModel: Setting groups. Count: {len(groups)}.")
         self.groups = groups
+        logger.debug(f"TestResultsModel: Groups set. Current groups count: {len(self.groups)}.")
 
         # Emit signal
+        logger.debug("TestResultsModel: Emitting groups_updated signal.")
         self.groups_updated.emit()
 
     @property
@@ -202,6 +220,9 @@ class TestResultsModel(QObject):
         Update suggestions and/or analysis status for a specific test.
         Emits signals if data was changed.
         """
+        logger.debug(
+            f"TestResultsModel: update_test_data called for test '{test_name}'. Suggestions provided: {suggestions is not None}, AnalysisStatus provided: {analysis_status is not None}."
+        )
         found_test = None
         for test_result in self.results:
             if test_result.name == test_name:
@@ -214,29 +235,45 @@ class TestResultsModel(QObject):
 
         updated = False
         if suggestions is not None:
+            logger.debug(
+                f"TestResultsModel: Updating suggestions for test '{test_name}'. New count: {len(suggestions)}."
+            )
             found_test.suggestions = suggestions
-            logger.debug(f"Suggestions updated for test '{test_name}'.")
+            logger.debug(
+                f"TestResultsModel: Emitting suggestions_updated signal for '{test_name}'."
+            )
             self.suggestions_updated.emit(test_name)
             updated = True
 
         if analysis_status is not None:
             if found_test.analysis_status != analysis_status:
+                logger.debug(
+                    f"TestResultsModel: Updating analysis status for test '{test_name}' from {found_test.analysis_status.name} to {analysis_status.name}."
+                )
                 found_test.analysis_status = analysis_status
                 logger.debug(
-                    f"Analysis status for test '{test_name}' changed to {analysis_status.name}."
+                    f"TestResultsModel: Emitting analysis_status_updated signal for '{test_name}'."
                 )
                 self.analysis_status_updated.emit(test_name)
                 updated = True
+            else:
+                logger.debug(
+                    f"TestResultsModel: Analysis status for test '{test_name}' is already {analysis_status.name}. No update needed."
+                )
 
         if updated:
             # A general signal that views might listen to for redraws
+            logger.debug("TestResultsModel: Emitting results_updated signal due to data change.")
             self.results_updated.emit()
+        else:
+            logger.debug(f"TestResultsModel: No actual data changed for test '{test_name}'.")
 
     def get_pytest_failures_for_analysis(self) -> List[PytestFailure]:
         """
         Converts failed or errored TestResult objects to PytestFailure objects
         suitable for analysis.
         """
+        logger.debug("TestResultsModel: get_pytest_failures_for_analysis called.")
         pytest_failures: List[PytestFailure] = []
         for tr_result in self.results:
             if tr_result.is_failed or tr_result.is_error:
@@ -255,6 +292,9 @@ class TestResultsModel(QObject):
                     logger.warning(
                         f"Test '{tr_result.name}' is marked failed/error but has no failure details. Skipping for analysis."
                     )
+        logger.debug(
+            f"TestResultsModel: Converted {len(pytest_failures)} TestResults to PytestFailures for analysis."
+        )
         return pytest_failures
 
     def load_test_run_results(
@@ -268,9 +308,13 @@ class TestResultsModel(QObject):
         updates the model's current results, and adds the run to history.
         If pytest_failures is empty, it implies no failures were found.
         """
+        logger.debug(
+            f"TestResultsModel: load_test_run_results called. Failures count: {len(pytest_failures)}, Source: {executed_source_path}, Type: {run_operation_type}."
+        )
         converted_test_results: List[TestResult] = []
         if not pytest_failures:
             logger.info(f"Test run from '{executed_source_path}' reported no failures.")
+            logger.debug("TestResultsModel: No failures to convert.")
 
         for pf_failure in pytest_failures:
             status = TestStatus.ERROR
@@ -295,6 +339,9 @@ class TestResultsModel(QObject):
                 suggestions=[],
             )
             converted_test_results.append(tr)
+        logger.debug(
+            f"TestResultsModel: Converted {len(converted_test_results)} PytestFailures to TestResults."
+        )
 
         # Create a record for the test run history
         current_run = TestRunResult(
@@ -304,9 +351,15 @@ class TestResultsModel(QObject):
             source_type=run_operation_type,  # e.g. "py_run", "directory_run"
         )
         self.test_run_history.append(current_run)
+        logger.debug(
+            f"TestResultsModel: Added new run to history. History count: {len(self.test_run_history)}."
+        )
 
         # Update the main results view to this latest run
         self.results = converted_test_results
+        logger.debug(
+            f"TestResultsModel: Main results updated to latest run. Results count: {len(self.results)}."
+        )
         # self.source_file and self.source_type (of the model) remain unchanged,
         # reflecting the user's primary selected file/directory.
 
@@ -314,6 +367,7 @@ class TestResultsModel(QObject):
             f"Loaded {len(converted_test_results)} results from test run of '{executed_source_path}'. "
             f"Added to history ({len(self.test_run_history)} runs total). Model source remains '{self.source_file}'."
         )
+        logger.debug("TestResultsModel: Emitting results_updated signal.")
         self.results_updated.emit()
 
     def get_latest_results(self) -> Optional[List[TestResult]]:
@@ -321,9 +375,13 @@ class TestResultsModel(QObject):
         Returns the list of TestResult objects from the most recent test run in history.
         Returns None if there is no run history.
         """
+        logger.debug("TestResultsModel: get_latest_results called.")
         if not self.test_run_history:
+            logger.debug("TestResultsModel: No run history found.")
             return None
-        return self.test_run_history[-1].results
+        latest_results = self.test_run_history[-1].results
+        logger.debug(f"TestResultsModel: Returning {len(latest_results)} results from latest run.")
+        return latest_results
 
     def compare_with_previous(self) -> dict[str, list[str]]:
         """
@@ -332,7 +390,11 @@ class TestResultsModel(QObject):
         This provides infrastructure for UI highlighting of changes.
         Returns an empty dictionary if there are fewer than two runs in history.
         """
+        logger.debug("TestResultsModel: compare_with_previous called.")
         if len(self.test_run_history) < 2:
+            logger.debug(
+                f"TestResultsModel: Not enough history to compare. History size: {len(self.test_run_history)}."
+            )
             return {}
 
         latest_run_tr_objects = self.test_run_history[-1].results
@@ -371,4 +433,5 @@ class TestResultsModel(QObject):
             elif latest_is_issue and previous_is_issue:
                 comparison["still_failing"].append(name)
 
+        logger.debug(f"TestResultsModel: Comparison complete. Results: {comparison}")
         return comparison

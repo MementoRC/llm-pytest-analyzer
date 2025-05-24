@@ -49,21 +49,20 @@ class FileSelectionView(QWidget):
     def __init__(self, parent: Optional[QWidget] = None):
         """
         Initialize the file selection view.
-
-        Args:
-            parent: Parent widget
         """
         super().__init__(parent)
-
+        logger.debug("FileSelectionView: Initializing.")
         self.current_directory = Path.cwd()
         self.selected_file: Optional[Path] = None
         self.selected_report_type = "json"
-
-        # Initialize UI
         self._init_ui()
+        logger.debug(
+            f"FileSelectionView: Initialization complete. Current dir: {self.current_directory}"
+        )
 
     def _init_ui(self) -> None:
         """Initialize the UI components."""
+        logger.debug("FileSelectionView: Initializing UI.")
         # Create main layout
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -86,6 +85,7 @@ class FileSelectionView(QWidget):
 
         # Add tab widget to main layout
         main_layout.addWidget(self.tabs)
+        logger.debug("FileSelectionView: UI initialized.")
 
     def _create_file_tab(self) -> QWidget:
         """
@@ -216,21 +216,19 @@ class FileSelectionView(QWidget):
 
     def _populate_file_tree(self) -> None:
         """Populate the file tree with test files from the current directory."""
+        logger.debug(
+            f"FileSelectionView: Populating file tree for directory: {self.current_directory}."
+        )
         self.file_model.clear()
         self.file_model.setHorizontalHeaderLabels(["Name", "Path"])
-
         root_item = self.file_model.invisibleRootItem()
-
+        files_found = 0
         try:
-            # Check if directory exists
             if not self.current_directory.exists():
                 logger.warning(f"Directory does not exist: {self.current_directory}")
                 return
-
-            # Get all Python files in the directory
             for path in self.current_directory.glob("**/*.py"):
                 if path.is_file():
-                    # Check if the file contains pytest tests
                     if self._is_test_file(path):
                         rel_path = path.relative_to(self.current_directory)
                         name_item = QStandardItem(path.name)
@@ -240,7 +238,8 @@ class FileSelectionView(QWidget):
                         path_item.setData(str(path), Qt.ItemDataRole.UserRole)
 
                         root_item.appendRow([name_item, path_item])
-
+                        files_found += 1
+            logger.debug(f"FileSelectionView: File tree populated with {files_found} test files.")
         except Exception as e:
             logger.exception(f"Error populating file tree: {e}")
 
@@ -258,41 +257,48 @@ class FileSelectionView(QWidget):
             True if the file is a test file, False otherwise
         """
         name = path.name
-        return name.startswith("test_") or name.endswith("_test.py")
+        is_test = name.startswith("test_") or name.endswith("_test.py")
+        # logger.debug(f"FileSelectionView: Checking if '{path}' is a test file. Result: {is_test}.") # Can be noisy
+        return is_test
 
     @pyqtSlot()
     def _on_browse_directory(self) -> None:
         """Handle the browse directory button click."""
+        logger.debug("FileSelectionView: Browse directory button clicked.")
         dir_path = QFileDialog.getExistingDirectory(
             self, "Select Directory", str(self.current_directory)
         )
-
         if dir_path:
+            logger.debug(f"FileSelectionView: Directory selected: {dir_path}.")
             self.current_directory = Path(dir_path)
             self.dir_combo.setCurrentText(str(self.current_directory))
-
-            # Add to history if not already present
             if self.dir_combo.findText(str(self.current_directory)) == -1:
                 self.dir_combo.addItem(str(self.current_directory))
-
-            # Repopulate the file tree
             self._populate_file_tree()
+        else:
+            logger.debug("FileSelectionView: Directory selection cancelled.")
 
     @pyqtSlot()
     def _on_select_report(self) -> None:
         """Handle the select report file button click."""
+        logger.debug(
+            f"FileSelectionView: Select report button clicked. Type: {self.selected_report_type}."
+        )
         file_filter = (
             "JSON Files (*.json)" if self.selected_report_type == "json" else "XML Files (*.xml)"
         )
-
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Select Report File", str(self.current_directory), file_filter
         )
-
         if file_path:
             self.selected_file = Path(file_path)
             self.report_path_label.setText(str(self.selected_file))
+            logger.debug(
+                f"FileSelectionView: Report file selected: {self.selected_file}. Emitting file_selected signal."
+            )
             self.file_selected.emit(self.selected_file)
+        else:
+            logger.debug("FileSelectionView: Report file selection cancelled.")
 
     @pyqtSlot(str)
     def _on_report_type_changed(self, report_type: str) -> None:
@@ -302,6 +308,9 @@ class FileSelectionView(QWidget):
         Args:
             report_type: Type of report ('json' or 'xml')
         """
+        logger.debug(
+            f"FileSelectionView: Report type changed to: {report_type}. Emitting report_type_changed signal."
+        )
         self.selected_report_type = report_type
         self.report_type_changed.emit(report_type)
 
@@ -313,15 +322,24 @@ class FileSelectionView(QWidget):
         Args:
             index: Index of the selected tab
         """
-        logger.debug(f"Tab changed to index {index}")
+        tab_text = self.tabs.tabText(index)
+        logger.debug(f"FileSelectionView: Tab changed to index {index} ('{tab_text}').")
 
     @pyqtSlot()
     def _on_file_clicked(self) -> None:
         """Handle file tree item click."""
         indexes = self.file_tree.selectedIndexes()
         if indexes:
-            # Get the file path from the first column's user role data
-            file_path = indexes[0].data(Qt.ItemDataRole.UserRole)
-            if file_path:
-                self.selected_file = Path(file_path)
+            file_path_str = indexes[0].data(Qt.ItemDataRole.UserRole)
+            if file_path_str:
+                self.selected_file = Path(file_path_str)
+                logger.debug(
+                    f"FileSelectionView: File clicked in tree: {self.selected_file}. Emitting file_selected signal."
+                )
                 self.file_selected.emit(self.selected_file)
+            else:
+                logger.warning(
+                    "FileSelectionView: File clicked in tree, but no file path data found in item."
+                )
+        else:
+            logger.debug("FileSelectionView: File tree clicked, but no valid index selected.")

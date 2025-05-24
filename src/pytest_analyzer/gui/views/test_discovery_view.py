@@ -31,17 +31,22 @@ class TestDiscoveryView(QWidget):
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
+        logger.debug("TestDiscoveryView: Initializing.")
         self._init_ui()
         self._block_item_changed_signal = False
+        logger.debug("TestDiscoveryView: Initialization complete.")
 
     def _init_ui(self) -> None:
+        logger.debug("TestDiscoveryView: Initializing UI.")
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
 
         # Controls (Refresh button, Filter)
         controls_layout = QHBoxLayout()
         self.refresh_button = QPushButton("Refresh Tests")
-        self.refresh_button.clicked.connect(self.discover_tests_requested)
+        self.refresh_button.clicked.connect(
+            self._emit_discover_tests_requested_debug
+        )  # Changed connection
         controls_layout.addWidget(self.refresh_button)
 
         controls_layout.addStretch()  # Pushes filter to the right
@@ -73,6 +78,13 @@ class TestDiscoveryView(QWidget):
         )
 
         main_layout.addWidget(self.test_tree_view)
+        logger.debug("TestDiscoveryView: UI initialized.")
+
+    def _emit_discover_tests_requested_debug(self):  # New method
+        logger.debug(
+            "TestDiscoveryView: Refresh button clicked. Emitting discover_tests_requested signal."
+        )
+        self.discover_tests_requested.emit()
 
     def _parse_node_id(self, node_id: str) -> Tuple[str, Optional[str], str]:
         """
@@ -104,14 +116,17 @@ class TestDiscoveryView(QWidget):
         Populates the tree view with discovered tests.
         `collected_items` are PytestFailure objects where `test_name` is the node ID.
         """
-        self._block_item_changed_signal = True  # Block signals during programmatic changes
+        logger.debug(f"TestDiscoveryView: Updating test tree with {len(collected_items)} items.")
+        self._block_item_changed_signal = True
         self.test_tree_model.clear()
         self.test_tree_model.setHorizontalHeaderLabels(["Test / Module / Class", "Node ID"])
+        logger.debug("TestDiscoveryView: Test tree model cleared.")
 
         root_item = self.test_tree_model.invisibleRootItem()
         file_items: Dict[str, QStandardItem] = {}
-        class_items: Dict[str, QStandardItem] = {}  # Keyed by "file_path::ClassName"
+        class_items: Dict[str, QStandardItem] = {}
 
+        processed_count = 0
         for item_failure_obj in collected_items:
             node_id = item_failure_obj.test_name  # This is the nodeid
             file_part, class_part, func_part = self._parse_node_id(node_id)
@@ -160,15 +175,24 @@ class TestDiscoveryView(QWidget):
             func_item_display.setCheckState(Qt.CheckState.Unchecked)  # Default to unchecked
             col_node_id_func = QStandardItem(node_id)  # Full node ID for test function
             parent_item.appendRow([func_item_display, col_node_id_func])
+            processed_count += 1
+        logger.debug(f"TestDiscoveryView: Processed {processed_count} items into tree structure.")
 
         self.test_tree_view.expandAll()
         self._block_item_changed_signal = False
+        logger.debug(
+            "TestDiscoveryView: Test tree updated and expanded. Signal blocking re-enabled."
+        )
 
     def _on_item_changed(self, item: QStandardItem) -> None:
         """Handle item check state changes to propagate to children/parents."""
         if self._block_item_changed_signal or not item.isCheckable():
+            # logger.debug(f"TestDiscoveryView: _on_item_changed skipped. Blocked: {self._block_item_changed_signal}, Not Checkable: {not item.isCheckable()}. Item: {item.text()}")
             return
 
+        logger.debug(
+            f"TestDiscoveryView: _on_item_changed. Item: '{item.text()}', CheckState: {item.checkState()}."
+        )
         self._block_item_changed_signal = True
         check_state = item.checkState()
 
@@ -185,13 +209,16 @@ class TestDiscoveryView(QWidget):
             self._update_parent_check_state(parent)
 
         self._block_item_changed_signal = False
+        logger.debug(
+            f"TestDiscoveryView: Item change propagation complete for '{item.text()}'. Emitting selection_changed signal."
+        )
         self.selection_changed.emit()
 
     def _update_parent_check_state(self, parent_item: QStandardItem) -> None:
         """Update parent's check state based on its children's states."""
         if not parent_item or not (parent_item.flags() & Qt.ItemFlag.ItemIsUserCheckable):
             return
-
+        # logger.debug(f"TestDiscoveryView: Updating parent check state for '{parent_item.text()}'.") # Can be noisy
         num_children = parent_item.rowCount()
         if num_children == 0:
             return
@@ -223,6 +250,7 @@ class TestDiscoveryView(QWidget):
         """
         Returns a list of node IDs for all checked test items (functions/methods).
         """
+        logger.debug("TestDiscoveryView: get_selected_node_ids called.")
         selected_ids: List[str] = []
         model = self.test_tree_model
 
@@ -250,21 +278,29 @@ class TestDiscoveryView(QWidget):
                             node_id_item = child_item.child(j, 1)
                             if node_id_item and node_id_item.text():
                                 selected_ids.append(node_id_item.text())
+        logger.debug(f"TestDiscoveryView: Found {len(selected_ids)} selected node IDs.")
         return selected_ids
 
     def clear_tree(self) -> None:
+        logger.debug("TestDiscoveryView: Clearing tree.")
         self._block_item_changed_signal = True
         self.test_tree_model.clear()
         self.test_tree_model.setHorizontalHeaderLabels(["Test / Module / Class", "Node ID"])
         self._block_item_changed_signal = False
-        self._filter_proxy_model = None  # Will be QSortFilterProxyModel if we use it
+        self._filter_proxy_model = None  # This line was in original, ensure it's still relevant or remove if QSortFilterProxyModel is not used.
+        logger.debug("TestDiscoveryView: Tree cleared.")
 
     def _apply_filter(self, text: str) -> None:
         """Filters the tree view based on the input text."""
+        logger.debug(f"TestDiscoveryView: Applying filter with text: '{text}'.")
         filter_text = text.lower()
         self._filter_recursive(self.test_tree_model.invisibleRootItem(), filter_text)
+        logger.debug("TestDiscoveryView: Filter application complete.")
 
     def _filter_recursive(self, parent_item: QStandardItem, filter_text: str) -> bool:
+        # This is recursive and can be noisy. Log entry/exit or key decisions.
+        # current_item_text = parent_item.text() if parent_item.index().isValid() else "InvisibleRoot"
+        # logger.debug(f"TestDiscoveryView: Filtering recursively. Item: '{current_item_text}', Filter: '{filter_text}'.")
         """
         Recursively apply filter. Returns True if this item or any child matches.
         An item is visible if its text matches OR any of its children match.
@@ -315,4 +351,4 @@ class TestDiscoveryView(QWidget):
                 if parent_item.parent() != self.test_tree_model.invisibleRootItem():
                     self.test_tree_view.collapse(parent_item.index())
 
-        return should_be_visible
+        return should_be_visible  # should_be_visible defined in original code
