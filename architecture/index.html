@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Pytest Analyzer Architecture - llm-pytest-analyzer</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Pytest Analyzer Architecture";
+        var mkdocs_page_input_path = "architecture.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> llm-pytest-analyzer
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">llm-pytest-analyzer</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Pytest Analyzer Architecture</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer/edit/main/docs/architecture.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="pytest-analyzer-architecture">Pytest Analyzer Architecture</h1>
+<h2 id="overview">Overview</h2>
+<p>Pytest Analyzer is a tool designed to analyze test failures, suggest fixes, and apply them to help developers resolve test failures more efficiently. This document outlines the architecture of the refactored Pytest Analyzer, which implements a modular, maintainable design with clear separation of concerns.</p>
+<p>The architecture follows these design principles:
+- <strong>Loose coupling</strong>: Components interact through well-defined interfaces
+- <strong>Dependency Injection</strong>: Dependencies are provided from the outside, making testing easier
+- <strong>State Machine Pattern</strong>: Complex workflows are managed using state machines
+- <strong>Protocol-based interfaces</strong>: Clear contracts between components using Python's Protocol type
+- <strong>Separation of concerns</strong>: Each component has a single responsibility
+- <strong>Both synchronous and asynchronous APIs</strong>: Supporting different usage patterns</p>
+<h2 id="component-architecture">Component Architecture</h2>
+<h3 id="core-components">Core Components</h3>
+<p>The system is composed of these primary components:</p>
+<ol>
+<li><strong>Extractor</strong>: Extracts test failure information from pytest reports</li>
+<li><strong>Analyzer</strong>: Analyzes test failures to determine their root causes</li>
+<li><strong>Suggester</strong>: Suggests fixes for test failures</li>
+<li><strong>Applier</strong>: Applies suggested fixes to the codebase</li>
+<li><strong>LLM Service</strong>: Provides language model capabilities for generating fix suggestions</li>
+<li><strong>PromptBuilder</strong>: Constructs prompts for the LLM service</li>
+<li><strong>ResponseParser</strong>: Parses and validates responses from the LLM service</li>
+<li><strong>Analyzer Service</strong>: Coordinates the overall analysis workflow</li>
+<li><strong>State Machine</strong>: Manages the workflow state transitions</li>
+<li><strong>DI Container</strong>: Manages dependencies between components</li>
+</ol>
+<h3 id="component-diagram">Component Diagram</h3>
+<pre><code>┌───────────────┐     ┌───────────────┐     ┌───────────────┐     ┌───────────────┐
+│   Extractor   │────▶│   Analyzer    │────▶│   Suggester   │────▶│    Applier    │
+└───────────────┘     └───────────────┘     └───────────────┘     └───────────────┘
+        │                     │                     │                     │
+        │                     │                     │                     │
+        │                     │                     │                     │
+        │                     ▼                     │                     │
+        │              ┌───────────────┐           │                     │
+        │              │ Analyzer State│           │                     │
+        │              │    Machine    │◀──────────┘                     │
+        │              └───────────────┘                                 │
+        │                     ▲                                          │
+        │                     │                                          │
+        └─────────────────────┼──────────────────────────────────────────┘
+                              │
+                    ┌─────────┴─────────┐
+                    │  AnalyzerService  │
+                    └───────────────────┘
+                              ▲
+                              │
+                    ┌─────────┴─────────┐
+                    │     CLI / API     │
+                    └───────────────────┘
+
+
+┌───────────────┐     ┌───────────────┐     ┌───────────────┐
+│ PromptBuilder │────▶│  LLM Service  │────▶│ResponseParser │
+└───────────────┘     └───────────────┘     └───────────────┘
+                            │
+                            ▼
+                    ┌───────────────┐
+                    │  LLM Client   │
+                    │ (Anthropic/   │
+                    │   OpenAI)     │
+                    └───────────────┘
+</code></pre>
+<h3 id="data-flow">Data Flow</h3>
+<ol>
+<li>The CLI or API initializes the AnalyzerService</li>
+<li>The AnalyzerService creates a State Machine to manage the analysis workflow</li>
+<li>The State Machine transitions through states:</li>
+<li>Extract test results (using Extractor)</li>
+<li>Analyze failures (using Analyzer)</li>
+<li>Generate suggestions (using Suggester)</li>
+<li>Apply fixes (using Applier)</li>
+<li>The Suggester may use the LLM Service to generate fix suggestions</li>
+<li>The LLM Service uses the PromptBuilder to create prompts</li>
+<li>The LLM Service uses the ResponseParser to process responses</li>
+<li>The Applier applies fixes to the codebase</li>
+<li>The AnalyzerService reports results back to the CLI or API</li>
+</ol>
+<h2 id="interface-definitions">Interface Definitions</h2>
+<h3 id="core-protocols">Core Protocols</h3>
+<h4 id="extractorprotocol">ExtractorProtocol</h4>
+<pre><code class="language-python">class ExtractorProtocol(Protocol):
+    &quot;&quot;&quot;Protocol for extracting test failures from test reports.&quot;&quot;&quot;
+
+    def extract_failures(self, report_path: str) -&gt; List[PytestFailure]:
+        &quot;&quot;&quot;
+        Extract failures from a pytest report.
+
+        Args:
+            report_path: Path to the pytest report file
+
+        Returns:
+            List of PytestFailure objects
+        &quot;&quot;&quot;
+        ...
+</code></pre>
+<h4 id="analyzerprotocol">AnalyzerProtocol</h4>
+<pre><code class="language-python">class AnalyzerProtocol(Protocol):
+    &quot;&quot;&quot;Protocol for analyzing test failures.&quot;&quot;&quot;
+
+    def analyze_failures(self, failures: List[PytestFailure]) -&gt; List[FailureAnalysis]:
+        &quot;&quot;&quot;
+        Analyze test failures to determine root causes.
+
+        Args:
+            failures: List of test failures to analyze
+
+        Returns:
+            List of failure analyses
+        &quot;&quot;&quot;
+        ...
+</code></pre>
+<h4 id="suggesterprotocol">SuggesterProtocol</h4>
+<pre><code class="language-python">class SuggesterProtocol(Protocol):
+    &quot;&quot;&quot;Protocol for suggesting fixes for test failures.&quot;&quot;&quot;
+
+    def suggest_fixes(self, analyses: List[FailureAnalysis]) -&gt; List[FixSuggestion]:
+        &quot;&quot;&quot;
+        Suggest fixes for analyzed test failures.
+
+        Args:
+            analyses: List of failure analyses
+
+        Returns:
+            List of fix suggestions
+        &quot;&quot;&quot;
+        ...
+</code></pre>
+<h4 id="applierprotocol">ApplierProtocol</h4>
+<pre><code class="language-python">class ApplierProtocol(Protocol):
+    &quot;&quot;&quot;Protocol for applying fixes to the codebase.&quot;&quot;&quot;
+
+    def apply_fixes(self, suggestions: List[FixSuggestion]) -&gt; List[AppliedFix]:
+        &quot;&quot;&quot;
+        Apply suggested fixes to the codebase.
+
+        Args:
+            suggestions: List of fix suggestions
+
+        Returns:
+            List of applied fixes
+        &quot;&quot;&quot;
+        ...
+</code></pre>
+<h4 id="llmserviceprotocol">LLMServiceProtocol</h4>
+<pre><code class="language-python">class LLMServiceProtocol(Protocol):
+    &quot;&quot;&quot;Protocol for language model services.&quot;&quot;&quot;
+
+    def generate_completion(self, prompt: str) -&gt; str:
+        &quot;&quot;&quot;
+        Generate a completion from the language model.
+
+        Args:
+            prompt: The input prompt
+
+        Returns:
+            The generated completion
+        &quot;&quot;&quot;
+        ...
+
+    async def generate_completion_async(self, prompt: str) -&gt; str:
+        &quot;&quot;&quot;
+        Generate a completion from the language model asynchronously.
+
+        Args:
+            prompt: The input prompt
+
+        Returns:
+            The generated completion
+        &quot;&quot;&quot;
+        ...
+</code></pre>
+<h3 id="state-machine">State Machine</h3>
+<pre><code class="language-python">from typing import Dict, Any, List, Optional, Set, Callable, TypeVar, Generic
+from enum import Enum, auto
+import logging
+
+T = TypeVar('T', bound=Enum)
+
+class StateMachine(Generic[T]):
+    &quot;&quot;&quot;Base class for state machines.&quot;&quot;&quot;
+
+    def __init__(self, initial_state: T):
+        self.current_state = initial_state
+        self.states: Set[T] = {initial_state}
+        self.transitions: Dict[T, Dict[T, Callable[..., bool]]] = {}
+        self.state_handlers: Dict[T, Callable[..., Any]] = {}
+        self.context: Dict[str, Any] = {}
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    def add_state(self, state: T, handler: Callable[..., Any]) -&gt; None:
+        &quot;&quot;&quot;Add a state to the state machine.&quot;&quot;&quot;
+        ...
+
+    def add_transition(self, from_state: T, to_state: T, condition: Callable[..., bool]) -&gt; None:
+        &quot;&quot;&quot;Add a transition between states.&quot;&quot;&quot;
+        ...
+
+    def run(self, **kwargs) -&gt; Any:
+        &quot;&quot;&quot;Run the state machine.&quot;&quot;&quot;
+        ...
+</code></pre>
+<h2 id="dependency-injection">Dependency Injection</h2>
+<p>The Dependency Injection (DI) pattern is used throughout the codebase to manage dependencies and facilitate testing. A container is provided to register and resolve dependencies.</p>
+<h3 id="container">Container</h3>
+<pre><code class="language-python">class Container:
+    &quot;&quot;&quot;Dependency injection container.&quot;&quot;&quot;
+
+    def __init__(self):
+        self._registrations = {}
+
+    def register(self, interface, implementation, mode: RegistrationMode = RegistrationMode.TRANSIENT) -&gt; None:
+        &quot;&quot;&quot;Register an implementation for an interface.&quot;&quot;&quot;
+        ...
+
+    def register_instance(self, interface, instance) -&gt; None:
+        &quot;&quot;&quot;Register an existing instance for an interface.&quot;&quot;&quot;
+        ...
+
+    def register_factory(self, interface, factory) -&gt; None:
+        &quot;&quot;&quot;Register a factory function for an interface.&quot;&quot;&quot;
+        ...
+
+    def register_singleton(self, interface, implementation) -&gt; None:
+        &quot;&quot;&quot;Register a singleton implementation for an interface.&quot;&quot;&quot;
+        ...
+
+    def resolve(self, interface):
+        &quot;&quot;&quot;Resolve an implementation for an interface.&quot;&quot;&quot;
+        ...
+</code></pre>
+<h3 id="service-registration">Service Registration</h3>
+<p>Services are registered with the container during application startup:</p>
+<pre><code class="language-python">def configure_services(container: Container = None) -&gt; Container:
+    &quot;&quot;&quot;Configure all services in the container.&quot;&quot;&quot;
+    if container is None:
+        container = Container()
+
+    # Register core services
+    container.register_singleton(Settings, Settings)
+    container.register_singleton(PathResolver, PathResolver)
+
+    # Register extractors
+    container.register_factory(ExtractorFactory, lambda: ExtractorFactory())
+
+    # Register analyzers
+    container.register(FailureAnalyzer, FailureAnalyzer)
+
+    # Register LLM services
+    container.register_factory(LLMServiceProtocol, _create_llm_service)
+
+    # Register state machine
+    container.register_factory(AnalyzerStateMachine, _create_analyzer_state_machine)
+
+    # Register main service
+    container.register_factory(DIPytestAnalyzerService, _create_analyzer_service)
+
+    return container
+</code></pre>
+<h2 id="error-handling-strategy">Error Handling Strategy</h2>
+<p>The application uses a hierarchical error handling approach:</p>
+<ol>
+<li><strong>Component-level errors</strong>: Each component handles its own specific errors</li>
+<li><strong>Service-level errors</strong>: The AnalyzerService handles errors from components</li>
+<li><strong>Application-level errors</strong>: The CLI or API handles unrecoverable errors</li>
+</ol>
+<p>Custom exceptions are defined in <code>errors.py</code> to represent different error conditions:</p>
+<pre><code class="language-python">class PytestAnalyzerError(Exception):
+    &quot;&quot;&quot;Base exception for all pytest-analyzer errors.&quot;&quot;&quot;
+    pass
+
+class ExtractionError(PytestAnalyzerError):
+    &quot;&quot;&quot;Error during extraction of test failures.&quot;&quot;&quot;
+    pass
+
+class AnalysisError(PytestAnalyzerError):
+    &quot;&quot;&quot;Error during analysis of test failures.&quot;&quot;&quot;
+    pass
+
+class SuggestionError(PytestAnalyzerError):
+    &quot;&quot;&quot;Error during suggestion generation.&quot;&quot;&quot;
+    pass
+
+class ApplierError(PytestAnalyzerError):
+    &quot;&quot;&quot;Error during fix application.&quot;&quot;&quot;
+    pass
+
+class LLMServiceError(PytestAnalyzerError):
+    &quot;&quot;&quot;Error during language model service operation.&quot;&quot;&quot;
+    pass
+
+class StateMachineError(PytestAnalyzerError):
+    &quot;&quot;&quot;Error during state machine operation.&quot;&quot;&quot;
+    pass
+</code></pre>
+<h2 id="state-machine-design">State Machine Design</h2>
+<p>The state machine design is used to manage the complex workflow of the analyzer service. The states and transitions are defined as follows:</p>
+<h3 id="analyzer-states">Analyzer States</h3>
+<pre><code class="language-python">class AnalyzerState(Enum):
+    &quot;&quot;&quot;States for the analyzer state machine.&quot;&quot;&quot;
+
+    INITIAL = auto()
+    EXTRACTING = auto()
+    ANALYZING = auto()
+    SUGGESTING = auto()
+    APPLYING = auto()
+    COMPLETED = auto()
+    ERROR = auto()
+</code></pre>
+<h3 id="state-handlers">State Handlers</h3>
+<p>Each state has a handler function that performs the work for that state:</p>
+<pre><code class="language-python">def handle_extracting(context: Dict[str, Any], **kwargs) -&gt; None:
+    &quot;&quot;&quot;Handle the EXTRACTING state.&quot;&quot;&quot;
+    extractor = context.get(&quot;extractor&quot;)
+    report_path = context.get(&quot;report_path&quot;)
+
+    failures = extractor.extract_failures(report_path)
+    context[&quot;failures&quot;] = failures
+
+def handle_analyzing(context: Dict[str, Any], **kwargs) -&gt; None:
+    &quot;&quot;&quot;Handle the ANALYZING state.&quot;&quot;&quot;
+    analyzer = context.get(&quot;analyzer&quot;)
+    failures = context.get(&quot;failures&quot;, [])
+
+    analyses = analyzer.analyze_failures(failures)
+    context[&quot;analyses&quot;] = analyses
+
+# ... more handlers for other states
+</code></pre>
+<h3 id="transitions">Transitions</h3>
+<p>Transitions between states are defined with conditions:</p>
+<pre><code class="language-python"># From INITIAL to EXTRACTING
+state_machine.add_transition(
+    AnalyzerState.INITIAL,
+    AnalyzerState.EXTRACTING,
+    lambda context, **kwargs: True  # Always transition to EXTRACTING
+)
+
+# From EXTRACTING to ANALYZING
+state_machine.add_transition(
+    AnalyzerState.EXTRACTING,
+    AnalyzerState.ANALYZING,
+    lambda context, **kwargs: len(context.get(&quot;failures&quot;, [])) &gt; 0
+)
+
+# From EXTRACTING to COMPLETED (no failures)
+state_machine.add_transition(
+    AnalyzerState.EXTRACTING,
+    AnalyzerState.COMPLETED,
+    lambda context, **kwargs: len(context.get(&quot;failures&quot;, [])) == 0
+)
+
+# ... more transitions
+</code></pre>
+<h2 id="synchronous-and-asynchronous-apis">Synchronous and Asynchronous APIs</h2>
+<p>The application provides both synchronous and asynchronous APIs for flexibility. Key async features include:</p>
+<ol>
+<li><strong>Async LLM Service</strong>: Provides asynchronous methods for language model interactions</li>
+<li><strong>Async Analyzer Service</strong>: An asynchronous version of the analyzer service</li>
+</ol>
+<p>Example of synchronous vs asynchronous API:</p>
+<pre><code class="language-python"># Synchronous API
+result = analyzer_service.run_and_analyze(report_path=&quot;report.xml&quot;)
+
+# Asynchronous API
+result = await async_analyzer_service.run_and_analyze_async(report_path=&quot;report.xml&quot;)
+</code></pre>
+<h2 id="backward-compatibility">Backward Compatibility</h2>
+<p>To maintain compatibility with existing code, a facade is provided that exposes the same API as the original analyzer service while using the new architecture internally:</p>
+<pre><code class="language-python">class PytestAnalyzerService:
+    &quot;&quot;&quot;Facade for backward compatibility with the original API.&quot;&quot;&quot;
+
+    def __init__(self, settings: Optional[Settings] = None):
+        self._container = initialize_container(settings)
+        self._service = self._container.resolve(DIPytestAnalyzerService)
+
+    def run_and_analyze(self, **kwargs):
+        &quot;&quot;&quot;Run pytest and analyze the results.&quot;&quot;&quot;
+        return self._service.run_and_analyze(**kwargs)
+
+    # ... other methods from the original API
+</code></pre>
+<h2 id="conclusion">Conclusion</h2>
+<p>This architecture provides a solid foundation for the Pytest Analyzer, allowing for:</p>
+<ol>
+<li><strong>Better maintainability</strong>: Clear separation of concerns and well-defined interfaces</li>
+<li><strong>Improved testability</strong>: Dependency injection facilitates testing with mocks</li>
+<li><strong>Enhanced flexibility</strong>: The state machine pattern allows for complex workflows</li>
+<li><strong>Future extensibility</strong>: New components can be added by implementing interfaces</li>
+<li><strong>Performance options</strong>: Both synchronous and asynchronous APIs are available</li>
+</ol>
+<p>The architecture has been designed to balance immediate refactoring needs with long-term maintainability and extensibility goals.</p>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

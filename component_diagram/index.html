@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Component Diagram for Pytest Analyzer - llm-pytest-analyzer</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Component Diagram for Pytest Analyzer";
+        var mkdocs_page_input_path = "component_diagram.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> llm-pytest-analyzer
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">llm-pytest-analyzer</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Component Diagram for Pytest Analyzer</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer/edit/main/docs/component_diagram.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="component-diagram-for-pytest-analyzer">Component Diagram for Pytest Analyzer</h1>
+<h2 id="main-component-diagram">Main Component Diagram</h2>
+<pre><code class="language-mermaid">graph TB
+    CLI[&quot;CLI / API Interface&quot;]
+    AS[&quot;AnalyzerService&quot;]
+    DI[&quot;DI Container&quot;]
+    ASM[&quot;AnalyzerStateMachine&quot;]
+    EXT[&quot;Extractor&quot;]
+    ANA[&quot;Analyzer&quot;]
+    SUG[&quot;Suggester&quot;]
+    APP[&quot;Applier&quot;]
+    LLMS[&quot;LLM Service&quot;]
+    PB[&quot;PromptBuilder&quot;]
+    RP[&quot;ResponseParser&quot;]
+    LC[&quot;LLM Client&quot;]
+
+    CLI --&gt;|uses| DI
+    DI --&gt;|resolves| AS
+    AS --&gt;|uses| ASM
+    ASM --&gt;|state 1| EXT
+    ASM --&gt;|state 2| ANA
+    ASM --&gt;|state 3| SUG
+    ASM --&gt;|state 4| APP
+    SUG --&gt;|uses| LLMS
+    LLMS --&gt;|uses| PB
+    LLMS --&gt;|uses| RP
+    LLMS --&gt;|calls| LC
+
+    classDef service fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef component fill:#bbf,stroke:#333,stroke-width:1px;
+    classDef container fill:#bfb,stroke:#333,stroke-width:2px;
+    classDef machine fill:#fbb,stroke:#333,stroke-width:1px;
+
+    class DI container;
+    class AS,LLMS service;
+    class EXT,ANA,SUG,APP,PB,RP,LC component;
+    class ASM machine;
+</code></pre>
+<h2 id="dependency-injection-container">Dependency Injection Container</h2>
+<pre><code class="language-mermaid">graph LR
+    DI[&quot;DI Container&quot;]
+    SET[&quot;Settings&quot;]
+    PR[&quot;PathResolver&quot;]
+    EF[&quot;ExtractorFactory&quot;]
+    FA[&quot;FailureAnalyzer&quot;]
+    FG[&quot;FailureGrouper&quot;]
+    FS[&quot;FixSuggester&quot;]
+    LS[&quot;LLMService&quot;]
+    AS[&quot;AnalyzerService&quot;]
+    ASM[&quot;AnalyzerStateMachine&quot;]
+
+    DI --&gt;|registers| SET
+    DI --&gt;|registers| PR
+    DI --&gt;|registers| EF
+    DI --&gt;|registers| FA
+    DI --&gt;|registers| FG
+    DI --&gt;|registers| FS
+    DI --&gt;|registers| LS
+    DI --&gt;|registers| ASM
+    DI --&gt;|registers| AS
+
+    classDef container fill:#bfb,stroke:#333,stroke-width:2px;
+    classDef component fill:#bbf,stroke:#333,stroke-width:1px;
+
+    class DI container;
+    class SET,PR,EF,FA,FG,FS,LS,ASM,AS component;
+</code></pre>
+<h2 id="state-machine-workflow">State Machine Workflow</h2>
+<pre><code class="language-mermaid">stateDiagram-v2
+    [*] --&gt; INITIAL
+    INITIAL --&gt; EXTRACTING
+    EXTRACTING --&gt; ANALYZING: has failures
+    EXTRACTING --&gt; COMPLETED: no failures
+    ANALYZING --&gt; SUGGESTING
+    SUGGESTING --&gt; APPLYING: auto_apply=true
+    SUGGESTING --&gt; COMPLETED: auto_apply=false
+    APPLYING --&gt; COMPLETED
+
+    EXTRACTING --&gt; ERROR: extraction error
+    ANALYZING --&gt; ERROR: analysis error
+    SUGGESTING --&gt; ERROR: suggestion error
+    APPLYING --&gt; ERROR: applier error
+
+    COMPLETED --&gt; [*]
+    ERROR --&gt; [*]
+</code></pre>
+<h2 id="llm-service-workflow">LLM Service Workflow</h2>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant Suggester
+    participant LLMService
+    participant PromptBuilder
+    participant LLMClient
+    participant ResponseParser
+
+    Suggester-&gt;&gt;LLMService: suggest_fix(failure)
+    LLMService-&gt;&gt;PromptBuilder: build_prompt(failure)
+    PromptBuilder--&gt;&gt;LLMService: prompt
+    LLMService-&gt;&gt;LLMClient: generate_completion(prompt)
+    LLMClient--&gt;&gt;LLMService: raw_response
+    LLMService-&gt;&gt;ResponseParser: parse_response(raw_response)
+    ResponseParser--&gt;&gt;LLMService: structured_response
+    LLMService--&gt;&gt;Suggester: fix_suggestion
+</code></pre>
+<h2 id="data-flow-diagram">Data Flow Diagram</h2>
+<pre><code class="language-mermaid">flowchart TD
+    subgraph Inputs
+        Report[&quot;Test Report (JSON/XML)&quot;]
+    end
+
+    subgraph Processing
+        EXT[&quot;Extractor&quot;]
+        ANA[&quot;Analyzer&quot;]
+        SUG[&quot;Suggester&quot;]
+        APP[&quot;Applier&quot;]
+    end
+
+    subgraph Data
+        PF[&quot;PytestFailure Objects&quot;]
+        FA[&quot;FailureAnalysis Objects&quot;]
+        FS[&quot;FixSuggestion Objects&quot;]
+        AF[&quot;AppliedFix Objects&quot;]
+    end
+
+    subgraph Output
+        FR[&quot;Fix Results&quot;]
+    end
+
+    Report --&gt; EXT
+    EXT --&gt; PF
+    PF --&gt; ANA
+    ANA --&gt; FA
+    FA --&gt; SUG
+    SUG --&gt; FS
+    FS --&gt; APP
+    APP --&gt; AF
+    AF --&gt; FR
+</code></pre>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Facade Architecture for Backward Compatibility - llm-pytest-analyzer</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Facade Architecture for Backward Compatibility";
+        var mkdocs_page_input_path = "facade_architecture.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> llm-pytest-analyzer
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">llm-pytest-analyzer</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Facade Architecture for Backward Compatibility</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer/edit/main/docs/facade_architecture.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="facade-architecture-for-backward-compatibility">Facade Architecture for Backward Compatibility</h1>
+<h2 id="overview">Overview</h2>
+<p>The facade pattern in this codebase serves as a bridge between the legacy API (<code>PytestAnalyzerService</code>) and the new modular architecture that uses dependency injection and protocol-based interfaces. This document explains the design decisions, implementation details, and usage patterns for the facade.</p>
+<h2 id="design-goals">Design Goals</h2>
+<ol>
+<li><strong>Maintain Backward Compatibility</strong>: Ensure that code using the original API continues to work without modifications.</li>
+<li><strong>Leverage New Architecture</strong>: Internally use the new components and state machine to benefit from improved design.</li>
+<li><strong>Provide Seamless Migration Path</strong>: Allow gradual migration from the old API to the new architecture.</li>
+<li><strong>Minimize Duplication</strong>: Avoid duplicating logic between old and new architecture.</li>
+<li><strong>Facilitate Testing</strong>: Make the system easier to test with proper separation of concerns.</li>
+</ol>
+<h2 id="implementation-components">Implementation Components</h2>
+<h3 id="pytestanalyzerfacade">PytestAnalyzerFacade</h3>
+<p>The <code>PytestAnalyzerFacade</code> class is the core of our compatibility layer. It:</p>
+<ul>
+<li>Implements the same interface as the original <code>PytestAnalyzerService</code></li>
+<li>Uses the dependency injection container internally</li>
+<li>Delegates work to the <code>AnalyzerStateMachine</code> and various protocol implementations</li>
+<li>Handles error cases and maintains the expected return formats</li>
+<li>Manages temporary resources like files</li>
+</ul>
+<h3 id="legacy-api-support-pytestanalyzerservice">Legacy API Support (PytestAnalyzerService)</h3>
+<p>For full backward compatibility, we provide the <code>PytestAnalyzerService</code> class which:</p>
+<ul>
+<li>Inherits from <code>PytestAnalyzerFacade</code></li>
+<li>Provides the same constructor signature as the original implementation</li>
+<li>Issues a deprecation warning to encourage migration to the new API</li>
+</ul>
+<h2 id="architecture-diagram">Architecture Diagram</h2>
+<pre><code>Legacy Code
+    │
+    ▼
+┌─────────────────────┐
+│PytestAnalyzerService│
+│(Backward Compatible)│
+└─────────────────────┘
+          │
+          │ inherits from
+          ▼
+┌─────────────────────┐      ┌───────────────────┐
+│ PytestAnalyzerFacade ├─────►DI Container       │
+└─────────────────────┘      └───────────────────┘
+          │                            │
+          │ delegates to               │ resolves
+          ▼                            ▼
+┌─────────────────────┐      ┌───────────────────┐
+│AnalyzerStateMachine │      │Protocol Interfaces│
+└─────────────────────┘      └───────────────────┘
+          │                            │
+          │ coordinates                │ implements
+          ▼                            ▼
+┌─────────────────────┐      ┌───────────────────┐
+│Different States     │      │Concrete Components│
+└─────────────────────┘      └───────────────────┘
+</code></pre>
+<h2 id="key-benefits">Key Benefits</h2>
+<ol>
+<li><strong>Isolation of Changes</strong>: Changes to the internal architecture don't affect external consumers.</li>
+<li><strong>Testing Simplicity</strong>: Each layer can be tested independently.</li>
+<li><strong>Clean Migration</strong>: New code can use the newer, more modular interfaces while legacy code continues to work.</li>
+<li><strong>Future Extension</strong>: New features can be added to the new architecture without affecting backward compatibility.</li>
+</ol>
+<h2 id="usage-examples">Usage Examples</h2>
+<h3 id="legacy-api-usage-still-supported">Legacy API Usage (Still Supported)</h3>
+<pre><code class="language-python">from pytest_analyzer.core.analyzer_service import PytestAnalyzerService
+
+# Create service with default settings
+service = PytestAnalyzerService()
+
+# Analyze test failures
+failures = service.run_pytest_only(&quot;tests/&quot;)
+suggestions = service.run_and_analyze(&quot;tests/&quot;)
+</code></pre>
+<h3 id="new-facade-api-usage-recommended">New Facade API Usage (Recommended)</h3>
+<pre><code class="language-python">from pytest_analyzer.core.analyzer_facade import PytestAnalyzerFacade
+
+# Create facade with default settings
+facade = PytestAnalyzerFacade()
+
+# Analyze test failures
+failures = facade.run_pytest_only(&quot;tests/&quot;)
+suggestions = facade.run_and_analyze(&quot;tests/&quot;)
+</code></pre>
+<h3 id="di-based-api-advanced">DI-Based API (Advanced)</h3>
+<pre><code class="language-python">from pytest_analyzer.core.di import get_container
+from pytest_analyzer.core.analyzer_service_di import DIPytestAnalyzerService
+
+# Get or create the DI container
+container = get_container()
+
+# Resolve the service from the container
+service = container.resolve(DIPytestAnalyzerService)
+
+# Use the service
+suggestions = service.run_and_analyze(&quot;tests/&quot;)
+</code></pre>
+<h2 id="future-considerations">Future Considerations</h2>
+<ol>
+<li><strong>Deprecation Timeline</strong>: Consider a phased approach to eventually remove the legacy API.</li>
+<li><strong>Feature Parity</strong>: Ensure all new features are accessible through the facade.</li>
+<li><strong>Documentation</strong>: Keep documentation updated as the architecture evolves.</li>
+<li><strong>Performance Monitoring</strong>: Compare performance between old and new implementations.</li>
+</ol>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

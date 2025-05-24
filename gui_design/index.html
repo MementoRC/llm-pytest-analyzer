@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Pytest Analyzer GUI Design Document - llm-pytest-analyzer</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Pytest Analyzer GUI Design Document";
+        var mkdocs_page_input_path = "gui_design.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> llm-pytest-analyzer
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">llm-pytest-analyzer</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Pytest Analyzer GUI Design Document</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer/edit/main/docs/gui_design.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="pytest-analyzer-gui-design-document">Pytest Analyzer GUI Design Document</h1>
+<h2 id="overview">Overview</h2>
+<p>The Pytest Analyzer GUI provides a user-friendly interface for analyzing pytest test failures, visualizing the results, and implementing suggested fixes. The GUI complements the existing CLI functionality while making it more accessible to users who prefer graphical interfaces.</p>
+<h2 id="main-components">Main Components</h2>
+<p>The GUI will consist of the following key components:</p>
+<ol>
+<li><strong>Main Window</strong> - The primary application window with a menu bar, toolbar, and status bar</li>
+<li><strong>Test Selection Panel</strong> - For selecting test files or directories</li>
+<li><strong>Failure Analysis View</strong> - Displays test failures, groupings, and patterns</li>
+<li><strong>Fix Suggestion Panel</strong> - Shows LLM-generated fix suggestions</li>
+<li><strong>Code Editor</strong> - For reviewing and editing suggested fixes</li>
+<li><strong>Settings Dialog</strong> - For configuring the application</li>
+</ol>
+<h2 id="layout-wireframes">Layout Wireframes</h2>
+<h3 id="main-window-layout">Main Window Layout</h3>
+<pre><code>+----------------------------------------------------------------------+
+| File  Edit  View  Tools  Help                                         |
++----------------------------------------------------------------------+
+| [Open] [Run] [Stop] [Settings]                        [LLM Provider] |
++----------------------------------------------------------------------+
+|                        |                                              |
+| Test Selection         | Failure Analysis View                        |
+| +------------------+   | +------------------------------------------+ |
+| | Project Files    |   | | Test Failures (2)                      v | |
+| | +--------------+ |   | | +---------------------------------+      | |
+| | | test_module.py|   | | | test_module.py::test_function_1  |      | |
+| | | +-test_func_1 |   | | | Error: AssertionError           |      | |
+| | | +-test_func_2 |   | | | Group: API Response Validation  |      | |
+| | | another_test..|   | | +---------------------------------+      | |
+| | +--------------+ |   | |                                          | |
+| +------------------+   | | +---------------------------------+      | |
+|                        | | | test_module.py::test_function_2  |      | |
+| [Load Test Results]    | | | Error: TypeError                 |      | |
+|                        | | | Group: Type Conversion           |      | |
+|                        | | +---------------------------------+      | |
+|                        | +------------------------------------------+ |
+|                        |                                              |
+|                        | Fix Suggestion                               |
+|                        | +------------------------------------------+ |
+|                        | | The issue appears to be in the API       | |
+|                        | | response validation where expected and   | |
+|                        | | actual values don't match.              | |
+|                        | |                                          | |
+|                        | | Suggested fix:                           | |
+|                        | | ```python                                | |
+|                        | | # Change line 42 from:                   | |
+|                        | | assert response.status == 200            | |
+|                        | | # To:                                    | |
+|                        | | assert response.status_code == 200       | |
+|                        | | ```                                      | |
+|                        | |                                          | |
+|                        | | [Show Diff] [Apply Fix] [Skip]           | |
+|                        | +------------------------------------------+ |
++----------------------------------------------------------------------+
+| Ready | LLM: GPT-4 | Analyzing 2 test failures                        |
++----------------------------------------------------------------------+
+</code></pre>
+<h3 id="settings-dialog">Settings Dialog</h3>
+<pre><code>+----------------------------------------------------------------------+
+| Settings                                                [X] [?]      |
++----------------------------------------------------------------------+
+| General                                                              |
+| +------------------------------------------------------------------+ |
+| | Project Root: [/path/to/project                     ] [Browse..] | |
+| | Default Test Directory: [tests/                     ] [Browse..] | |
+| | Auto-run Failed Tests: [X]                                       | |
+| | Max Test Runs: [3      ]                                         | |
+| +------------------------------------------------------------------+ |
+|                                                                      |
+| LLM Configuration                                                    |
+| +------------------------------------------------------------------+ |
+| | Provider:      [OpenAI▼]                                         | |
+| | Model:         [gpt-4▼ ]                                         | |
+| | API Key:       [****************************************]         | |
+| | Temperature:   [0.7    ]                                         | |
+| | Max Tokens:    [4096   ]                                         | |
+| | Stream Output: [X]                                               | |
+| +------------------------------------------------------------------+ |
+|                                                                      |
+| Git Integration                                                      |
+| +------------------------------------------------------------------+ |
+| | Use Git Integration: [X]                                         | |
+| | Auto-create Branches: [X]                                        | |
+| | Branch Prefix: [fix-  ]                                          | |
+| | Auto-commit Fixes: [ ]                                           | |
+| +------------------------------------------------------------------+ |
+|                                                                      |
+|                                            [Cancel] [Save &amp; Close]   |
++----------------------------------------------------------------------+
+</code></pre>
+<h3 id="code-editor-view">Code Editor View</h3>
+<pre><code>+----------------------------------------------------------------------+
+| Code Editor - test_module.py                              [X] [?]    |
++----------------------------------------------------------------------+
+| 38  def test_function_1():                                           |
+| 39      &quot;&quot;&quot;Test that the API response is validated correctly.&quot;&quot;&quot;     |
+| 40      response = make_api_call()                                   |
+| 41                                                                   |
+| 42*     assert response.status == 200  # This line will be changed   |
+| 43      assert response.json()[&quot;data&quot;] is not None                   |
+| 44      assert &quot;id&quot; in response.json()[&quot;data&quot;]                       |
++----------------------------------------------------------------------+
+| Diff View                                                           |
+| +------------------------------------------------------------------+ |
+| | - assert response.status == 200                                  | |
+| | + assert response.status_code == 200                             | |
+| +------------------------------------------------------------------+ |
+|                                                                      |
+|                                    [Cancel] [Apply] [Apply &amp; Close]  |
++----------------------------------------------------------------------+
+</code></pre>
+<h2 id="interaction-flow">Interaction Flow</h2>
+<ol>
+<li><strong>Starting the Application</strong>:</li>
+<li>User launches the pytest-analyzer-gui</li>
+<li>Main window appears with empty panels</li>
+<li>
+<p>User can select a project or load test results</p>
+</li>
+<li>
+<p><strong>Loading Test Results</strong>:</p>
+</li>
+<li>User selects a test file/directory or loads existing test results</li>
+<li>Application displays available tests in the Test Selection panel</li>
+<li>
+<p>Failures and errors are shown in the Failure Analysis View</p>
+</li>
+<li>
+<p><strong>Analyzing Failures</strong>:</p>
+</li>
+<li>User selects a failure from the Failure Analysis View</li>
+<li>Application sends the failure information to the LLM for analysis</li>
+<li>Progress is shown in the status bar</li>
+<li>
+<p>Fix suggestions are displayed in the Fix Suggestion panel</p>
+</li>
+<li>
+<p><strong>Applying Fixes</strong>:</p>
+</li>
+<li>User reviews the suggested fix</li>
+<li>Clicks "Show Diff" to see the proposed changes in the Code Editor</li>
+<li>Can apply the fix directly or edit it before applying</li>
+<li>
+<p>Application can optionally run the test again to verify the fix</p>
+</li>
+<li>
+<p><strong>Configuration</strong>:</p>
+</li>
+<li>User accesses Settings dialog from menu or toolbar</li>
+<li>Can configure LLM provider, project settings, and Git integration</li>
+</ol>
+<h2 id="implementation-details">Implementation Details</h2>
+<h3 id="key-classes">Key Classes</h3>
+<ol>
+<li><code>MainWindow</code> - The primary application window and controller</li>
+<li><code>TestModel</code> - Data model for test information</li>
+<li><code>FailureModel</code> - Data model for failure information</li>
+<li><code>TestSelectionView</code> - UI component for test selection</li>
+<li><code>FailureAnalysisView</code> - UI component for failure display</li>
+<li><code>FixSuggestionView</code> - UI component for fix suggestions</li>
+<li><code>CodeEditorView</code> - UI component for code editing</li>
+<li><code>SettingsDialog</code> - Dialog for application configuration</li>
+<li><code>AnalyzerService</code> - Interface to the core pytest-analyzer functionality</li>
+</ol>
+<h3 id="technology-stack">Technology Stack</h3>
+<ul>
+<li><strong>PyQt6</strong>: UI framework</li>
+<li><strong>Rich</strong>: Terminal-like output formatting in the GUI</li>
+<li><strong>Qt Designer</strong>: For creating and editing UI layouts</li>
+<li><strong>Pytest Analyzer Core</strong>: Existing functionality for test analysis</li>
+</ul>
+<h2 id="integration-with-existing-code">Integration with Existing Code</h2>
+<p>The GUI will be implemented as a new component that uses the existing pytest-analyzer core functionality. It will:</p>
+<ol>
+<li>Import and use the <code>PytestAnalyzerService</code> class for core functionality</li>
+<li>Use the same models and data structures as the CLI</li>
+<li>Share configuration with the CLI through the <code>Settings</code> class</li>
+<li>Maintain backward compatibility with the CLI</li>
+</ol>
+<h2 id="future-enhancements">Future Enhancements</h2>
+<ul>
+<li><strong>Result History</strong>: Save and load previous analysis sessions</li>
+<li><strong>Batch Processing</strong>: Analyze and fix multiple failures in one operation</li>
+<li><strong>Interactive Tutorials</strong>: Guide users through the analysis process</li>
+<li><strong>Custom Themes</strong>: Light/dark mode and customizable UI themes</li>
+<li><strong>Plugin System</strong>: Allow extensions for specialized test frameworks</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>
