@@ -970,6 +970,10 @@ class PytestAnalyzerService:
         try:
             args = pytest_args or []
             cmd = [
+                "pixi",
+                "run",
+                "-e",
+                "dev",
                 "pytest",
                 test_path,
                 "--json-report",
@@ -995,6 +999,8 @@ class PytestAnalyzerService:
                         check=False,
                         stdout=devnull,
                         stderr=devnull,
+                        env=os.environ,
+                        cwd=self.settings.project_root,
                     )
             elif progress_mode:
                 # With progress mode enabled, make sure the output isn't being captured
@@ -1004,13 +1010,25 @@ class PytestAnalyzerService:
                 console.print("[cyan]Running pytest with JSON report...[/cyan]")
 
                 # Run pytest with normal output, needed for rich progress display
-                result = subprocess.run(cmd, timeout=self.settings.pytest_timeout, check=False)
+                result = subprocess.run(
+                    cmd,
+                    timeout=self.settings.pytest_timeout,
+                    check=False,
+                    env=os.environ,
+                    cwd=self.settings.project_root,
+                )
 
                 if result.returncode != 0 and not quiet_mode:
                     console.print(f"[yellow]Pytest exited with code {result.returncode}[/yellow]")
             else:
                 # Run pytest with a timeout, normal output but no special progress display
-                subprocess.run(cmd, timeout=self.settings.pytest_timeout, check=False)
+                subprocess.run(
+                    cmd,
+                    timeout=self.settings.pytest_timeout,
+                    check=False,
+                    env=os.environ,
+                    cwd=self.settings.project_root,
+                )
 
             # Extract failures from JSON output
             extractor = get_extractor(Path(json_report_path), self.settings, self.path_resolver)
@@ -1045,7 +1063,15 @@ class PytestAnalyzerService:
 
         try:
             args = pytest_args or []
-            cmd = ["pytest", test_path, f"--junit-xml={xml_report_path}"]
+            cmd = [
+                "pixi",
+                "run",
+                "-e",
+                "dev",
+                "pytest",
+                test_path,
+                f"--junit-xml={xml_report_path}",
+            ]
 
             # Important: we need to extend args after defining base command to allow
             # custom args to override the defaults if needed
@@ -1066,6 +1092,8 @@ class PytestAnalyzerService:
                         check=False,
                         stdout=devnull,
                         stderr=devnull,
+                        env=os.environ,
+                        cwd=self.settings.project_root,
                     )
             elif progress_mode:
                 # With progress mode enabled, make sure the output isn't being captured
@@ -1075,13 +1103,30 @@ class PytestAnalyzerService:
                 console.print("[cyan]Running pytest with XML report...[/cyan]")
 
                 # Run pytest with normal output, needed for rich progress display
-                result = subprocess.run(cmd, timeout=self.settings.pytest_timeout, check=False)
+                result = subprocess.run(
+                    cmd,
+                    timeout=self.settings.pytest_timeout,
+                    check=False,
+                    env=os.environ,
+                    cwd=self.settings.project_root,
+                )
 
                 if result.returncode != 0 and not quiet_mode:
                     console.print(f"[yellow]Pytest exited with code {result.returncode}[/yellow]")
             else:
                 # Run pytest with a timeout, normal output but no special progress display
-                subprocess.run(cmd, timeout=self.settings.pytest_timeout, check=False)
+                subprocess.run(
+                    cmd,
+                    timeout=self.settings.pytest_timeout,
+                    check=False,
+                    env=os.environ,
+                    cwd=self.settings.project_root,
+                )
+
+            # Small delay to ensure file is fully written
+            import time
+
+            time.sleep(0.1)
 
             # Extract failures from XML output
             extractor = get_extractor(Path(xml_report_path), self.settings, self.path_resolver)

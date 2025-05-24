@@ -118,7 +118,7 @@ class JsonResultExtractor:
         # Process test entries
         tests = data.get("tests", [])
         for test in tests:
-            if test.get("outcome") == "failed":
+            if test.get("outcome") in ["failed", "error"]:
                 failure = self._create_failure_from_test(test)
                 if failure:
                     failures.append(failure)
@@ -235,7 +235,7 @@ class JsonResultExtractor:
         # Process test entries
         tests = data.get("tests", [])
         for test in tests:
-            if test.get("outcome") == "failed":
+            if test.get("outcome") in ["failed", "error"]:
                 failure = self._create_failure_from_test(test)
                 if failure:
                     failures.append(failure)

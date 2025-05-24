@@ -159,7 +159,19 @@ class XmlResultExtractor:
 
                 # Try to extract file path from classname
                 if classname and "." in classname:
-                    file_part = classname.replace(".", "/") + ".py"
+                    # For pytest, the classname is typically: module.path.ClassName
+                    # We need to extract just the module path and ignore the class name
+                    parts = classname.split(".")
+
+                    # Check if the last part looks like a class name (starts with capital letter)
+                    if len(parts) > 1 and parts[-1][0].isupper():
+                        # Remove the class name, keep only the module path
+                        module_parts = parts[:-1]
+                    else:
+                        # If no clear class name, use all parts
+                        module_parts = parts
+
+                    file_part = "/".join(module_parts) + ".py"
                     file_path = str(self.path_resolver.resolve_path(file_part))
 
                 # Extract line number from traceback if available
@@ -267,7 +279,19 @@ class XmlResultExtractor:
 
                 # Try to extract file path from classname
                 if classname and "." in classname:
-                    file_part = classname.replace(".", "/") + ".py"
+                    # For pytest, the classname is typically: module.path.ClassName
+                    # We need to extract just the module path and ignore the class name
+                    parts = classname.split(".")
+
+                    # Check if the last part looks like a class name (starts with capital letter)
+                    if len(parts) > 1 and parts[-1][0].isupper():
+                        # Remove the class name, keep only the module path
+                        module_parts = parts[:-1]
+                    else:
+                        # If no clear class name, use all parts
+                        module_parts = parts
+
+                    file_part = "/".join(module_parts) + ".py"
                     file_path = str(self.path_resolver.resolve_path(file_part))
 
                 # Extract line number from traceback if available
