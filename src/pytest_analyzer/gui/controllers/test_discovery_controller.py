@@ -116,6 +116,7 @@ class TestDiscoveryController(BaseController):
                 # Create a minimal PytestFailure object for the discovered file
                 # Use the relative file path as the node ID to match pytest conventions
                 failure_item = PytestFailure(
+                    outcome="discovered",  # Mark as a discovered item
                     test_name=relative_file_path_str,  # Use relative file path as node ID
                     test_file=relative_file_path_str,
                     error_type="discovered_file",  # Indicates this is from discovery
