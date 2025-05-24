@@ -236,6 +236,9 @@ class MainController(BaseController):
         self.test_execution_controller.test_execution_completed.connect(
             self.test_results_controller.auto_load_test_results
         )
+        self.test_execution_controller.test_counts_updated.connect(
+            self._update_status_bar_test_counts
+        )
 
         # Connect test results model signals to report controller
         self.logger.debug("MainController: Connecting TestResultsModel to ReportController...")
@@ -689,6 +692,32 @@ class MainController(BaseController):
         # Update status bar (already handled by WorkflowGuide -> _update_status_bar_guidance)
         # Potentially update other UI elements, e.g., highlighting current step in a visual guide
         self.logger.debug("MainController: _on_workflow_state_changed finished.")
+
+    @pyqtSlot(int, int, int, int)
+    def _update_status_bar_test_counts(
+        self, passed: int, failed: int, skipped: int, errors: int
+    ) -> None:
+        """Updates the test count label in the main window's status bar."""
+        self.logger.debug(
+            f"MainController: _update_status_bar_test_counts called with P:{passed}, F:{failed}, S:{skipped}, E:{errors}"
+        )
+        if hasattr(self.main_window, "test_count_label"):
+            # Format: "Tests: {total} (P:{passed}, F:{failed}, E:{errors}, S:{skipped})"
+            # Compact Format: "Tests: {passed}P, {failed}F, {errors}E, {skipped}S"
+            total_tests = passed + failed + skipped + errors
+            if total_tests == 0 and passed == 0 and failed == 0 and skipped == 0 and errors == 0:
+                # This case can mean "reset" or "no tests run yet"
+                status_text = "Tests: 0"
+            else:
+                status_text = f"Tests: {passed}P, {failed}F, {errors}E, {skipped}S"
+
+            self.main_window.test_count_label.setText(status_text)
+            self.logger.info(f"Status bar test count updated: {status_text}")
+        else:
+            self.logger.warning(
+                "MainController: main_window.test_count_label not found, cannot update test counts."
+            )
+        self.logger.debug("MainController: _update_status_bar_test_counts finished.")
 
     def _on_project_changed(self, project) -> None:
         """Handle project change."""

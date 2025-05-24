@@ -28,6 +28,8 @@ class TestExecutionController(BaseController):
     # Signal to emit received output text, to be connected to TestOutputView
     output_received = pyqtSignal(str)
     test_execution_completed = pyqtSignal(list)  # Emits List[PytestFailure]
+    # Signal to emit test counts: passed, failed, skipped, errors
+    test_counts_updated = pyqtSignal(int, int, int, int)
 
     def __init__(
         self,
@@ -132,6 +134,10 @@ class TestExecutionController(BaseController):
             self.logger.debug("TestExecutionController: Called output_view.clear_output()")
             self.progress_view.reset_view()
             self.logger.debug("TestExecutionController: Called progress_view.reset_view()")
+            self.test_counts_updated.emit(0, 0, 0, 0)  # Reset counts in status bar
+            self.logger.debug(
+                "TestExecutionController: Emitted test_counts_updated(0,0,0,0) for new run."
+            )
             self.progress_view.show()
             self.logger.debug("TestExecutionController: Called progress_view.show()")
             self.progress_view.update_progress(0, "Running tests...")
@@ -223,6 +229,10 @@ class TestExecutionController(BaseController):
             self.logger.debug(
                 f"TestExecutionController: Called progress_view.update_stats with counts P:{passed_count} F:{failed_count} S:{skipped_count} E:{error_count}"
             )
+            self.test_counts_updated.emit(passed_count, failed_count, skipped_count, error_count)
+            self.logger.debug(
+                f"TestExecutionController: Emitted test_counts_updated with P:{passed_count} F:{failed_count} S:{skipped_count} E:{error_count}"
+            )
             self.progress_view.update_progress(100, final_message)  # Mark as 100%
             self.logger.debug(
                 f"TestExecutionController: Called progress_view.update_progress(100, '{final_message}')"
@@ -251,6 +261,10 @@ class TestExecutionController(BaseController):
             self.progress_view.update_progress(0, fail_msg)
             self.logger.debug(
                 f"TestExecutionController: Called progress_view.update_progress(0, '{fail_msg}')"
+            )
+            self.test_counts_updated.emit(0, 0, 0, 0)  # Reset counts in status bar on failure
+            self.logger.debug(
+                "TestExecutionController: Emitted test_counts_updated(0,0,0,0) for failed run."
             )
             # Keep stats as they were, or reset.
             # self.progress_view.hide() # Or set to a "failed" state
