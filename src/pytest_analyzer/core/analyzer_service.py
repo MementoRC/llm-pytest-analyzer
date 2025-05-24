@@ -995,7 +995,8 @@ class PytestAnalyzerService:
             # Important: we need to extend args after defining base command to allow
             # custom args to override the defaults if needed
             cmd.extend(args)
-            logger.debug(f"Executing pytest for JSON report with command: {' '.join(cmd)}")
+            logger.info(f"Executing command for JSON report: {' '.join(cmd)}")
+            logger.info(f"Working directory for JSON report: {self.settings.project_root}")
 
             # Determine if we're in quiet mode
             quiet_mode = "-q" in args or "-qq" in args or "--quiet" in args
@@ -1053,12 +1054,25 @@ class PytestAnalyzerService:
             # Extract failures from JSON output
             if report_file_size > 0:  # Only attempt to parse if file has content
                 extractor = get_extractor(Path(json_report_path), self.settings, self.path_resolver)
-                return extractor.extract_failures(Path(json_report_path))
+                extracted_failures = extractor.extract_failures(Path(json_report_path))
+                logger.info(
+                    f"JSON extractor returned {len(extracted_failures)} failures from {json_report_path}."
+                )
+                logger.debug(f"Failures from JSON extractor: {extracted_failures}")
+                return extracted_failures
+            logger.info(
+                f"JSON report file {json_report_path} is empty or non-existent, returning 0 failures."
+            )
             return []  # Return empty list if report file is empty or non-existent
 
         except subprocess.TimeoutExpired:
             logger.error(
                 f"Pytest execution for JSON report timed out after {self.settings.pytest_timeout} seconds"
+            )
+            return []
+        except Exception as e:
+            logger.error(
+                f"Exception during JSON report generation or extraction: {e}", exc_info=True
             )
             return []
         finally:
@@ -1100,7 +1114,8 @@ class PytestAnalyzerService:
             # Important: we need to extend args after defining base command to allow
             # custom args to override the defaults if needed
             cmd.extend(args)
-            logger.debug(f"Executing pytest for XML report with command: {' '.join(cmd)}")
+            logger.info(f"Executing command for XML report: {' '.join(cmd)}")
+            logger.info(f"Working directory for XML report: {self.settings.project_root}")
 
             # Determine if we're in quiet mode
             quiet_mode = "-q" in args or "-qq" in args or "--quiet" in args
@@ -1164,12 +1179,25 @@ class PytestAnalyzerService:
             # Extract failures from XML output
             if report_file_size > 0:  # Only attempt to parse if file has content
                 extractor = get_extractor(Path(xml_report_path), self.settings, self.path_resolver)
-                return extractor.extract_failures(Path(xml_report_path))
+                extracted_failures = extractor.extract_failures(Path(xml_report_path))
+                logger.info(
+                    f"XML extractor returned {len(extracted_failures)} failures from {xml_report_path}."
+                )
+                logger.debug(f"Failures from XML extractor: {extracted_failures}")
+                return extracted_failures
+            logger.info(
+                f"XML report file {xml_report_path} is empty or non-existent, returning 0 failures."
+            )
             return []  # Return empty list if report file is empty or non-existent
 
         except subprocess.TimeoutExpired:
             logger.error(
                 f"Pytest execution for XML report timed out after {self.settings.pytest_timeout} seconds"
+            )
+            return []
+        except Exception as e:
+            logger.error(
+                f"Exception during XML report generation or extraction: {e}", exc_info=True
             )
             return []
         finally:

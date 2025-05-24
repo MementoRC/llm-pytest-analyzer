@@ -117,12 +117,26 @@ class JsonResultExtractor:
 
         # Process test entries
         tests = data.get("tests", [])
-        for test in tests:
+        logger.debug(f"Found {len(tests)} test entries in JSON data.")
+        num_matching_outcome = 0
+
+        for test_idx, test in enumerate(tests):
             # Process all tests, outcome will be handled in _create_failure_from_test
+            logger.debug(
+                f"Processing JSON test entry {test_idx + 1}/{len(tests)}: {test.get('nodeid', 'Unknown NodeID')}"
+            )
             parsed_test_info = self._create_failure_from_test(test)
             if parsed_test_info:
                 failures.append(parsed_test_info)
+                # We can infer it matched outcome criteria if a PytestFailure object was created,
+                # especially since _create_failure_from_test logs specific outcomes.
+                if parsed_test_info.outcome in ["failed", "error"]:
+                    num_matching_outcome += 1
 
+        logger.debug(
+            f"JSON Extractor: Found {num_matching_outcome} tests with 'failed' or 'error' outcomes leading to PytestFailure objects."
+        )
+        logger.info(f"JSON Extractor: Parsed {len(failures)} failures from JSON report.")
         return failures
 
     def _create_failure_from_test(self, test: Dict[str, Any]) -> Optional[PytestFailure]:
@@ -141,6 +155,8 @@ class JsonResultExtractor:
 
         outcome = test.get("outcome", "unknown")
         nodeid = test.get("nodeid", "")
+
+        logger.debug(f"Creating PytestFailure for test: {nodeid}, outcome: {outcome}")
 
         try:
             # Extract basic test information
@@ -248,9 +264,12 @@ class JsonResultExtractor:
                 # Ensure error_type_str is set if outcome is error/failed
                 if not error_type_str:
                     error_type_str = outcome.capitalize()  # e.g. "Failed", "Error"
+                logger.debug(
+                    f"Test {nodeid} outcome is '{outcome}'. Error details: type='{error_type_str}', message='{error_message_str}'"
+                )
 
             # Create PytestFailure object
-            return PytestFailure(
+            failure_obj = PytestFailure(
                 outcome=outcome,
                 test_name=nodeid,
                 test_file=file_path_str,
@@ -261,9 +280,11 @@ class JsonResultExtractor:
                 relevant_code=relevant_code_str,
                 raw_output_section=json.dumps(test, indent=2),
             )
+            logger.debug(f"Created PytestFailure object: {failure_obj}")
+            return failure_obj
 
         except Exception as e:
-            logger.error(f"Error creating PytestFailure from test entry: {e}")
+            logger.error(f"Error creating PytestFailure from test entry for nodeid {nodeid}: {e}")
             return None
 
     def _parse_json_data(self, data: Dict[str, Any]) -> List[PytestFailure]:
@@ -280,10 +301,24 @@ class JsonResultExtractor:
 
         # Process test entries
         tests = data.get("tests", [])
-        for test in tests:
+        logger.debug(f"Found {len(tests)} test entries in direct JSON data.")
+        num_matching_outcome_direct = 0
+
+        for test_idx, test in enumerate(tests):
             # Process all tests
+            logger.debug(
+                f"Processing direct JSON test entry {test_idx + 1}/{len(tests)}: {test.get('nodeid', 'Unknown NodeID')}"
+            )
             parsed_test_info = self._create_failure_from_test(test)
             if parsed_test_info:
                 failures.append(parsed_test_info)
+                if parsed_test_info.outcome in ["failed", "error"]:
+                    num_matching_outcome_direct += 1
 
+        logger.debug(
+            f"JSON Extractor (direct data): Found {num_matching_outcome_direct} tests with 'failed' or 'error' outcomes leading to PytestFailure objects."
+        )
+        logger.info(
+            f"JSON Extractor (direct data): Parsed {len(failures)} failures from direct JSON data."
+        )
         return failures

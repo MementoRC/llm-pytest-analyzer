@@ -122,12 +122,22 @@ class XmlResultExtractor:
             return []
 
         failures = []
+        testcase_elements = root.findall(".//testcase")
+        logger.debug(f"Found {len(testcase_elements)} testcase elements in XML.")
+
+        num_with_failure_elements = 0
+        num_with_error_elements = 0
 
         # Find all testcase elements
-        for testcase in root.findall(".//testcase"):
+        for testcase in testcase_elements:
             # Check if the testcase has failure or error elements
             failure_elements = testcase.findall("failure")
             error_elements = testcase.findall("error")
+
+            if failure_elements:
+                num_with_failure_elements += 1
+            if error_elements:
+                num_with_error_elements += 1
 
             if failure_elements or error_elements:
                 # Get failure information
@@ -210,9 +220,12 @@ class XmlResultExtractor:
                     traceback=traceback,
                     raw_output_section=ET.tostring(testcase, encoding="unicode"),
                 )
-
+                logger.debug(f"Created PytestFailure object: {failure}")
                 failures.append(failure)
 
+        logger.debug(f"Total testcases with <failure> elements: {num_with_failure_elements}")
+        logger.debug(f"Total testcases with <error> elements: {num_with_error_elements}")
+        logger.info(f"XML Extractor: Parsed {len(failures)} failures from XML report.")
         return failures
 
     def _extract_line_number_from_traceback(self, traceback: str) -> Optional[int]:
