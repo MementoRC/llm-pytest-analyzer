@@ -306,19 +306,70 @@ class MainWindow(QMainWindow):
         return self._test_output_view
 
     def _create_code_editor_view(self):
-        """Factory function for code editor view."""
+        """
+        Factory function for code editor view.
+        Tries to create QScintilla-based CodeEditorView, falls back to SimpleCodeEditorView.
+        Returns the editor instance or None if all creation attempts fail.
+        """
         if self._code_editor_view is None:
+            created_editor = None
+            # Attempt 1: QScintilla-based CodeEditorView
             try:
+                logger.debug("Attempting to create QScintilla-based CodeEditorView.")
                 from .views.code_editor_view import CodeEditorView
 
-                self._code_editor_view = CodeEditorView()
-                logger.debug("Created QScintilla code editor view")
-            except ImportError as e:
-                logger.warning(f"QScintilla not available, using simple editor: {e}")
-                from .views.simple_code_editor_view import SimpleCodeEditorView
+                created_editor = CodeEditorView()
+                logger.info("QScintilla-based CodeEditorView created successfully.")
+            except ImportError:
+                logger.warning(
+                    "QScintilla (CodeEditorView) import failed. Falling back to SimpleCodeEditorView."
+                )
+                # Attempt 2: Fallback SimpleCodeEditorView due to ImportError
+                try:
+                    logger.debug("Attempting to create SimpleCodeEditorView as fallback.")
+                    from .views.simple_code_editor_view import SimpleCodeEditorView
 
-                self._code_editor_view = SimpleCodeEditorView()
-                logger.debug("Created simple code editor view")
+                    created_editor = SimpleCodeEditorView()
+                    logger.info("SimpleCodeEditorView created successfully as fallback.")
+                except ImportError:
+                    logger.critical(
+                        "Critical: Failed to import SimpleCodeEditorView. Code editor functionality will be unavailable.",
+                        exc_info=True,
+                    )
+                except Exception as e_simple:
+                    logger.critical(
+                        f"Critical: Failed to instantiate SimpleCodeEditorView: {e_simple}. Code editor functionality will be unavailable.",
+                        exc_info=True,
+                    )
+            except Exception as e_qsci:
+                logger.error(
+                    f"Failed to instantiate CodeEditorView: {e_qsci}. Falling back to SimpleCodeEditorView.",
+                    exc_info=True,
+                )
+                # Attempt 3: Fallback SimpleCodeEditorView due to QScintilla instantiation error
+                try:
+                    logger.debug(
+                        "Attempting to create SimpleCodeEditorView after QScintilla instantiation failure."
+                    )
+                    from .views.simple_code_editor_view import SimpleCodeEditorView
+
+                    created_editor = SimpleCodeEditorView()
+                    logger.info(
+                        "SimpleCodeEditorView created successfully as fallback after QScintilla instantiation failure."
+                    )
+                except ImportError:
+                    logger.critical(
+                        "Critical: Failed to import SimpleCodeEditorView (as fallback). Code editor functionality will be unavailable.",
+                        exc_info=True,
+                    )
+                except Exception as e_simple_fallback:
+                    logger.critical(
+                        f"Critical: Failed to instantiate SimpleCodeEditorView (as fallback): {e_simple_fallback}. Code editor functionality will be unavailable.",
+                        exc_info=True,
+                    )
+
+            self._code_editor_view = created_editor
+
         return self._code_editor_view
 
     @property
