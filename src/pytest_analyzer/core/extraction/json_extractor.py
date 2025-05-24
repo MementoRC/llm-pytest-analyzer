@@ -156,6 +156,11 @@ class JsonResultExtractor:
         outcome = test.get("outcome", "unknown")
         nodeid = test.get("nodeid", "")
 
+        # Only process tests with "failed" or "error" outcomes
+        if outcome not in ["failed", "error"]:
+            logger.debug(f"Skipping test {nodeid} with outcome '{outcome}' as it's not a failure.")
+            return None
+
         logger.debug(f"Creating PytestFailure for test: {nodeid}, outcome: {outcome}")
 
         try:
@@ -215,10 +220,16 @@ class JsonResultExtractor:
                     if exc_info and isinstance(exc_info, dict) and "type" in exc_info:
                         error_type_str = exc_info["type"]
                         # Only set error_message_str from exc_info if not already set from top-level test["message"]
-                        if not error_message_str:
-                            error_message_str = exc_info.get(
-                                "message", error_source_block.get("longrepr")
-                            )
+                        if not error_message_str:  # This condition means error_message_str was not set by test.get("message")
+                            # Prioritize longrepr from the error_source_block (e.g., call.longrepr).
+                            # This is for cases like the test data where "assert 1 == 2" is in longrepr,
+                            # and ensures it's taken even if exc_info.message might be present but less informative (e.g., empty).
+                            block_longrepr = error_source_block.get("longrepr")
+                            if block_longrepr is not None:
+                                error_message_str = block_longrepr
+                            else:
+                                # Fallback to exc_info.message if longrepr is not available in the error_source_block.
+                                error_message_str = exc_info.get("message")
                     elif (
                         not error_message_str
                     ):  # If no exc_info, or exc_info missing details, and message not set
