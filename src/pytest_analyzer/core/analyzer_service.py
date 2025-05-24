@@ -736,23 +736,35 @@ class PytestAnalyzerService:
                     args_copy.append("--disable-warnings")
 
             # Choose extraction strategy based on settings
+            failures: List[PytestFailure] = []
             if self.settings.preferred_format == "plugin":
                 # Use direct pytest plugin integration
                 all_args = [test_path]
                 all_args.extend(args_copy)
-
                 failures = collect_failures_with_plugin(all_args)
-
-            elif self.settings.preferred_format == "json":
-                # Generate JSON output and parse it
-                failures = self._run_and_extract_json(test_path, args_copy)
-
             elif self.settings.preferred_format == "xml":
-                # Generate XML output and parse it
+                logger.info("Attempting XML report extraction.")
                 failures = self._run_and_extract_xml(test_path, args_copy)
-
+                if not failures:
+                    logger.warning(
+                        "XML extraction yielded no failures. Attempting JSON extraction as a fallback."
+                    )
+                    failures = self._run_and_extract_json(test_path, args_copy)
+                    if failures:
+                        logger.info(
+                            f"JSON fallback successfully extracted {len(failures)} failures."
+                        )
+                    else:
+                        logger.info("JSON fallback also yielded no failures.")
+            elif self.settings.preferred_format == "json":
+                logger.info("Attempting JSON report extraction.")
+                failures = self._run_and_extract_json(test_path, args_copy)
+                # Optional: Could add fallback to XML here if JSON fails, but not requested.
             else:
-                # Default to JSON format
+                # Default to JSON format if preferred_format is unrecognized
+                logger.warning(
+                    f"Unknown preferred_format '{self.settings.preferred_format}', defaulting to JSON."
+                )
                 failures = self._run_and_extract_json(test_path, args_copy)
 
             # Update progress if active
@@ -983,6 +995,7 @@ class PytestAnalyzerService:
             # Important: we need to extend args after defining base command to allow
             # custom args to override the defaults if needed
             cmd.extend(args)
+            logger.debug(f"Executing pytest for JSON report with command: {' '.join(cmd)}")
 
             # Determine if we're in quiet mode
             quiet_mode = "-q" in args or "-qq" in args or "--quiet" in args
@@ -993,7 +1006,7 @@ class PytestAnalyzerService:
                 # When in quiet mode, redirect output to devnull
                 with open(os.devnull, "w") as devnull:
                     # Run pytest with a timeout, redirecting output to devnull
-                    subprocess.run(
+                    result = subprocess.run(
                         cmd,
                         timeout=self.settings.pytest_timeout,
                         check=False,
@@ -1017,12 +1030,9 @@ class PytestAnalyzerService:
                     env=os.environ,
                     cwd=self.settings.project_root,
                 )
-
-                if result.returncode != 0 and not quiet_mode:
-                    console.print(f"[yellow]Pytest exited with code {result.returncode}[/yellow]")
             else:
                 # Run pytest with a timeout, normal output but no special progress display
-                subprocess.run(
+                result = subprocess.run(
                     cmd,
                     timeout=self.settings.pytest_timeout,
                     check=False,
@@ -1030,20 +1040,34 @@ class PytestAnalyzerService:
                     cwd=self.settings.project_root,
                 )
 
+            logger.debug(f"Pytest process for JSON report exited with code {result.returncode}")
+            report_file_size = (
+                os.path.getsize(json_report_path) if os.path.exists(json_report_path) else -1
+            )
+            logger.debug(
+                f"Generated JSON report file: {json_report_path}, Size: {report_file_size} bytes"
+            )
+            if report_file_size == 0:
+                logger.warning(f"Generated JSON report file is empty: {json_report_path}")
+
             # Extract failures from JSON output
-            extractor = get_extractor(Path(json_report_path), self.settings, self.path_resolver)
-            return extractor.extract_failures(Path(json_report_path))
+            if report_file_size > 0:  # Only attempt to parse if file has content
+                extractor = get_extractor(Path(json_report_path), self.settings, self.path_resolver)
+                return extractor.extract_failures(Path(json_report_path))
+            return []  # Return empty list if report file is empty or non-existent
 
         except subprocess.TimeoutExpired:
-            logger.error(f"Pytest execution timed out after {self.settings.pytest_timeout} seconds")
+            logger.error(
+                f"Pytest execution for JSON report timed out after {self.settings.pytest_timeout} seconds"
+            )
             return []
         finally:
             # Ensure temporary file is deleted (ignore errors)
             try:
                 if os.path.exists(json_report_path):
                     os.remove(json_report_path)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Error deleting temporary JSON report file {json_report_path}: {e}")
 
     def _run_and_extract_xml(
         self, test_path: str, pytest_args: Optional[List[str]] = None
@@ -1076,6 +1100,7 @@ class PytestAnalyzerService:
             # Important: we need to extend args after defining base command to allow
             # custom args to override the defaults if needed
             cmd.extend(args)
+            logger.debug(f"Executing pytest for XML report with command: {' '.join(cmd)}")
 
             # Determine if we're in quiet mode
             quiet_mode = "-q" in args or "-qq" in args or "--quiet" in args
@@ -1086,7 +1111,7 @@ class PytestAnalyzerService:
                 # When in quiet mode, redirect output to devnull
                 with open(os.devnull, "w") as devnull:
                     # Run pytest with a timeout, redirecting output to devnull
-                    subprocess.run(
+                    result = subprocess.run(
                         cmd,
                         timeout=self.settings.pytest_timeout,
                         check=False,
@@ -1110,12 +1135,9 @@ class PytestAnalyzerService:
                     env=os.environ,
                     cwd=self.settings.project_root,
                 )
-
-                if result.returncode != 0 and not quiet_mode:
-                    console.print(f"[yellow]Pytest exited with code {result.returncode}[/yellow]")
             else:
                 # Run pytest with a timeout, normal output but no special progress display
-                subprocess.run(
+                result = subprocess.run(
                     cmd,
                     timeout=self.settings.pytest_timeout,
                     check=False,
@@ -1123,25 +1145,40 @@ class PytestAnalyzerService:
                     cwd=self.settings.project_root,
                 )
 
-            # Small delay to ensure file is fully written
+            logger.debug(f"Pytest process for XML report exited with code {result.returncode}")
+            # Small delay that was present, kept as per instructions not to change unrelated code unless necessary.
+            # However, modern systems should handle file flushing properly.
             import time
 
             time.sleep(0.1)
 
+            report_file_size = (
+                os.path.getsize(xml_report_path) if os.path.exists(xml_report_path) else -1
+            )
+            logger.debug(
+                f"Generated XML report file: {xml_report_path}, Size: {report_file_size} bytes"
+            )
+            if report_file_size == 0:
+                logger.warning(f"Generated XML report file is empty: {xml_report_path}")
+
             # Extract failures from XML output
-            extractor = get_extractor(Path(xml_report_path), self.settings, self.path_resolver)
-            return extractor.extract_failures(Path(xml_report_path))
+            if report_file_size > 0:  # Only attempt to parse if file has content
+                extractor = get_extractor(Path(xml_report_path), self.settings, self.path_resolver)
+                return extractor.extract_failures(Path(xml_report_path))
+            return []  # Return empty list if report file is empty or non-existent
 
         except subprocess.TimeoutExpired:
-            logger.error(f"Pytest execution timed out after {self.settings.pytest_timeout} seconds")
+            logger.error(
+                f"Pytest execution for XML report timed out after {self.settings.pytest_timeout} seconds"
+            )
             return []
         finally:
             # Ensure temporary file is deleted (ignore errors)
             try:
                 if os.path.exists(xml_report_path):
                     os.remove(xml_report_path)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Error deleting temporary XML report file {xml_report_path}: {e}")
 
     def _generate_suggestions(
         self,

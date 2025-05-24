@@ -100,11 +100,25 @@ class XmlResultExtractor:
         Returns:
             List of PytestFailure objects
         """
+        if not xml_path.exists() or xml_path.stat().st_size == 0:
+            logger.error(
+                f"XML report file is empty or does not exist: {xml_path} (Size: {xml_path.stat().st_size if xml_path.exists() else 'N/A'} bytes)"
+            )
+            return []
+
         try:
             tree = ET.parse(xml_path)
             root = tree.getroot()
         except ET.ParseError as e:
-            logger.error(f"Invalid XML in report file: {e}")
+            logger.error(
+                f"Invalid XML in report file: {xml_path} (Size: {xml_path.stat().st_size} bytes). Error: {e}"
+            )
+            # Optionally, log first few lines of the file for debugging
+            try:
+                with xml_path.open("r") as f_err:
+                    logger.debug(f"First 200 chars of problematic XML: {f_err.read(200)}")
+            except Exception as read_err:
+                logger.debug(f"Could not read problematic XML file for debugging: {read_err}")
             return []
 
         failures = []
@@ -178,8 +192,16 @@ class XmlResultExtractor:
                 if traceback:
                     line_number = self._extract_line_number_from_traceback(traceback)
 
+                # Determine outcome
+                current_outcome = "unknown"
+                if failure_elements:
+                    current_outcome = "failed"
+                elif error_elements:
+                    current_outcome = "error"
+
                 # Create PytestFailure object
                 failure = PytestFailure(
+                    outcome=current_outcome,
                     test_name=full_test_name,
                     test_file=file_path,
                     line_number=line_number,
@@ -298,8 +320,16 @@ class XmlResultExtractor:
                 if traceback:
                     line_number = self._extract_line_number_from_traceback(traceback)
 
+                # Determine outcome
+                current_outcome = "unknown"
+                if failure_elements:
+                    current_outcome = "failed"
+                elif error_elements:
+                    current_outcome = "error"
+
                 # Create PytestFailure object
                 failure = PytestFailure(
+                    outcome=current_outcome,
                     test_name=full_test_name,
                     test_file=file_path,
                     line_number=line_number,
