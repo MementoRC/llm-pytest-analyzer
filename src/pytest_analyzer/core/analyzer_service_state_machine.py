@@ -58,9 +58,7 @@ class StateMachinePytestAnalyzerService:
         self.state_machine = AnalyzerStateMachine(self.context)
 
     @with_timeout(300)
-    def analyze_pytest_output(
-        self, output_path: Union[str, Path]
-    ) -> List[FixSuggestion]:
+    def analyze_pytest_output(self, output_path: Union[str, Path]) -> List[FixSuggestion]:
         """
         Analyze pytest output from a file and generate fix suggestions.
 
@@ -92,11 +90,10 @@ class StateMachinePytestAnalyzerService:
             # Return suggestions
             if self.state_machine.is_completed():
                 return self.state_machine.get_suggestions()
-            else:
-                logger.warning(
-                    f"Analysis not completed, state: {self.state_machine.current_state_name}"
-                )
-                return []
+            logger.warning(
+                f"Analysis not completed, state: {self.state_machine.current_state_name}"
+            )
+            return []
 
         except Exception as e:
             logger.error(f"Error analyzing pytest output: {e}")
@@ -146,9 +143,7 @@ class StateMachinePytestAnalyzerService:
                 # Suppress pytest output (using super quiet mode)
                 if "-qq" not in args_copy:
                     # First remove any existing -q flags
-                    args_copy = [
-                        arg for arg in args_copy if arg != "-q" and arg != "--quiet"
-                    ]
+                    args_copy = [arg for arg in args_copy if arg != "-q" and arg != "--quiet"]
                     # Add super quiet mode flag
                     args_copy.append("-qq")
                 # Add short traceback flag for cleaner output
@@ -234,9 +229,7 @@ class StateMachinePytestAnalyzerService:
             # Make sure quiet mode is reflected in pytest args (using super quiet mode)
             if "-qq" not in pytest_args:
                 # First remove any existing -q flags
-                pytest_args = [
-                    arg for arg in pytest_args if arg != "-q" and arg != "--quiet"
-                ]
+                pytest_args = [arg for arg in pytest_args if arg != "-q" and arg != "--quiet"]
                 # Add super quiet mode flag
                 pytest_args.append("-qq")
             # Add short traceback flag for cleaner output
@@ -271,9 +264,7 @@ class StateMachinePytestAnalyzerService:
                     task_id=main_task_id,
                 )
 
-                progress.update(
-                    main_task_id, advance=1, description="Analyzing failures..."
-                )
+                progress.update(main_task_id, advance=1, description="Analyzing failures...")
 
                 try:
                     # Continue with analysis
@@ -282,16 +273,13 @@ class StateMachinePytestAnalyzerService:
                     # Return suggestions based on state machine status
                     if self.state_machine.is_completed():
                         return self.state_machine.get_suggestions()
-                    else:
-                        logger.warning(
-                            f"Analysis not completed, state: {self.state_machine.current_state_name}"
-                        )
-                        return []
+                    logger.warning(
+                        f"Analysis not completed, state: {self.state_machine.current_state_name}"
+                    )
+                    return []
 
                 except Exception as e:
-                    progress.update(
-                        main_task_id, description=f"Error: {e}", completed=True
-                    )
+                    progress.update(main_task_id, description=f"Error: {e}", completed=True)
                     logger.error(f"Error analyzing tests: {e}")
                     self.state_machine.set_error(e, f"Error analyzing tests: {e}")
                     return []
@@ -325,9 +313,7 @@ class StateMachinePytestAnalyzerService:
                     task_id=main_task_id,
                 )
 
-                progress.update(
-                    main_task_id, advance=1, description="[cyan]Analyzing failures..."
-                )
+                progress.update(main_task_id, advance=1, description="[cyan]Analyzing failures...")
 
                 try:
                     # Continue with analysis
@@ -336,11 +322,10 @@ class StateMachinePytestAnalyzerService:
                     # Return suggestions based on state machine status
                     if self.state_machine.is_completed():
                         return self.state_machine.get_suggestions()
-                    else:
-                        logger.warning(
-                            f"Analysis not completed, state: {self.state_machine.current_state_name}"
-                        )
-                        return []
+                    logger.warning(
+                        f"Analysis not completed, state: {self.state_machine.current_state_name}"
+                    )
+                    return []
 
                 except Exception as e:
                     progress.update(
@@ -365,9 +350,8 @@ class StateMachinePytestAnalyzerService:
         # Delegate to the fix applier in the state machine context
         if self.context.fix_applier:
             return self.context.fix_applier.apply_fix_suggestion(suggestion)
-        else:
-            logger.error("Cannot apply fix: Fix applier not initialized")
-            return None
+        logger.error("Cannot apply fix: Fix applier not initialized")
+        return None
 
     def _process_output_file(self, output_path: Path) -> None:
         """
@@ -399,9 +383,7 @@ class StateMachinePytestAnalyzerService:
             logger.error(f"Error processing output file: {e}")
             self.state_machine.set_error(e, f"Error processing output file: {e}")
 
-    def _extract_failures(
-        self, test_path: str, pytest_args: List[str]
-    ) -> List[PytestFailure]:
+    def _extract_failures(self, test_path: str, pytest_args: List[str]) -> List[PytestFailure]:
         """
         Extract failures from pytest execution.
 
@@ -467,16 +449,11 @@ class StateMachinePytestAnalyzerService:
                     self._generate_suggestions()
 
                     # Move to completed state if we were able to generate suggestions
-                    if (
-                        self.state_machine.current_state_name
-                        == AnalyzerState.SUGGESTING
-                    ):
+                    if self.state_machine.current_state_name == AnalyzerState.SUGGESTING:
                         if self.context.suggestions:
                             # If we have suggestions and want to apply them, continue to applying state
                             if self.context.settings.auto_apply:
-                                self.state_machine.trigger(
-                                    AnalyzerEvent.START_APPLICATION
-                                )
+                                self.state_machine.trigger(AnalyzerEvent.START_APPLICATION)
                                 self._apply_fixes()
                             else:
                                 # Otherwise, just complete the workflow
@@ -498,22 +475,14 @@ class StateMachinePytestAnalyzerService:
         if self.context.suggester:
             for failure in self.context.failures:
                 try:
-                    with ResourceMonitor(
-                        max_time_seconds=self.context.settings.analyzer_timeout
-                    ):
-                        rule_based_suggestions = self.context.suggester.suggest_fixes(
-                            failure
-                        )
+                    with ResourceMonitor(max_time_seconds=self.context.settings.analyzer_timeout):
+                        rule_based_suggestions = self.context.suggester.suggest_fixes(failure)
                         all_suggestions.extend(rule_based_suggestions)
                 except Exception as e:
                     logger.error(f"Error generating rule-based suggestions: {e}")
 
         # Generate LLM-based suggestions if enabled
-        if (
-            self.context.llm_suggester
-            and self.context.settings.use_llm
-            and self.context.failures
-        ):
+        if self.context.llm_suggester and self.context.settings.use_llm and self.context.failures:
             try:
                 # Process each failure group with LLM
                 for fingerprint, group in self.context.failure_groups.items():
@@ -528,9 +497,7 @@ class StateMachinePytestAnalyzerService:
 
                     # Generate suggestions for the representative failure
                     try:
-                        with ResourceMonitor(
-                            max_time_seconds=self.context.settings.llm_timeout
-                        ):
+                        with ResourceMonitor(max_time_seconds=self.context.settings.llm_timeout):
                             llm_suggestions = self.context.llm_suggester.suggest_fixes(
                                 representative
                             )
@@ -638,9 +605,7 @@ class StateMachinePytestAnalyzerService:
                 # Determine if we're in quiet mode
                 quiet_mode = "-q" in args or "-qq" in args or "--quiet" in args
                 # Determine if we want to show progress (requires -s to avoid pytest capturing output)
-                progress_mode = not quiet_mode and (
-                    "-s" in args or "--capture=no" in args
-                )
+                progress_mode = not quiet_mode and ("-s" in args or "--capture=no" in args)
 
                 if quiet_mode:
                     # When in quiet mode, redirect output to devnull
@@ -669,9 +634,7 @@ class StateMachinePytestAnalyzerService:
                         )
                 else:
                     # Run pytest with a timeout, normal output but no special progress display
-                    subprocess.run(
-                        cmd, timeout=self.context.settings.pytest_timeout, check=False
-                    )
+                    subprocess.run(cmd, timeout=self.context.settings.pytest_timeout, check=False)
 
                 # Extract failures from JSON output
                 extractor = get_extractor(
@@ -710,9 +673,7 @@ class StateMachinePytestAnalyzerService:
                 # Determine if we're in quiet mode
                 quiet_mode = "-q" in args or "-qq" in args or "--quiet" in args
                 # Determine if we want to show progress (requires -s to avoid pytest capturing output)
-                progress_mode = not quiet_mode and (
-                    "-s" in args or "--capture=no" in args
-                )
+                progress_mode = not quiet_mode and ("-s" in args or "--capture=no" in args)
 
                 if quiet_mode:
                     # When in quiet mode, redirect output to devnull
@@ -741,9 +702,7 @@ class StateMachinePytestAnalyzerService:
                         )
                 else:
                     # Run pytest with a timeout, normal output but no special progress display
-                    subprocess.run(
-                        cmd, timeout=self.context.settings.pytest_timeout, check=False
-                    )
+                    subprocess.run(cmd, timeout=self.context.settings.pytest_timeout, check=False)
 
                 # Extract failures from XML output
                 extractor = get_extractor(

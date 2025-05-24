@@ -125,9 +125,7 @@ class JsonResultExtractor:
 
         return failures
 
-    def _create_failure_from_test(
-        self, test: Dict[str, Any]
-    ) -> Optional[PytestFailure]:
+    def _create_failure_from_test(self, test: Dict[str, Any]) -> Optional[PytestFailure]:
         """
         Create a PytestFailure object from a test entry in the JSON report.
 

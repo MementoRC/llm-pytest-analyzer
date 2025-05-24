@@ -107,7 +107,7 @@ def test_limit_memory_error(mock_logger_warning, mock_setrlimit, mock_getrlimit)
     """Test error handling when setting memory limits."""
     # Make setrlimit raise an exception
     mock_getrlimit.return_value = (1024, 1024)
-    mock_setrlimit.side_effect = resource.error("Test error")
+    mock_setrlimit.side_effect = OSError("Test error")
 
     # Call limit_memory
     limit_memory(1024)
@@ -170,8 +170,8 @@ def test_resource_monitor_check_time_limit(mock_getrusage, mock_time):
         time_values["calls"] += 1
         if time_values["calls"] == 1:  # First call in __enter__
             return 0
-        else:  # Subsequent calls in check() and __exit__
-            return 61
+        # Subsequent calls in check() and __exit__
+        return 61
 
     mock_time.side_effect = mock_time_func
 
@@ -216,8 +216,8 @@ def test_resource_monitor_check_within_limits(mock_getrusage, mock_time):
         time_values["calls"] += 1
         if time_values["calls"] == 1:  # First call in __enter__
             return 0
-        else:  # Subsequent calls in check() and __exit__
-            return 30
+        # Subsequent calls in check() and __exit__
+        return 30
 
     mock_time.side_effect = mock_time_func
 

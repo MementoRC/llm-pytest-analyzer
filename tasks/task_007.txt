@@ -1,79 +1,108 @@
 # Task ID: 7
-# Title: Implement State Machine Base Class
-# Status: done
+# Title: Implement LLM Service
+# Status: pending
 # Dependencies: 2
 # Priority: high
-# Description: Create a reusable state machine framework for managing complex processes.
+# Description: Create a proper LLM service with configuration and resource management injected
 # Details:
-Implement a state machine base class that can be extended for specific workflows:
+Implement a service for interacting with language models. Support both synchronous and asynchronous APIs. Implement proper error handling, retries, and resource management.
 
+Example implementation:
 ```python
-from typing import Dict, Any, List, Optional, Set, Callable, TypeVar, Generic
-from enum import Enum, auto
 import logging
+import asyncio
+import time
+from typing import Optional, Dict, Any
+import aiohttp
+import requests
+from .interfaces import LLMService
 
-T = TypeVar('T', bound=Enum)
+class OpenAIService(LLMService):
+    def __init__(self, api_key: str, model: str = "gpt-4",
+                 max_retries: int = 3, timeout: int = 30,
+                 logger: Optional[logging.Logger] = None):
+        self.api_key = api_key
+        self.model = model
+        self.max_retries = max_retries
+        self.timeout = timeout
+        self.logger = logger or logging.getLogger(__name__)
+        self.base_url = "https://api.openai.com/v1/chat/completions"
 
-class StateMachine(Generic[T]):
-    def __init__(self, initial_state: T):
-        self.current_state = initial_state
-        self.states: Set[T] = {initial_state}
-        self.transitions: Dict[T, Dict[T, Callable[..., bool]]] = {}
-        self.state_handlers: Dict[T, Callable[..., Any]] = {}
-        self.context: Dict[str, Any] = {}
-        self.logger = logging.getLogger(self.__class__.__name__)
+    def _prepare_payload(self, prompt: str) -> Dict[str, Any]:
+        return {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.7
+        }
 
-    def add_state(self, state: T, handler: Callable[..., Any]) -> None:
-        self.states.add(state)
-        self.state_handlers[state] = handler
-        if state not in self.transitions:
-            self.transitions[state] = {}
+    def generate_completion(self, prompt: str) -> str:
+        self.logger.debug(f"Generating completion for prompt: {prompt[:50]}...")
 
-    def add_transition(self, from_state: T, to_state: T, condition: Callable[..., bool]) -> None:
-        if from_state not in self.states or to_state not in self.states:
-            raise ValueError("Both states must be added before defining a transition")
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
 
-        if from_state not in self.transitions:
-            self.transitions[from_state] = {}
+        payload = self._prepare_payload(prompt)
 
-        self.transitions[from_state][to_state] = condition
+        for attempt in range(self.max_retries):
+            try:
+                response = requests.post(
+                    self.base_url,
+                    headers=headers,
+                    json=payload,
+                    timeout=self.timeout
+                )
 
-    def run(self, **kwargs) -> Any:
-        result = None
-        while True:
-            self.logger.info(f"Executing state: {self.current_state.name}")
+                response.raise_for_status()
+                result = response.json()
+                completion = result["choices"][0]["message"]["content"]
 
-            # Execute current state handler
-            handler = self.state_handlers.get(self.current_state)
-            if handler:
-                try:
-                    result = handler(self.context, **kwargs)
-                except Exception as e:
-                    self.logger.error(f"Error in state {self.current_state.name}: {str(e)}")
+                self.logger.debug(f"Generated completion: {completion[:50]}...")
+                return completion
+            except Exception as e:
+                self.logger.warning(f"Attempt {attempt+1} failed: {str(e)}")
+                if attempt < self.max_retries - 1:
+                    time.sleep(2 ** attempt)  # Exponential backoff
+                else:
+                    self.logger.error(f"All {self.max_retries} attempts failed")
                     raise
 
-            # Check for transitions
-            next_state = self._get_next_state(**kwargs)
-            if next_state is None:
-                break  # No valid transition, we're done
+    async def generate_completion_async(self, prompt: str) -> str:
+        self.logger.debug(f"Generating async completion for prompt: {prompt[:50]}...")
 
-            self.logger.info(f"Transitioning from {self.current_state.name} to {next_state.name}")
-            self.current_state = next_state
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
 
-        return result
+        payload = self._prepare_payload(prompt)
 
-    def _get_next_state(self, **kwargs) -> Optional[T]:
-        if self.current_state not in self.transitions:
-            return None
+        for attempt in range(self.max_retries):
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        self.base_url,
+                        headers=headers,
+                        json=payload,
+                        timeout=self.timeout
+                    ) as response:
+                        response.raise_for_status()
+                        result = await response.json()
+                        completion = result["choices"][0]["message"]["content"]
 
-        for next_state, condition in self.transitions[self.current_state].items():
-            if condition(self.context, **kwargs):
-                return next_state
-
-        return None
+                        self.logger.debug(f"Generated async completion: {completion[:50]}...")
+                        return completion
+            except Exception as e:
+                self.logger.warning(f"Async attempt {attempt+1} failed: {str(e)}")
+                if attempt < self.max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                else:
+                    self.logger.error(f"All {self.max_retries} async attempts failed")
+                    raise
 ```
 
-This base class should be flexible enough to handle different types of workflows while providing consistent logging and error handling.
+Ensure the implementation handles API errors, rate limiting, and other common issues.
 
 # Test Strategy:
-Create unit tests with a simple test state machine to verify state transitions, handler execution, and error handling. Test both successful workflows and error cases.
+Create unit tests with mocked HTTP responses to verify both synchronous and asynchronous APIs. Test error handling by simulating various API errors and rate limits. Verify that retries work correctly with exponential backoff. Test timeout handling.

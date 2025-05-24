@@ -59,9 +59,7 @@ class FailureAnalyzer:
             base_error_type = self._get_base_error_type(failure.error_type)
 
             # Find the appropriate analyzer function
-            analyzer = self.error_analyzers.get(
-                base_error_type, self._analyze_generic_error
-            )
+            analyzer = self.error_analyzers.get(base_error_type, self._analyze_generic_error)
 
             # Generate suggestions
             suggestions = analyzer(failure)
@@ -106,9 +104,7 @@ class FailureAnalyzer:
             suggestion, confidence = self._analyze_assert_statement(failure)
             if suggestion:
                 suggestions.append(
-                    FixSuggestion(
-                        failure=failure, suggestion=suggestion, confidence=confidence
-                    )
+                    FixSuggestion(failure=failure, suggestion=suggestion, confidence=confidence)
                 )
 
         # Generic suggestion if no specific pattern matched
@@ -134,17 +130,13 @@ class FailureAnalyzer:
             Tuple of (suggestion, confidence)
         """
         # Look for equality assertions
-        equality_match = re.search(
-            r"assert\s+([^=]+)\s*==\s*([^,]+)", failure.traceback
-        )
+        equality_match = re.search(r"assert\s+([^=]+)\s*==\s*([^,]+)", failure.traceback)
         if equality_match:
             left = equality_match.group(1).strip()
             right = equality_match.group(2).strip()
 
             # Look for expected vs. actual values
-            expected_match = re.search(
-                r"E\s+assert\s+([^=]+)\s*==\s*([^,]+)", failure.traceback
-            )
+            expected_match = re.search(r"E\s+assert\s+([^=]+)\s*==\s*([^,]+)", failure.traceback)
             if expected_match:
                 actual = expected_match.group(1).strip()
                 expected = expected_match.group(2).strip()
@@ -301,9 +293,7 @@ class FailureAnalyzer:
             )
 
         # Check for unexpected keyword arguments
-        kwarg_match = re.search(
-            r"got an unexpected keyword argument '(.+)'", failure.error_message
-        )
+        kwarg_match = re.search(r"got an unexpected keyword argument '(.+)'", failure.error_message)
         if kwarg_match:
             param = kwarg_match.group(1)
 

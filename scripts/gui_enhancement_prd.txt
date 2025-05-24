@@ -1,0 +1,287 @@
+# GUI Enhancement PRD: Complete Test Execution and Analysis Workflow
+
+## Executive Summary
+
+The pytest-analyzer GUI currently provides excellent test result visualization but lacks the core functionality to execute tests, analyze failures with LLM, and apply suggested fixes. This PRD outlines the enhancements needed to create a complete test-to-fix workflow in the GUI.
+
+## Current State Analysis
+
+### Existing Strengths
+- Solid MVC architecture foundation with proper Qt6 implementation
+- Excellent test results visualization and navigation
+- Comprehensive data models for test results and failures
+- File selection and report parsing capabilities
+- Clean UI layout with proper menu/toolbar structure
+
+### Critical Gaps
+- No test execution engine integration
+- Missing LLM analysis capabilities
+- No fix suggestion and application workflow
+- Empty controllers directory (logic embedded in MainWindow)
+- No settings management interface
+- Missing background task management
+
+## Product Vision
+
+Transform the pytest-analyzer GUI from a passive results viewer into a complete test-driven development assistant that can:
+1. Execute pytest tests with real-time progress tracking
+2. Automatically analyze failures using LLM services
+3. Suggest and apply fixes to failing tests
+4. Provide a seamless workflow from test failure to resolution
+
+## Feature Requirements
+
+### Phase 1: Core Test Execution (High Priority)
+
+#### F1.1: Test Execution Engine
+- **Description**: Execute pytest tests directly from the GUI
+- **Requirements**:
+  - Integration with existing PytestAnalyzerService
+  - Real-time progress tracking with progress bar
+  - Live output capture and display
+  - Support for test discovery and selection
+  - Configurable test execution parameters
+- **Acceptance Criteria**:
+  - User can run tests by clicking "Run Tests" button
+  - Progress is shown in real-time
+  - Test output is displayed in dedicated tab
+  - Results are automatically loaded after execution
+
+#### F1.2: Test Selection Interface
+- **Description**: Allow users to select specific tests to run
+- **Requirements**:
+  - Tree view of discovered tests
+  - Checkbox selection for individual tests/suites
+  - Filter by test names, files, or directories
+  - Support for pytest markers and custom filters
+- **Acceptance Criteria**:
+  - User can select specific tests to run
+  - Selection persists across sessions
+  - Filters work correctly
+
+### Phase 2: LLM Analysis Integration (High Priority)
+
+#### F2.1: Failure Analysis Controller
+- **Description**: Integrate LLM analysis capabilities
+- **Requirements**:
+  - Connect to existing LLMSuggester components
+  - Automatic analysis of failed tests
+  - Background processing with progress indicators
+  - Analysis results display in dedicated panels
+- **Acceptance Criteria**:
+  - Failed tests are automatically analyzed
+  - Analysis results appear in failure details
+  - User can manually trigger re-analysis
+
+#### F2.2: Fix Suggestion Display
+- **Description**: Display LLM-generated fix suggestions
+- **Requirements**:
+  - Rich text display of suggested fixes
+  - Code highlighting and formatting
+  - Diff view for proposed changes
+  - Multiple suggestion ranking/scoring
+- **Acceptance Criteria**:
+  - Fix suggestions are clearly displayed
+  - User can navigate between multiple suggestions
+  - Code changes are highlighted
+
+### Phase 3: Fix Application Workflow (High Priority)
+
+#### F3.1: Code Editor Integration
+- **Description**: Embedded code editor for viewing and applying fixes
+- **Requirements**:
+  - Syntax highlighting for Python code
+  - Diff view showing before/after changes
+  - Side-by-side comparison
+  - Apply/reject individual changes
+- **Acceptance Criteria**:
+  - User can view original and modified code
+  - Individual changes can be applied selectively
+  - Changes are properly highlighted
+
+#### F3.2: Fix Application Engine
+- **Description**: Apply suggested fixes to source files
+- **Requirements**:
+  - Integration with existing FixApplier components
+  - Git integration for change tracking
+  - Backup and rollback capabilities
+  - Batch fix application
+- **Acceptance Criteria**:
+  - Fixes are applied correctly to source files
+  - Git commits are created for applied fixes
+  - User can rollback changes if needed
+
+### Phase 4: Settings and Configuration (Medium Priority)
+
+#### F4.1: Settings Dialog
+- **Description**: Complete settings management interface
+- **Requirements**:
+  - LLM provider configuration (OpenAI, Anthropic, etc.)
+  - Test execution settings (timeout, parallel execution)
+  - GUI preferences (theme, layout)
+  - Project-specific settings
+- **Acceptance Criteria**:
+  - All settings are configurable through GUI
+  - Settings persist across sessions
+  - Validation of required settings
+
+#### F4.2: Project Management
+- **Description**: Project-specific configuration
+- **Requirements**:
+  - Project discovery and selection
+  - Per-project settings storage
+  - Recent projects menu
+  - Project-specific test configuration
+- **Acceptance Criteria**:
+  - User can manage multiple projects
+  - Project settings are isolated
+  - Quick project switching
+
+### Phase 5: Advanced Features (Low Priority)
+
+#### F5.1: Session Management
+- **Description**: Save and restore analysis sessions
+- **Requirements**:
+  - Session state persistence
+  - Analysis history tracking
+  - Bookmarking of important failures
+  - Export/import of sessions
+- **Acceptance Criteria**:
+  - User can save current analysis state
+  - Sessions can be restored later
+  - Analysis history is maintained
+
+#### F5.2: Reporting and Export
+- **Description**: Generate reports of analysis results
+- **Requirements**:
+  - HTML report generation
+  - PDF export capabilities
+  - Test coverage reports
+  - Fix application summaries
+- **Acceptance Criteria**:
+  - User can generate comprehensive reports
+  - Reports include all relevant analysis data
+  - Multiple export formats available
+
+## Technical Architecture
+
+### Controller Implementation
+Create proper MVC controllers to separate business logic:
+
+```
+controllers/
+├── main_controller.py           # Main application orchestration
+├── test_execution_controller.py # Test running and progress
+├── analysis_controller.py       # LLM analysis coordination
+├── fix_controller.py            # Fix suggestion and application
+├── file_controller.py           # File operations and project management
+└── settings_controller.py       # Configuration management
+```
+
+### Integration Points
+- **PytestAnalyzerService**: Core test execution and analysis
+- **AnalyzerStateMachine**: Workflow state management
+- **LLMSuggester**: AI-powered failure analysis
+- **FixApplier**: Code modification and Git integration
+- **ConfigurationManager**: Settings and configuration
+
+### Background Task Management
+- Implement Qt QThread-based background processing
+- Progress reporting through Qt signals/slots
+- Cancellation support for long-running operations
+- Error handling and user feedback
+
+## User Experience Flow
+
+### Primary Workflow
+1. **Project Setup**: User selects project directory
+2. **Test Discovery**: System discovers available tests
+3. **Test Selection**: User selects tests to run (optional)
+4. **Test Execution**: Tests run with progress tracking
+5. **Failure Analysis**: Failed tests are automatically analyzed
+6. **Fix Review**: User reviews suggested fixes
+7. **Fix Application**: User applies selected fixes
+8. **Re-testing**: User re-runs tests to verify fixes
+
+### Error Handling
+- Graceful handling of test execution failures
+- LLM service connection errors
+- File system permission issues
+- Invalid configuration scenarios
+
+## Success Metrics
+
+### Functional Metrics
+- Test execution success rate
+- LLM analysis accuracy
+- Fix application success rate
+- User workflow completion rate
+
+### Performance Metrics
+- Test execution time
+- Analysis response time
+- GUI responsiveness during background operations
+- Memory usage optimization
+
+### User Experience Metrics
+- Time from failure to fix
+- Number of clicks to complete workflow
+- User satisfaction with suggested fixes
+- Feature adoption rates
+
+## Dependencies
+
+### External Dependencies
+- Qt6 framework (already integrated)
+- Existing pytest-analyzer core components
+- LLM service APIs (OpenAI, Anthropic, etc.)
+- Git integration libraries
+
+### Internal Dependencies
+- All Phase 1 features must be completed before Phase 2
+- Phase 2 analysis features required for Phase 3 fix application
+- Settings infrastructure (Phase 4) can be developed in parallel
+
+## Risk Assessment
+
+### Technical Risks
+- **Qt threading complexity**: Mitigated by using established Qt patterns
+- **LLM integration reliability**: Mitigated by proper error handling and retries
+- **Performance with large test suites**: Mitigated by background processing and pagination
+
+### User Experience Risks
+- **Complex workflow**: Mitigated by progressive disclosure and good defaults
+- **Information overload**: Mitigated by clean UI design and filtering options
+
+## Implementation Timeline
+
+### Phase 1: Core Test Execution (4-6 weeks)
+- Test execution engine integration
+- Background task management
+- Basic progress tracking
+
+### Phase 2: LLM Analysis Integration (3-4 weeks)
+- Analysis controller implementation
+- Results display enhancement
+- Error handling
+
+### Phase 3: Fix Application Workflow (4-5 weeks)
+- Code editor integration
+- Fix application engine
+- Git integration
+
+### Phase 4: Settings and Configuration (2-3 weeks)
+- Settings dialog implementation
+- Project management
+- Configuration persistence
+
+### Phase 5: Advanced Features (3-4 weeks)
+- Session management
+- Reporting and export
+- Polish and optimization
+
+## Conclusion
+
+This PRD outlines a comprehensive enhancement to the pytest-analyzer GUI that will transform it from a passive results viewer into an active test-driven development assistant. The phased approach ensures that core functionality is delivered first, with advanced features building on the solid foundation.
+
+The implementation will leverage the existing excellent architecture while adding the missing controller layer and integrating with the robust core analysis engine already in place.

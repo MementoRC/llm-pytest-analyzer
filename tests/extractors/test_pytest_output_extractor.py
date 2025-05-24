@@ -106,10 +106,9 @@ def test_error():
     def mock_extract_error_details(section_text):
         if "assert 1 == 2" in section_text:
             return "AssertionError", "assert 1 == 2", section_text, 25
-        elif "ValueError" in section_text:
+        if "ValueError" in section_text:
             return "ValueError", "This is an error", section_text, 29
-        else:
-            return "Error", "", section_text, None
+        return "Error", "", section_text, None
 
     monkeypatch.setattr(extractor, "_extract_error_details", mock_extract_error_details)
 
@@ -233,8 +232,7 @@ E       ValueError: This is an error
     failure2 = next(f for f in failures if f.test_name == "test_error")
     assert failure2.line_number == 8
     assert (
-        failure2.relevant_code
-        and 'raise ValueError("This is an error")' in failure2.relevant_code
+        failure2.relevant_code and 'raise ValueError("This is an error")' in failure2.relevant_code
     )
 
 

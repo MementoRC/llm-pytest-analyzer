@@ -1,70 +1,45 @@
 # Task ID: 4
-# Title: Implement LLM Service Interface and Base Implementation
-# Status: done
+# Title: Implement Analyzer Component
+# Status: pending
 # Dependencies: 2, 3
-# Priority: high
-# Description: Create a properly abstracted LLM service with both synchronous and asynchronous APIs.
+# Priority: medium
+# Description: Refactor the test failure analysis logic into a dedicated component with proper interfaces
 # Details:
-Implement the LLM service with the following components:
+Create concrete implementations of the Analyzer protocol. The analyzer should analyze test failures and provide context for suggesting fixes. Implement proper error handling and logging.
 
+Example implementation:
 ```python
-from typing import Dict, Any, Optional, Protocol
-import aiohttp
-import requests
-from contextlib import contextmanager
+import logging
+from typing import Optional
+from .interfaces import Analyzer, TestFailure, LLMService
 
-class LLMConfig(Protocol):
-    api_key: str
-    model_name: str
-    temperature: float
-    max_tokens: int
-    # Other configuration parameters
+class LLMBasedAnalyzer(Analyzer):
+    def __init__(self, llm_service: LLMService, logger: Optional[logging.Logger] = None):
+        self.llm_service = llm_service
+        self.logger = logger or logging.getLogger(__name__)
 
-class LLMService:
-    def __init__(self, config: LLMConfig):
-        self.config = config
+    def analyze_failure(self, failure: TestFailure) -> str:
+        self.logger.info(f"Analyzing failure for test: {failure.test_name}")
 
-    @contextmanager
-    def _error_context(self, operation: str):
         try:
-            yield
+            prompt = f"""Analyze the following pytest test failure and explain what might be causing it:
+
+Test name: {failure.test_name}
+Error message: {failure.error_message}
+Traceback:
+{failure.traceback}
+
+Provide a detailed analysis of what's causing this failure:"""
+
+            analysis = self.llm_service.generate_completion(prompt)
+            self.logger.debug(f"Generated analysis: {analysis[:100]}...")
+            return analysis
         except Exception as e:
-            # Log the error with context
-            raise LLMServiceError(f"Error during {operation}: {str(e)}") from e
-
-    def generate(self, prompt: str, **kwargs) -> str:
-        with self._error_context("synchronous generation"):
-            # Implementation for synchronous API call
-            params = {**self.config.__dict__, **kwargs}
-            response = requests.post(
-                "https://api.openai.com/v1/completions",
-                headers={"Authorization": f"Bearer {self.config.api_key}"},
-                json={"prompt": prompt, **params}
-            )
-            response.raise_for_status()
-            return response.json()["choices"][0]["text"]
-
-    async def generate_async(self, prompt: str, **kwargs) -> str:
-        with self._error_context("asynchronous generation"):
-            # Implementation for asynchronous API call
-            params = {**self.config.__dict__, **kwargs}
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "https://api.openai.com/v1/completions",
-                    headers={"Authorization": f"Bearer {self.config.api_key}"},
-                    json={"prompt": prompt, **params}
-                ) as response:
-                    if response.status != 200:
-                        text = await response.text()
-                        raise LLMServiceError(f"API error: {response.status}, {text}")
-                    data = await response.json()
-                    return data["choices"][0]["text"]
-
-class LLMServiceError(Exception):
-    pass
+            self.logger.error(f"Error analyzing test failure: {str(e)}")
+            raise
 ```
 
-Ensure the implementation is configurable, handles errors properly, and provides both synchronous and asynchronous APIs.
+Ensure the implementation handles different types of test failures and provides useful analysis.
 
 # Test Strategy:
-Create unit tests with mocked HTTP responses to test both successful and error scenarios. Test both synchronous and asynchronous APIs. Verify error handling and context managers work as expected.
+Create unit tests with mock LLMService to verify the analyzer correctly formats prompts and handles responses. Test error handling by simulating LLM service failures. Verify that the analyzer correctly logs operations and errors.

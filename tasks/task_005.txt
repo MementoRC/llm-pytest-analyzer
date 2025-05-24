@@ -1,49 +1,48 @@
 # Task ID: 5
-# Title: Implement PromptBuilder Component
-# Status: done
+# Title: Implement Suggester Component
+# Status: pending
 # Dependencies: 2, 4
 # Priority: medium
-# Description: Create a dedicated component for constructing prompts to send to the LLM service.
+# Description: Refactor the fix suggestion logic into a dedicated component with proper interfaces
 # Details:
-Implement a PromptBuilder that handles template management and prompt construction:
+Create concrete implementations of the Suggester protocol. The suggester should generate fix suggestions based on the analysis. Implement proper error handling and logging.
 
+Example implementation:
 ```python
-from string import Template
-from typing import Dict, Any, Optional
-import os
-import json
+import logging
+from typing import Optional
+from .interfaces import Suggester, TestFailure, LLMService
 
-class PromptBuilder:
-    def __init__(self, template_dir: Optional[str] = None):
-        self.template_dir = template_dir or os.path.join(os.path.dirname(__file__), "templates")
-        self.templates: Dict[str, Template] = {}
-        self._load_templates()
+class LLMBasedSuggester(Suggester):
+    def __init__(self, llm_service: LLMService, logger: Optional[logging.Logger] = None):
+        self.llm_service = llm_service
+        self.logger = logger or logging.getLogger(__name__)
 
-    def _load_templates(self) -> None:
-        # Load templates from files
-        if os.path.exists(self.template_dir):
-            for filename in os.listdir(self.template_dir):
-                if filename.endswith(".txt"):
-                    template_name = os.path.splitext(filename)[0]
-                    with open(os.path.join(self.template_dir, filename), "r") as f:
-                        self.templates[template_name] = Template(f.read())
+    def suggest_fix(self, analysis: str, failure: TestFailure) -> str:
+        self.logger.info(f"Suggesting fix for test: {failure.test_name}")
 
-    def build_prompt(self, template_name: str, **kwargs) -> str:
-        if template_name not in self.templates:
-            raise ValueError(f"Template '{template_name}' not found")
+        try:
+            prompt = f"""Based on the following analysis of a pytest test failure, suggest a specific code fix:
 
-        # Handle special cases like code formatting
-        for key, value in kwargs.items():
-            if isinstance(value, dict):
-                kwargs[key] = json.dumps(value, indent=2)
+Test name: {failure.test_name}
+Error message: {failure.error_message}
+Traceback:
+{failure.traceback}
 
-        return self.templates[template_name].substitute(**kwargs)
+Analysis:
+{analysis}
 
-    def register_template(self, name: str, template_string: str) -> None:
-        self.templates[name] = Template(template_string)
+Provide a specific code fix that would resolve this issue:"""
+
+            suggestion = self.llm_service.generate_completion(prompt)
+            self.logger.debug(f"Generated suggestion: {suggestion[:100]}...")
+            return suggestion
+        except Exception as e:
+            self.logger.error(f"Error suggesting fix: {str(e)}")
+            raise
 ```
 
-Create a set of default templates for common operations like test failure analysis, fix suggestion, etc. Store these in a templates directory.
+Ensure the implementation generates useful and specific fix suggestions.
 
 # Test Strategy:
-Write unit tests that verify template loading, prompt building with various parameter types, and error handling for missing templates. Test with both file-based templates and programmatically registered templates.
+Create unit tests with mock LLMService to verify the suggester correctly formats prompts and handles responses. Test error handling by simulating LLM service failures. Verify that the suggester correctly logs operations and errors.

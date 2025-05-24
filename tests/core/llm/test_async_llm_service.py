@@ -15,9 +15,7 @@ from pytest_analyzer.core.prompts.prompt_builder import PromptBuilder
 from pytest_analyzer.utils.resource_manager import (
     ResourceMonitor,
 )
-from pytest_analyzer.utils.resource_manager import (
-    TimeoutError as ResourceManagerTimeoutError,
-)
+from pytest_analyzer.utils.resource_manager import TimeoutError as ResourceManagerTimeoutError
 
 
 # Sample test data
@@ -132,9 +130,7 @@ class TestAsyncLLMService:
         )
 
         # Set up the mock to return a specific response
-        mock_async_anthropic_client.messages.create.return_value.content[
-            0
-        ].text = "Async response"
+        mock_async_anthropic_client.messages.create.return_value.content[0].text = "Async response"
 
         # Call the method
         result = await service.send_prompt("Test prompt")
@@ -172,9 +168,7 @@ class TestAsyncLLMService:
         result = await service.analyze_failure(sample_failure)
 
         # Verify the method behavior
-        mock_prompt_builder.build_analysis_prompt.assert_called_once_with(
-            sample_failure
-        )
+        mock_prompt_builder.build_analysis_prompt.assert_called_once_with(sample_failure)
         service.send_prompt.assert_awaited_once_with("Analysis prompt")
         mock_response_parser.parse_analysis_response.assert_called_once_with(
             sample_failure, "Analysis response"
@@ -257,9 +251,7 @@ class TestAsyncLLMService:
         assert result == mock_response_parser.parse_suggestion_response.return_value
 
     @pytest.mark.asyncio
-    async def test_error_handling_in_send_prompt(
-        self, mock_prompt_builder, mock_response_parser
-    ):
+    async def test_error_handling_in_send_prompt(self, mock_prompt_builder, mock_response_parser):
         """Test error handling in the async send_prompt method."""
         # Create a mock client that raises an exception
         mock_client = AsyncMock()
@@ -305,9 +297,7 @@ class TestAsyncLLMService:
         service.send_prompt = mock_send_prompt
 
         # Make the response parser raise an exception
-        mock_response_parser.parse_analysis_response.side_effect = Exception(
-            "Parsing Error"
-        )
+        mock_response_parser.parse_analysis_response.side_effect = Exception("Parsing Error")
 
         # Call analyze_failure and expect an exception
         with pytest.raises(ParsingError) as exc_info:
@@ -325,9 +315,7 @@ class TestAsyncLLMService:
         mock_client.__class__.__module__ = "anthropic"
 
         # Set up the mock to raise a TimeoutError directly
-        mock_client.messages.create.side_effect = ResourceManagerTimeoutError(
-            "Operation timed out"
-        )
+        mock_client.messages.create.side_effect = ResourceManagerTimeoutError("Operation timed out")
 
         # Create the service
         service = AsyncLLMService(

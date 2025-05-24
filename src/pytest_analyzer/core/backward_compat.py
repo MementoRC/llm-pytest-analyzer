@@ -53,9 +53,7 @@ class PytestAnalyzerService(PytestAnalyzerFacade):
         suggestions = service.analyze_pytest_output("test_results.xml")
     """
 
-    def __init__(
-        self, settings: Optional[Settings] = None, llm_client: Optional[Any] = None
-    ):
+    def __init__(self, settings: Optional[Settings] = None, llm_client: Optional[Any] = None):
         """
         Initialize the service with a deprecation warning.
 

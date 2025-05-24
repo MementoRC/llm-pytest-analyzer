@@ -278,7 +278,5 @@ def test_collect_failures_with_plugin(mock_pytest_main):
     collect_failures_with_plugin(pytest_args)
 
     # Verify the results
-    mock_pytest_main.assert_called_once_with(
-        pytest_args, plugins=[mock_main.captured_plugin]
-    )
+    mock_pytest_main.assert_called_once_with(pytest_args, plugins=[mock_main.captured_plugin])
     assert isinstance(mock_main.captured_plugin, FailureCollectorPlugin)

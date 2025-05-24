@@ -97,7 +97,7 @@ def create_gitignore(project_path: Path) -> None:
             with open(gitignore_path, "w") as f:
                 f.write("\n".join(basic_ignores))
             logger.info(f"Created .gitignore at {gitignore_path}")
-        except IOError as e:
+        except OSError as e:
             logger.warning(f"Failed to create .gitignore: {e}")
 
 
@@ -115,9 +115,7 @@ def init_git_repository(project_path: str, force: bool = False) -> bool:
 
     try:
         # Initialize Git
-        subprocess.run(
-            ["git", "init"], cwd=project_dir, capture_output=True, check=True, text=True
-        )
+        subprocess.run(["git", "init"], cwd=project_dir, capture_output=True, check=True, text=True)
         logger.info(f"Initialized Git repository at {project_dir}")
 
         # Create .gitignore
@@ -171,30 +169,24 @@ def confirm_git_setup(project_path: str) -> bool:
     # Ask user confirmation to initialize Git
     print(f"The project at {project_path} is not under Git version control.")
     try:
-        response = input(
-            "Would you like to initialize a Git repository to track changes? (y/n): "
-        )
+        response = input("Would you like to initialize a Git repository to track changes? (y/n): ")
     except (EOFError, OSError):
         # Non-interactive environment, do not initialize Git
-        logger.info(
-            "Non-interactive environment detected; skipping Git initialization prompt."
-        )
+        logger.info("Non-interactive environment detected; skipping Git initialization prompt.")
         return False
 
     if response.lower() == "y":
         if init_git_repository(project_path):
             print("Git repository initialized with an initial commit.")
             return True
-        else:
-            print(
-                "Failed to initialize Git repository. Fix suggestions will be generated but cannot be applied automatically."
-            )
-            return False
-    else:
         print(
-            "Proceeding without Git integration. Fix suggestions will be generated but cannot be applied automatically."
+            "Failed to initialize Git repository. Fix suggestions will be generated but cannot be applied automatically."
         )
         return False
+    print(
+        "Proceeding without Git integration. Fix suggestions will be generated but cannot be applied automatically."
+    )
+    return False
 
 
 def get_git_root(path: str) -> Optional[str]:
@@ -221,9 +213,7 @@ def get_git_root(path: str) -> Optional[str]:
         return None
 
 
-def create_branch_for_fixes(
-    repo_path: str, branch_name: Optional[str] = None
-) -> Tuple[str, str]:
+def create_branch_for_fixes(repo_path: str, branch_name: Optional[str] = None) -> Tuple[str, str]:
     """
     Create and checkout a new branch for applying fixes.
 
@@ -309,7 +299,9 @@ def commit_fix(repo_path: str, file_path: str, issue_description: str) -> bool:
         )
 
         # Create commit
-        commit_message = f"fix: Apply pytest-analyzer fix for {issue_description} in {abs_file_path.name}"
+        commit_message = (
+            f"fix: Apply pytest-analyzer fix for {issue_description} in {abs_file_path.name}"
+        )
         subprocess.run(
             ["git", "commit", "-m", commit_message],
             cwd=repo_path,

@@ -33,18 +33,9 @@ def test_prompt_builder_initialization() -> None:
     assert "llm_suggestion" in builder.templates
     assert "batch_analysis" in builder.templates
     assert builder.templates["analysis"] == PromptBuilder._DEFAULT_TEMPLATES["analysis"]
-    assert (
-        builder.templates["suggestion"]
-        == PromptBuilder._DEFAULT_TEMPLATES["suggestion"]
-    )
-    assert (
-        builder.templates["llm_suggestion"]
-        == PromptBuilder._DEFAULT_TEMPLATES["llm_suggestion"]
-    )
-    assert (
-        builder.templates["batch_analysis"]
-        == PromptBuilder._DEFAULT_TEMPLATES["batch_analysis"]
-    )
+    assert builder.templates["suggestion"] == PromptBuilder._DEFAULT_TEMPLATES["suggestion"]
+    assert builder.templates["llm_suggestion"] == PromptBuilder._DEFAULT_TEMPLATES["llm_suggestion"]
+    assert builder.templates["batch_analysis"] == PromptBuilder._DEFAULT_TEMPLATES["batch_analysis"]
 
 
 def test_prompt_builder_custom_initialization() -> None:
@@ -78,18 +69,13 @@ def test_prompt_builder_custom_initialization() -> None:
         "batch_analysis": custom_batch_analysis,
         "new_custom_template": "This is a new one: {test_file}",
     }
-    builder_dict = PromptBuilder(
-        templates=custom_templates, max_prompt_size=custom_max_size
-    )
+    builder_dict = PromptBuilder(templates=custom_templates, max_prompt_size=custom_max_size)
     assert builder_dict.max_prompt_size == custom_max_size
     assert builder_dict.templates["analysis"] == custom_analysis
     assert builder_dict.templates["suggestion"] == custom_suggestion
     assert builder_dict.templates["llm_suggestion"] == custom_llm_suggestion
     assert builder_dict.templates["batch_analysis"] == custom_batch_analysis
-    assert (
-        builder_dict.templates["new_custom_template"]
-        == "This is a new one: {test_file}"
-    )
+    assert builder_dict.templates["new_custom_template"] == "This is a new one: {test_file}"
 
 
 def test_load_templates_from_dir(tmp_path) -> None:

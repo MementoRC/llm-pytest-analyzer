@@ -273,9 +273,7 @@ class TestAdvancedContainer:
 
         # Test injecting function parameters
         @inject(container)
-        def process_data(
-            logger: ILogger, calculator: ICalculator, optional_param: str = "default"
-        ):
+        def process_data(logger: ILogger, calculator: ICalculator, optional_param: str = "default"):
             logger.log(f"Processing with optional param: {optional_param}")
             return calculator.add(10, 20)
 
@@ -325,9 +323,7 @@ class TestAdvancedContainer:
         container = Container()
 
         # Register multiple types at once
-        container.register_many(
-            {ICalculator: Calculator, ILogger: Logger, IService: Service}
-        )
+        container.register_many({ICalculator: Calculator, ILogger: Logger, IService: Service})
 
         # Verify all registrations
         assert isinstance(container.resolve(ICalculator), Calculator)

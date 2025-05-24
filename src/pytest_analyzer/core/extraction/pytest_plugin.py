@@ -33,9 +33,7 @@ class FailureCollectorPlugin:
                 self.test_items[item.nodeid] = {
                     "path": str(item.path) if hasattr(item, "path") else None,
                     "module": item.module.__name__ if hasattr(item, "module") else None,
-                    "function": (
-                        item.function.__name__ if hasattr(item, "function") else None
-                    ),
+                    "function": (item.function.__name__ if hasattr(item, "function") else None),
                 }
             except Exception as e:
                 logger.error(
@@ -87,9 +85,7 @@ class FailureCollectorPlugin:
             if hasattr(longrepr, "reprcrash"):
                 crash = longrepr.reprcrash
                 error_type = (
-                    crash.message.split(":", 1)[0]
-                    if ":" in crash.message
-                    else "AssertionError"
+                    crash.message.split(":", 1)[0] if ":" in crash.message else "AssertionError"
                 )
                 error_message = crash.message
 
@@ -102,9 +98,7 @@ class FailureCollectorPlugin:
             error_message=error_message,
             traceback=traceback_text,
             relevant_code=relevant_code,
-            raw_output_section=(
-                str(report.longrepr) if hasattr(report, "longrepr") else ""
-            ),
+            raw_output_section=(str(report.longrepr) if hasattr(report, "longrepr") else ""),
         )
 
         self.failures.append(failure)

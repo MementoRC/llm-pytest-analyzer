@@ -126,9 +126,7 @@ class LLMService(LLMServiceProtocol):
             LLMServiceError: If there's an error communicating with the LLM
         """
         if not self._llm_request_func:
-            logger.error(
-                "LLMService cannot send prompt: No LLM request function configured."
-            )
+            logger.error("LLMService cannot send prompt: No LLM request function configured.")
             raise LLMServiceError("No LLM request function configured")
 
         with error_context(LLMServiceError, "Failed to send prompt to language model"):
@@ -194,9 +192,7 @@ class LLMService(LLMServiceProtocol):
         )
 
         # Send the prompt to the LLM
-        with error_context(
-            LLMServiceError, "Failed to get fix suggestions from language model"
-        ):
+        with error_context(LLMServiceError, "Failed to get fix suggestions from language model"):
             response = self.send_prompt(prompt)
 
         # Parse the response
@@ -220,33 +216,26 @@ class LLMService(LLMServiceProtocol):
         if self.llm_client:
             client_module_name = self.llm_client.__class__.__module__.lower()
 
-            if "anthropic" in client_module_name and hasattr(
-                self.llm_client, "messages"
-            ):
+            if "anthropic" in client_module_name and hasattr(self.llm_client, "messages"):
                 # For Anthropic client
                 return lambda p: self._request_with_anthropic(p)
-            elif "openai" in client_module_name and hasattr(self.llm_client, "chat"):
+            if "openai" in client_module_name and hasattr(self.llm_client, "chat"):
                 # For OpenAI client
                 return lambda p: self._request_with_openai(p)
-            else:
-                logger.warning(
-                    f"Provided LLM client type ({client_module_name}) is not explicitly supported. "
-                    "Using a generic approach."
+            logger.warning(
+                f"Provided LLM client type ({client_module_name}) is not explicitly supported. "
+                "Using a generic approach."
+            )
+            # Try a generic approach if known methods exist
+            if hasattr(self.llm_client, "generate"):
+                return lambda p: str(self.llm_client.generate(prompt=p, max_tokens=self.max_tokens))
+            if hasattr(self.llm_client, "completions") and hasattr(
+                self.llm_client.completions, "create"
+            ):
+                return lambda p: str(
+                    self.llm_client.completions.create(prompt=p, max_tokens=self.max_tokens)
                 )
-                # Try a generic approach if known methods exist
-                if hasattr(self.llm_client, "generate"):
-                    return lambda p: str(
-                        self.llm_client.generate(prompt=p, max_tokens=self.max_tokens)
-                    )
-                elif hasattr(self.llm_client, "completions") and hasattr(
-                    self.llm_client.completions, "create"
-                ):
-                    return lambda p: str(
-                        self.llm_client.completions.create(
-                            prompt=p, max_tokens=self.max_tokens
-                        )
-                    )
-                return None
+            return None
 
         # If llm_client is None and auto-detection is disabled, return None
         if self.disable_auto_detection:
@@ -294,11 +283,7 @@ class LLMService(LLMServiceProtocol):
                 max_tokens=self.max_tokens,
                 messages=[{"role": "user", "content": prompt}],
             )
-            if (
-                message.content
-                and isinstance(message.content, list)
-                and message.content[0].text
-            ):
+            if message.content and isinstance(message.content, list) and message.content[0].text:
                 return message.content[0].text
             return ""
         except Exception as e:

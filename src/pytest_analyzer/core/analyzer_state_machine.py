@@ -320,14 +320,10 @@ class AnalyzerStateMachine(BaseStateMachine[AnalyzerContext, AnalyzerEvent]):
 
         # Initialize components
         if not context.analyzer:
-            context.analyzer = FailureAnalyzer(
-                max_suggestions=context.settings.max_suggestions
-            )
+            context.analyzer = FailureAnalyzer(max_suggestions=context.settings.max_suggestions)
 
         if not context.suggester:
-            context.suggester = FixSuggester(
-                min_confidence=context.settings.min_confidence
-            )
+            context.suggester = FixSuggester(min_confidence=context.settings.min_confidence)
 
         # Initialize LLM service and suggester if enabled
         if context.settings.use_llm and not context.llm_suggester:
@@ -461,28 +457,20 @@ class AnalyzerStateMachine(BaseStateMachine[AnalyzerContext, AnalyzerEvent]):
 
     # Guard conditions
 
-    def _guard_can_extract(
-        self, context: AnalyzerContext, event: Optional[AnalyzerEvent]
-    ) -> bool:
+    def _guard_can_extract(self, context: AnalyzerContext, event: Optional[AnalyzerEvent]) -> bool:
         """Check if extraction can begin."""
         # Need either a test path or an output path
         return bool(context.test_path or context.output_path)
 
-    def _guard_has_failures(
-        self, context: AnalyzerContext, event: Optional[AnalyzerEvent]
-    ) -> bool:
+    def _guard_has_failures(self, context: AnalyzerContext, event: Optional[AnalyzerEvent]) -> bool:
         """Check if there are failures to analyze."""
         return len(context.failures) > 0
 
-    def _guard_no_failures(
-        self, context: AnalyzerContext, event: Optional[AnalyzerEvent]
-    ) -> bool:
+    def _guard_no_failures(self, context: AnalyzerContext, event: Optional[AnalyzerEvent]) -> bool:
         """Check if there are no failures."""
         return len(context.failures) == 0
 
-    def _guard_can_suggest(
-        self, context: AnalyzerContext, event: Optional[AnalyzerEvent]
-    ) -> bool:
+    def _guard_can_suggest(self, context: AnalyzerContext, event: Optional[AnalyzerEvent]) -> bool:
         """Check if suggestions can be generated."""
         return len(context.failures) > 0 and bool(context.suggester)
 
@@ -534,9 +522,7 @@ class AnalyzerStateMachine(BaseStateMachine[AnalyzerContext, AnalyzerEvent]):
         # Group failures if using LLM
         if context.settings.use_llm and context.llm_suggester:
             project_root = (
-                str(context.path_resolver.project_root)
-                if context.path_resolver
-                else None
+                str(context.path_resolver.project_root) if context.path_resolver else None
             )
             context.failure_groups = group_failures(context.failures, project_root)
 
@@ -561,9 +547,7 @@ class AnalyzerStateMachine(BaseStateMachine[AnalyzerContext, AnalyzerEvent]):
         if not context.error_state:
             context.error_state = self.current_state_name
 
-    def _action_reset(
-        self, context: AnalyzerContext, event: Optional[AnalyzerEvent]
-    ) -> None:
+    def _action_reset(self, context: AnalyzerContext, event: Optional[AnalyzerEvent]) -> None:
         """Reset the state machine context."""
         logger.debug("Resetting analyzer state machine")
 
@@ -607,9 +591,8 @@ class AnalyzerStateMachine(BaseStateMachine[AnalyzerContext, AnalyzerEvent]):
         context.main_task_id = main_task_id
 
         # Start extraction if we have required parameters
-        if (
-            self.current_state_name == AnalyzerState.INITIALIZING
-            and self._guard_can_extract(context, None)
+        if self.current_state_name == AnalyzerState.INITIALIZING and self._guard_can_extract(
+            context, None
         ):
             self.trigger(AnalyzerEvent.START_EXTRACTION)
 

@@ -7,13 +7,16 @@ repos:
     rev: 6.0.1
     hooks:
       - id: isort
-        args: ["--profile", "black"]
+        args: ["--profile", "black", "--line-length", "100"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.6
+    rev: v0.11.10
     hooks:
       - id: ruff-format
+        args: ["--respect-gitignore"]
+        types_or: [python, pyi]
+        require_serial: true
       - id: ruff
-        args: ["--fix", "--exit-non-zero-on-fix"]
+        args: ["--fix", "--exit-non-zero-on-fix", "--respect-gitignore"]
         types_or: [python, pyi]
         require_serial: true
   # - repo: https://github.com/pre-commit/mirrors-mypy
@@ -26,12 +29,14 @@ repos:
     rev: v5.0.0
     hooks:
       - id: end-of-file-fixer
+        exclude: "^.+\\.md$"  # Exclude Markdown files to avoid unwanted changes
       - id: trailing-whitespace
+        exclude: "^.+\\.md$"  # Exclude Markdown files to avoid unwanted changes
       - id: check-yaml
       - id: check-merge-conflict
       - id: debug-statements
   - repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v20.1.0
+    rev: v20.1.4
     hooks:
       - id: clang-format
         files: "\\.(c|cpp|h|hpp|pyx)$"

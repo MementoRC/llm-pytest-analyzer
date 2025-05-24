@@ -150,10 +150,7 @@ class FixApplierAdapter(Applier):
             tests_to_validate = []
             if hasattr(suggestion, "validation_tests") and suggestion.validation_tests:
                 tests_to_validate = suggestion.validation_tests
-            elif (
-                hasattr(suggestion.failure, "test_name")
-                and suggestion.failure.test_name
-            ):
+            elif hasattr(suggestion.failure, "test_name") and suggestion.failure.test_name:
                 # Use the original failing test for validation
                 tests_to_validate = [suggestion.failure.test_name]
 

@@ -62,11 +62,7 @@ class GitFixApplier:
                 rolled_back_files=[],
             )
 
-        verbose = (
-            self.verbose_test_output
-            if verbose_test_output is None
-            else verbose_test_output
-        )
+        verbose = self.verbose_test_output if verbose_test_output is None else verbose_test_output
 
         # Check if working tree is clean
         if not is_working_tree_clean(self.git_root):
@@ -80,12 +76,8 @@ class GitFixApplier:
         try:
             # Create a branch for our fixes if we haven't already
             if not self.current_branch:
-                self.current_branch, self.original_branch = create_branch_for_fixes(
-                    self.git_root
-                )
-                logger.info(
-                    f"Created branch '{self.current_branch}' for applying fixes"
-                )
+                self.current_branch, self.original_branch = create_branch_for_fixes(self.git_root)
+                logger.info(f"Created branch '{self.current_branch}' for applying fixes")
 
             applied_files = []
             rolled_back_files = []
@@ -167,9 +159,7 @@ class GitFixApplier:
                     reset_file(self.git_root, str(applied_file))
                     rolled_back_files.append(applied_file)
                 except Exception as reset_error:
-                    logger.error(
-                        f"Error rolling back changes to {applied_file}: {reset_error}"
-                    )
+                    logger.error(f"Error rolling back changes to {applied_file}: {reset_error}")
 
             return FixApplicationResult(
                 success=False,

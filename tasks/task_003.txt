@@ -1,66 +1,53 @@
 # Task ID: 3
-# Title: Implement Dependency Injection Container
-# Status: done
+# Title: Implement Extractor Component
+# Status: pending
 # Dependencies: 2
-# Priority: high
-# Description: Create a dependency injection container to manage component dependencies and facilitate testing.
+# Priority: medium
+# Description: Refactor the test failure extraction logic into a dedicated component with proper interfaces
 # Details:
-Implement a DI container that will manage the creation and lifecycle of all components:
+Create concrete implementations of the Extractor protocol. The extractor should parse pytest output and extract test failures. Implement proper error handling and logging.
 
+Example implementation:
 ```python
-from typing import Dict, Type, Any, TypeVar, Generic, cast
+from typing import List, Optional
+import re
+import logging
+from .interfaces import Extractor, TestFailure
 
-T = TypeVar('T')
+class PytestExtractor(Extractor):
+    def __init__(self, logger: Optional[logging.Logger] = None):
+        self.logger = logger or logging.getLogger(__name__)
 
-class DIContainer:
-    def __init__(self):
-        self._services: Dict[Type, Any] = {}
-        self._factories: Dict[Type, callable] = {}
+    def extract_failures(self, test_output: str) -> List[TestFailure]:
+        self.logger.debug(f"Extracting failures from {len(test_output)} bytes of test output")
+        failures = []
 
-    def register(self, interface_type: Type[T], implementation: T) -> None:
-        self._services[interface_type] = implementation
+        # Regex pattern to match pytest failures
+        failure_pattern = r"E\s+(.+?)\n([\s\S]+?)(?=\n\n|$)"
 
-    def register_factory(self, interface_type: Type[T], factory: callable) -> None:
-        self._factories[interface_type] = factory
+        try:
+            for match in re.finditer(failure_pattern, test_output):
+                error_message = match.group(1)
+                traceback = match.group(2)
 
-    def resolve(self, interface_type: Type[T]) -> T:
-        if interface_type in self._services:
-            return cast(T, self._services[interface_type])
+                # Extract test name from traceback
+                test_name_match = re.search(r"([\w\.]+)::([\w\.]+)", traceback)
+                test_name = test_name_match.group(0) if test_name_match else "Unknown test"
 
-        if interface_type in self._factories:
-            implementation = self._factories[interface_type]()
-            self._services[interface_type] = implementation
-            return cast(T, implementation)
+                failures.append(TestFailure(
+                    test_name=test_name,
+                    error_message=error_message,
+                    traceback=traceback
+                ))
 
-        raise KeyError(f"No registration found for {interface_type.__name__}")
+            self.logger.info(f"Extracted {len(failures)} test failures")
+            return failures
+        except Exception as e:
+            self.logger.error(f"Error extracting failures: {str(e)}")
+            raise
 ```
 
-Provide helper methods for registering and resolving dependencies. Include documentation on how to use the container in different contexts (production, testing).
+Ensure the implementation handles different pytest output formats and edge cases.
 
 # Test Strategy:
-Write unit tests that verify the container can register and resolve dependencies correctly. Test both direct registration and factory-based registration. Verify proper error handling for missing dependencies.
-
-# Subtasks:
-## 1. Implement Core Container Structure [done]
-### Dependencies: None
-### Description: Create the foundational structure for the dependency injection container with basic registration and resolution capabilities.
-### Details:
-Implement the Container class with internal storage for registered dependencies. Include methods for basic registration and resolution. Implement proper type annotations using generics. Add error handling for missing dependencies. Write unit tests for basic container functionality including registration, resolution, and error cases.
-
-## 2. Develop Advanced Registration Mechanisms [done]
-### Dependencies: 3.1
-### Description: Extend the container with various registration options including singleton, transient, and factory registrations.
-### Details:
-Implement singleton registration to ensure only one instance is created. Add transient registration for new instances on each resolution. Create factory registration for custom instance creation logic. Implement decorator-based registration for cleaner syntax. Write unit tests for each registration type, verifying correct lifecycle management.
-
-## 3. Implement Dependency Resolution Logic [done]
-### Dependencies: 3.1, 3.2
-### Description: Create advanced resolution capabilities including automatic dependency injection and circular dependency detection.
-### Details:
-Implement automatic constructor injection by analyzing parameter types. Add support for resolving nested dependencies. Implement circular dependency detection and prevention. Create mechanisms for optional dependencies. Write comprehensive tests for complex resolution scenarios including nested dependencies and edge cases.
-
-## 4. Create Documentation and Usage Examples [done]
-### Dependencies: 3.1, 3.2, 3.3
-### Description: Develop comprehensive documentation and example code demonstrating container usage patterns.
-### Details:
-Write detailed API documentation with type information. Create usage examples for common scenarios. Document best practices and anti-patterns. Implement a sample application demonstrating real-world usage. Create integration tests that verify the examples work as documented.
+Create unit tests with sample pytest outputs of varying formats. Test error handling by providing malformed inputs. Verify that all extracted failures contain the correct information. Test with both successful and failing test outputs.

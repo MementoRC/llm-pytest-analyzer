@@ -109,7 +109,7 @@ class TestLLMClientDetection:
         def side_effect(provider, _):
             if provider == LLMProvider.ANTHROPIC:
                 return None
-            elif provider == LLMProvider.OPENAI:
+            if provider == LLMProvider.OPENAI:
                 return MagicMock()
 
         mock_init_client.side_effect = side_effect
@@ -141,9 +141,7 @@ class TestLLMClientDetection:
         assert provider is None
         assert mock_init_client.call_count == 1  # Only tried the preferred provider
 
-    @patch(
-        "pytest_analyzer.core.llm.llm_service_factory.Anthropic", new_callable=MagicMock
-    )
+    @patch("pytest_analyzer.core.llm.llm_service_factory.Anthropic", new_callable=MagicMock)
     def test_anthropic_client_initialization(self, mock_anthropic):
         """Test Anthropic client initialization with API key."""
         # Set up the mock
@@ -160,9 +158,7 @@ class TestLLMClientDetection:
         mock_anthropic.assert_called_once_with(api_key="test-api-key")
         assert client is mock_client
 
-    @patch(
-        "pytest_analyzer.core.llm.llm_service_factory.openai", new_callable=MagicMock
-    )
+    @patch("pytest_analyzer.core.llm.llm_service_factory.openai", new_callable=MagicMock)
     def test_openai_client_initialization(self, mock_openai):
         """Test OpenAI client initialization with API key."""
         # Set up the mock for OpenAI
@@ -180,9 +176,7 @@ class TestLLMClientDetection:
         assert client is mock_client
 
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "env-test-key"})
-    @patch(
-        "pytest_analyzer.core.llm.llm_service_factory.Anthropic", new_callable=MagicMock
-    )
+    @patch("pytest_analyzer.core.llm.llm_service_factory.Anthropic", new_callable=MagicMock)
     def test_api_key_from_environment(self, mock_anthropic):
         """Test using API key from environment variable."""
         # Set up the mock
@@ -200,12 +194,8 @@ class TestLLMClientDetection:
     def test_azure_openai_initialization(self):
         """Test Azure OpenAI client initialization."""
         # Use a direct patch approach to avoid fixture issues
-        with patch(
-            "pytest_analyzer.core.llm.llm_service_factory.AZURE_OPENAI_AVAILABLE", True
-        ):
-            with patch(
-                "pytest_analyzer.core.llm.llm_service_factory.AzureOpenAI"
-            ) as mock_azure:
+        with patch("pytest_analyzer.core.llm.llm_service_factory.AZURE_OPENAI_AVAILABLE", True):
+            with patch("pytest_analyzer.core.llm.llm_service_factory.AzureOpenAI") as mock_azure:
                 # Set up the mock
                 mock_client = MagicMock()
                 mock_azure.return_value = mock_client
@@ -229,12 +219,8 @@ class TestLLMClientDetection:
     def test_together_client_initialization(self):
         """Test Together.ai client initialization."""
         # Use a direct patch approach to avoid fixture issues
-        with patch(
-            "pytest_analyzer.core.llm.llm_service_factory.TOGETHER_AVAILABLE", True
-        ):
-            with patch(
-                "pytest_analyzer.core.llm.llm_service_factory.Together"
-            ) as mock_together:
+        with patch("pytest_analyzer.core.llm.llm_service_factory.TOGETHER_AVAILABLE", True):
+            with patch("pytest_analyzer.core.llm.llm_service_factory.Together") as mock_together:
                 # Set up the mock
                 mock_client = MagicMock()
                 mock_together.return_value = mock_client
@@ -252,13 +238,9 @@ class TestLLMClientDetection:
     def test_ollama_client_detection(self):
         """Test Ollama client detection with running service."""
         # Use a direct patch approach to avoid fixture issues
-        with patch(
-            "pytest_analyzer.core.llm.llm_service_factory.OLLAMA_AVAILABLE", True
-        ):
+        with patch("pytest_analyzer.core.llm.llm_service_factory.OLLAMA_AVAILABLE", True):
             with patch("socket.socket") as mock_socket:
-                with patch(
-                    "pytest_analyzer.core.llm.llm_service_factory.ollama"
-                ) as mock_ollama:
+                with patch("pytest_analyzer.core.llm.llm_service_factory.ollama") as mock_ollama:
                     # Set up the socket mock to simulate Ollama running
                     socket_instance = MagicMock()
                     mock_socket.return_value.__enter__.return_value = socket_instance
@@ -276,9 +258,7 @@ class TestLLMClientDetection:
 
     def test_error_handling_in_client_initialization(self):
         """Test error handling during client initialization."""
-        with patch(
-            "pytest_analyzer.core.llm.llm_service_factory.Anthropic"
-        ) as mock_anthropic:
+        with patch("pytest_analyzer.core.llm.llm_service_factory.Anthropic") as mock_anthropic:
             # Simulate error during initialization
             mock_anthropic.side_effect = ValueError("API key error")
 
@@ -326,7 +306,7 @@ class TestLLMClientDetection:
             def side_effect(provider, _):
                 if provider == LLMProvider.ANTHROPIC:
                     return None
-                elif provider == LLMProvider.OPENAI:
+                if provider == LLMProvider.OPENAI:
                     return MagicMock()
                 return None
 
@@ -371,9 +351,7 @@ class TestLLMClientDetection:
     def test_environment_variable_detection(self):
         """Test detection of API keys from multiple environment variables."""
         # Test Anthropic environment detection
-        with patch(
-            "pytest_analyzer.core.llm.llm_service_factory.Anthropic"
-        ) as mock_anthropic:
+        with patch("pytest_analyzer.core.llm.llm_service_factory.Anthropic") as mock_anthropic:
             mock_anthropic_client = MagicMock()
             mock_anthropic.return_value = mock_anthropic_client
 
@@ -384,9 +362,7 @@ class TestLLMClientDetection:
             assert client is mock_anthropic_client
 
         # Test OpenAI environment detection
-        with patch(
-            "pytest_analyzer.core.llm.llm_service_factory.openai"
-        ) as mock_openai:
+        with patch("pytest_analyzer.core.llm.llm_service_factory.openai") as mock_openai:
             mock_openai_client = MagicMock()
             mock_openai.OpenAI.return_value = mock_openai_client
 
@@ -397,12 +373,8 @@ class TestLLMClientDetection:
             assert client is mock_openai_client
 
         # Test Azure OpenAI environment detection
-        with patch(
-            "pytest_analyzer.core.llm.llm_service_factory.AZURE_OPENAI_AVAILABLE", True
-        ):
-            with patch(
-                "pytest_analyzer.core.llm.llm_service_factory.AzureOpenAI"
-            ) as mock_azure:
+        with patch("pytest_analyzer.core.llm.llm_service_factory.AZURE_OPENAI_AVAILABLE", True):
+            with patch("pytest_analyzer.core.llm.llm_service_factory.AzureOpenAI") as mock_azure:
                 mock_azure_client = MagicMock()
                 mock_azure.return_value = mock_azure_client
 
@@ -460,9 +432,7 @@ class TestLLMClientDetection:
             assert provider == LLMProvider.OPENAI
 
             # Verify attempt was made with OpenAI
-            assert any(
-                call[0][0] == LLMProvider.OPENAI for call in mock_init.call_args_list
-            )
+            assert any(call[0][0] == LLMProvider.OPENAI for call in mock_init.call_args_list)
 
     def test_azure_openai_provider_preference(self):
         """Test that Azure OpenAI provider preference is respected."""
@@ -490,10 +460,7 @@ class TestLLMClientDetection:
             assert provider == LLMProvider.AZURE_OPENAI
 
             # Verify attempt was made with Azure
-            assert any(
-                call[0][0] == LLMProvider.AZURE_OPENAI
-                for call in mock_init.call_args_list
-            )
+            assert any(call[0][0] == LLMProvider.AZURE_OPENAI for call in mock_init.call_args_list)
 
     def test_azure_provider_preference_alternative_spelling(self):
         """Test that Azure provider preference is respected with alternative spelling."""
@@ -521,7 +488,4 @@ class TestLLMClientDetection:
             assert provider == LLMProvider.AZURE_OPENAI
 
             # Verify attempt was made with Azure
-            assert any(
-                call[0][0] == LLMProvider.AZURE_OPENAI
-                for call in mock_init.call_args_list
-            )
+            assert any(call[0][0] == LLMProvider.AZURE_OPENAI for call in mock_init.call_args_list)

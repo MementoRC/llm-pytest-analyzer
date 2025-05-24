@@ -127,16 +127,15 @@ def determine_provider(client: Any) -> LLMProvider:
 
     if isinstance(client, Anthropic) or "anthropic" in module_name:
         return LLMProvider.ANTHROPIC
-    elif isinstance(client, AzureOpenAI) or "azure" in module_name:
+    if isinstance(client, AzureOpenAI) or "azure" in module_name:
         return LLMProvider.AZURE_OPENAI
-    elif "openai" in module_name:
+    if "openai" in module_name:
         return LLMProvider.OPENAI
-    elif isinstance(client, Together) or "together" in module_name:
+    if isinstance(client, Together) or "together" in module_name:
         return LLMProvider.TOGETHER
-    elif "ollama" in module_name:
+    if "ollama" in module_name:
         return LLMProvider.OLLAMA
-    else:
-        return LLMProvider.CUSTOM
+    return LLMProvider.CUSTOM
 
 
 class LLMServiceFactory:
@@ -219,17 +218,16 @@ class LLMServiceFactory:
                 max_tokens=max_tokens,
                 model_name=model_name,
             )
-        else:
-            logger.debug("Creating asynchronous LLM service")
-            return AsyncLLMService(
-                prompt_builder=prompt_builder,
-                response_parser=response_parser,
-                resource_monitor=resource_monitor,
-                llm_client=llm_client,
-                timeout_seconds=timeout_seconds,
-                max_tokens=max_tokens,
-                model_name=model_name,
-            )
+        logger.debug("Creating asynchronous LLM service")
+        return AsyncLLMService(
+            prompt_builder=prompt_builder,
+            response_parser=response_parser,
+            resource_monitor=resource_monitor,
+            llm_client=llm_client,
+            timeout_seconds=timeout_seconds,
+            max_tokens=max_tokens,
+            model_name=model_name,
+        )
 
 
 def detect_llm_client(
@@ -353,9 +351,7 @@ def _try_initialize_client(provider: LLMProvider, settings: Settings) -> Optiona
     elif provider == LLMProvider.AZURE_OPENAI:
         if AZURE_OPENAI_AVAILABLE:
             api_key = settings.azure_api_key or os.environ.get("AZURE_OPENAI_API_KEY")
-            endpoint = settings.azure_endpoint or os.environ.get(
-                "AZURE_OPENAI_ENDPOINT"
-            )
+            endpoint = settings.azure_endpoint or os.environ.get("AZURE_OPENAI_ENDPOINT")
 
             if api_key and endpoint:
                 try:
@@ -393,8 +389,7 @@ def _try_initialize_client(provider: LLMProvider, settings: Settings) -> Optiona
                         logger.info("Creating Ollama client for local LLM requests")
                         # Ollama client doesn't need specific initialization
                         return ollama
-                    else:
-                        logger.warning("Ollama service not detected on port 11434")
+                    logger.warning("Ollama service not detected on port 11434")
             except Exception as e:
                 logger.warning(f"Failed to check/initialize Ollama: {e}")
 

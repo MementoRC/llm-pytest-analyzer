@@ -17,7 +17,7 @@ class TestBackwardCompat:
         """Test that initializing the legacy class name shows a deprecation warning."""
         # Use pytest's warning recorder to check for the warning
         with pytest.warns(DeprecationWarning) as recorded_warnings:
-            service = PytestAnalyzerService()
+            service = PytestAnalyzerService(settings=Settings())
 
         # Verify the warning was issued
         assert len(recorded_warnings) == 1

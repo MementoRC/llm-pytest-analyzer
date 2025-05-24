@@ -151,7 +151,7 @@ def test_create_gitignore_existing_file(mock_project_dir):
 
 def test_create_gitignore_io_error(mock_project_dir):
     """Test create_gitignore when there's an IO error."""
-    with patch("builtins.open", side_effect=IOError("Permission denied")):
+    with patch("builtins.open", side_effect=OSError("Permission denied")):
         # This should not raise an exception
         create_gitignore(mock_project_dir)
 
@@ -289,9 +289,7 @@ def test_confirm_git_setup_init_success(mock_init, mock_is_repo, mock_check):
             mock_check.assert_called_once()
             mock_is_repo.assert_called_once_with("/project")
             mock_init.assert_called_once_with("/project")
-            mock_print.assert_called_with(
-                "Git repository initialized with an initial commit."
-            )
+            mock_print.assert_called_with("Git repository initialized with an initial commit.")
 
 
 @patch("pytest_analyzer.utils.git_manager.check_git_installed")
@@ -510,9 +508,7 @@ def test_is_working_tree_clean_false(mock_subprocess, mock_project_dir):
 
 def test_is_working_tree_clean_error(mock_subprocess, mock_project_dir):
     """Test is_working_tree_clean when an error occurs."""
-    mock_subprocess.side_effect = subprocess.CalledProcessError(
-        1, ["git", "status", "--porcelain"]
-    )
+    mock_subprocess.side_effect = subprocess.CalledProcessError(1, ["git", "status", "--porcelain"])
 
     result = is_working_tree_clean(str(mock_project_dir))
 

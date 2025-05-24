@@ -39,9 +39,7 @@ def configure_logging(settings: Settings, log_file: Optional[str] = None) -> Non
             log_level = logging.CRITICAL
 
     # Create formatters
-    console_formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
+    console_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     file_formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s"
     )

@@ -1,150 +1,77 @@
 # Task ID: 8
-# Title: Implement Analyzer State Machine
-# Status: done
-# Dependencies: 2, 3, 4, 5, 6, 7
-# Priority: high
-# Description: Create a state machine implementation for the test analysis workflow.
+# Title: Implement PromptBuilder Component
+# Status: pending
+# Dependencies: 7
+# Priority: medium
+# Description: Create a PromptBuilder component for constructing prompts for the LLM service
 # Details:
-Implement a concrete state machine for the test analysis workflow:
+Implement a component for building prompts for the LLM service. Support templates, context management, and prompt optimization.
 
+Example implementation:
 ```python
-from enum import Enum, auto
-from typing import Dict, Any, List, Optional
+import logging
+from typing import Dict, Any, Optional
+from string import Template
 
-class AnalyzerState(Enum):
-    INITIALIZE = auto()
-    EXTRACT_TEST_RESULTS = auto()
-    ANALYZE_FAILURES = auto()
-    GENERATE_SUGGESTIONS = auto()
-    APPLY_FIXES = auto()
-    COMPLETE = auto()
-    ERROR = auto()
+class PromptBuilder:
+    def __init__(self, templates_path: Optional[str] = None, logger: Optional[logging.Logger] = None):
+        self.logger = logger or logging.getLogger(__name__)
+        self.templates: Dict[str, Template] = {}
 
-class AnalyzerStateMachine(StateMachine[AnalyzerState]):
-    def __init__(self, di_container: DIContainer):
-        super().__init__(AnalyzerState.INITIALIZE)
-        self.di_container = di_container
+        # Default templates
+        self.templates["analyze"] = Template("""Analyze the following pytest test failure and explain what might be causing it:
 
-        # Register states
-        self.add_state(AnalyzerState.INITIALIZE, self._initialize)
-        self.add_state(AnalyzerState.EXTRACT_TEST_RESULTS, self._extract_test_results)
-        self.add_state(AnalyzerState.ANALYZE_FAILURES, self._analyze_failures)
-        self.add_state(AnalyzerState.GENERATE_SUGGESTIONS, self._generate_suggestions)
-        self.add_state(AnalyzerState.APPLY_FIXES, self._apply_fixes)
-        self.add_state(AnalyzerState.COMPLETE, self._complete)
-        self.add_state(AnalyzerState.ERROR, self._handle_error)
+Test name: ${test_name}
+Error message: ${error_message}
+Traceback:
+${traceback}
 
-        # Register transitions
-        self.add_transition(
-            AnalyzerState.INITIALIZE,
-            AnalyzerState.EXTRACT_TEST_RESULTS,
-            lambda ctx, **kwargs: ctx.get('initialized', False)
-        )
-        self.add_transition(
-            AnalyzerState.EXTRACT_TEST_RESULTS,
-            AnalyzerState.ANALYZE_FAILURES,
-            lambda ctx, **kwargs: ctx.get('extraction_results') is not None
-        )
-        self.add_transition(
-            AnalyzerState.ANALYZE_FAILURES,
-            AnalyzerState.GENERATE_SUGGESTIONS,
-            lambda ctx, **kwargs: ctx.get('analysis_results') is not None
-        )
-        self.add_transition(
-            AnalyzerState.GENERATE_SUGGESTIONS,
-            AnalyzerState.APPLY_FIXES,
-            lambda ctx, **kwargs: ctx.get('suggestions') is not None and kwargs.get('apply_fixes', False)
-        )
-        self.add_transition(
-            AnalyzerState.GENERATE_SUGGESTIONS,
-            AnalyzerState.COMPLETE,
-            lambda ctx, **kwargs: ctx.get('suggestions') is not None and not kwargs.get('apply_fixes', False)
-        )
-        self.add_transition(
-            AnalyzerState.APPLY_FIXES,
-            AnalyzerState.COMPLETE,
-            lambda ctx, **kwargs: ctx.get('fixes_applied', False)
-        )
+Provide a detailed analysis of what's causing this failure:""")
 
-        # Error transitions from any state
-        for state in AnalyzerState:
-            if state not in [AnalyzerState.COMPLETE, AnalyzerState.ERROR]:
-                self.add_transition(
-                    state,
-                    AnalyzerState.ERROR,
-                    lambda ctx, **kwargs: ctx.get('error') is not None
-                )
+        self.templates["suggest"] = Template("""Based on the following analysis of a pytest test failure, suggest a specific code fix:
 
-    def _initialize(self, context: Dict[str, Any], **kwargs) -> None:
+Test name: ${test_name}
+Error message: ${error_message}
+Traceback:
+${traceback}
+
+Analysis:
+${analysis}
+
+Provide a specific code fix that would resolve this issue:""")
+
+        # Load custom templates if provided
+        if templates_path:
+            self._load_templates(templates_path)
+
+    def _load_templates(self, templates_path: str) -> None:
+        # Implementation to load templates from files
+        pass
+
+    def build_prompt(self, template_name: str, context: Dict[str, Any]) -> str:
+        self.logger.debug(f"Building prompt using template: {template_name}")
+
+        if template_name not in self.templates:
+            self.logger.error(f"Template not found: {template_name}")
+            raise KeyError(f"Template not found: {template_name}")
+
         try:
-            # Initialize components
-            context['extractor'] = self.di_container.resolve(Extractor)
-            context['analyzer'] = self.di_container.resolve(Analyzer)
-            context['suggester'] = self.di_container.resolve(Suggester)
-            context['applier'] = self.di_container.resolve(Applier)
-            context['initialized'] = True
+            prompt = self.templates[template_name].substitute(context)
+            self.logger.debug(f"Built prompt: {prompt[:50]}...")
+            return prompt
+        except KeyError as e:
+            self.logger.error(f"Missing context variable: {str(e)}")
+            raise
         except Exception as e:
-            context['error'] = str(e)
+            self.logger.error(f"Error building prompt: {str(e)}")
+            raise
 
-    def _extract_test_results(self, context: Dict[str, Any], **kwargs) -> None:
-        try:
-            extractor = context['extractor']
-            test_results = kwargs.get('test_results')
-            if not test_results:
-                raise ValueError("No test results provided")
-
-            context['extraction_results'] = extractor.extract(test_results)
-        except Exception as e:
-            context['error'] = str(e)
-
-    def _analyze_failures(self, context: Dict[str, Any], **kwargs) -> None:
-        try:
-            analyzer = context['analyzer']
-            extraction_results = context['extraction_results']
-            context['analysis_results'] = analyzer.analyze(extraction_results)
-        except Exception as e:
-            context['error'] = str(e)
-
-    def _generate_suggestions(self, context: Dict[str, Any], **kwargs) -> None:
-        try:
-            suggester = context['suggester']
-            analysis_results = context['analysis_results']
-            context['suggestions'] = suggester.suggest(analysis_results)
-        except Exception as e:
-            context['error'] = str(e)
-
-    def _apply_fixes(self, context: Dict[str, Any], **kwargs) -> None:
-        try:
-            applier = context['applier']
-            suggestions = context['suggestions']
-            target_files = kwargs.get('target_files', [])
-            context['fixes_applied'] = applier.apply(suggestions, target_files)
-        except Exception as e:
-            context['error'] = str(e)
-
-    def _complete(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        # Return the final results
-        return {
-            'extraction_results': context.get('extraction_results'),
-            'analysis_results': context.get('analysis_results'),
-            'suggestions': context.get('suggestions'),
-            'fixes_applied': context.get('fixes_applied', False)
-        }
-
-    def _handle_error(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        # Return error information
-        return {
-            'error': context.get('error', 'Unknown error'),
-            'state': self.current_state.name,
-            'partial_results': {
-                'extraction_results': context.get('extraction_results'),
-                'analysis_results': context.get('analysis_results'),
-                'suggestions': context.get('suggestions')
-            }
-        }
+    def register_template(self, name: str, template_string: str) -> None:
+        self.logger.debug(f"Registering template: {name}")
+        self.templates[name] = Template(template_string)
 ```
 
-This implementation should handle the complete workflow of extracting test results, analyzing failures, generating suggestions, and optionally applying fixes.
+Ensure the implementation supports loading templates from files and customizing templates at runtime.
 
 # Test Strategy:
-Create unit tests that verify each state transition and handler. Use mocked dependencies to test both successful and error scenarios. Test the complete workflow with different input parameters.
+Create unit tests to verify template substitution works correctly. Test error handling for missing templates and context variables. Verify that custom templates can be registered and used. Test loading templates from files.

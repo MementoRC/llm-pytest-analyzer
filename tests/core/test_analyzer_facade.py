@@ -74,9 +74,7 @@ class TestAnalyzerFacade:
 
         # Mock the run method to return a result with extraction results
         mock_failure = MagicMock()
-        mock_state_machine.run.return_value = {
-            "extraction_results": {"failures": [mock_failure]}
-        }
+        mock_state_machine.run.return_value = {"extraction_results": {"failures": [mock_failure]}}
 
         # Create the facade
         facade = PytestAnalyzerFacade()
@@ -187,9 +185,7 @@ class TestAnalyzerFacade:
                     code_changes_to_apply = {}
                     for key, value in suggestion.code_changes.items():
                         # Skip metadata keys like 'source' and 'fingerprint'
-                        if not isinstance(key, str) or (
-                            "/" not in key and "\\" not in key
-                        ):
+                        if not isinstance(key, str) or ("/" not in key and "\\" not in key):
                             continue
                         # Skip empty values
                         if not value:
@@ -207,22 +203,14 @@ class TestAnalyzerFacade:
 
                     # Determine which tests to run for validation
                     tests_to_validate = []
-                    if (
-                        hasattr(suggestion, "validation_tests")
-                        and suggestion.validation_tests
-                    ):
+                    if hasattr(suggestion, "validation_tests") and suggestion.validation_tests:
                         tests_to_validate = suggestion.validation_tests
-                    elif (
-                        hasattr(suggestion.failure, "test_name")
-                        and suggestion.failure.test_name
-                    ):
+                    elif hasattr(suggestion.failure, "test_name") and suggestion.failure.test_name:
                         # Use the original failing test for validation
                         tests_to_validate = [suggestion.failure.test_name]
 
                     # Call our mock applier directly
-                    return self._mock_applier.apply(
-                        code_changes_to_apply, tests_to_validate
-                    )
+                    return self._mock_applier.apply(code_changes_to_apply, tests_to_validate)
 
                 except Exception as e:
                     print(f"Error in test apply_suggestion: {e}")
@@ -302,9 +290,7 @@ class TestAnalyzerFacade:
         assert result["analyses"][0] == {"key": "value"}
         assert len(result["suggestions"]) == 1
 
-    @patch(
-        "pytest_analyzer.core.analyzer_facade.PytestAnalyzerFacade.analyze_test_results"
-    )
+    @patch("pytest_analyzer.core.analyzer_facade.PytestAnalyzerFacade.analyze_test_results")
     def test_suggest_fixes(self, mock_analyze_test_results):
         """Test the suggest_fixes method."""
         # Setup mock analyze_test_results to return a result with suggestions
@@ -453,9 +439,7 @@ class TestAnalyzerFacade:
 
             # Mock context creation
             mock_context = MagicMock()
-            facade._create_analyzer_context_from_container = MagicMock(
-                return_value=mock_context
-            )
+            facade._create_analyzer_context_from_container = MagicMock(return_value=mock_context)
 
             # Test analyze_test_results with all required mocks
             with patch("tempfile.NamedTemporaryFile") as mock_temp_file:

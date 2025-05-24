@@ -1,169 +1,115 @@
 # Task ID: 15
-# Title: Implement Comprehensive Testing Suite
+# Title: Create Backward Compatibility Layer
 # Status: pending
-# Dependencies: 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14
+# Dependencies: 1, 2, 3, 4, 5, 6, 7, 11
 # Priority: high
-# Description: Create a comprehensive testing suite for all components and workflows.
+# Description: Ensure backward compatibility with existing code
 # Details:
-Implement a comprehensive testing suite that covers all components and workflows:
+Implement a backward compatibility layer to ensure existing code continues to work with the refactored components. Create adapter classes and facade patterns as needed.
 
-1. **Unit Tests**:
-   - Create test files for each component
-   - Use pytest fixtures for common test data and mocks
-   - Test both success and error paths
-   - Use parameterized tests for different scenarios
-
-2. **Integration Tests**:
-   - Test component chains (e.g., Extractor -> Analyzer -> Suggester)
-   - Test the state machine with different inputs
-   - Test the facade with different scenarios
-
-3. **End-to-End Tests**:
-   - Test the complete workflow with real-world examples
-   - Test backward compatibility with existing code
-
-4. **Test Helpers**:
-   - Create mock implementations of all interfaces for testing
-   - Create test fixtures for common test data
-   - Create test utilities for common assertions
-
-Example test file structure:
-
-```
-tests/
-  unit/
-    test_extractor.py
-    test_analyzer.py
-    test_suggester.py
-    test_applier.py
-    test_llm_service.py
-    test_prompt_builder.py
-    test_response_parser.py
-    test_state_machine.py
-    test_di_container.py
-    test_error_handling.py
-  integration/
-    test_analysis_workflow.py
-    test_suggestion_workflow.py
-    test_application_workflow.py
-  e2e/
-    test_facade.py
-    test_backward_compatibility.py
-  conftest.py  # Common fixtures
-  test_data/   # Test data files
-```
-
-Example unit test for the Extractor:
-
+Example implementation:
 ```python
-import pytest
-from pytest_analyzer.extractors import PytestExtractor
+import logging
+from typing import Optional, List, Dict, Any
 
-@pytest.fixture
-def sample_pytest_output():
-    with open('tests/test_data/sample_pytest_output.txt', 'r') as f:
-        return f.read()
+# Import new components
+from .di_container import DIContainer
+from .interfaces import Extractor, Analyzer, Suggester, Applier, LLMService, TestFailure
+from .state_machine import AnalyzerStateMachine, AnalysisState
 
-def test_extractor_with_valid_output(sample_pytest_output):
-    # Arrange
-    extractor = PytestExtractor()
+# Legacy class to maintain backward compatibility
+class PytestAnalyzer:
+    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4", logger: Optional[logging.Logger] = None):
+        self.logger = logger or logging.getLogger(__name__)
+        self.logger.info("Initializing PytestAnalyzer with backward compatibility")
 
-    # Act
-    result = extractor.extract(sample_pytest_output)
+        # Set up DI container
+        self.container = DIContainer()
 
-    # Assert
-    assert 'failures' in result
-    assert isinstance(result['failures'], list)
-    assert len(result['failures']) > 0
+        # Configure and register services
+        from .config_manager import ConfigManager
+        config_manager = ConfigManager(logger=self.logger)
+        config_manager.load_from_env()
 
-    # Check first failure structure
-    failure = result['failures'][0]
-    assert 'file_path' in failure
-    assert 'test_name' in failure
-    assert 'error' in failure
-    assert 'traceback' in failure
-    assert 'code_context' in failure
+        # Override with constructor parameters if provided
+        config = config_manager.get_config()
+        if api_key:
+            config.llm.api_key = api_key
+        if model:
+            config.llm.model = model
 
-def test_extractor_with_empty_output():
-    # Arrange
-    extractor = PytestExtractor()
+        # Register LLM service
+        from .llm_service import OpenAIService
+        llm_service = OpenAIService(
+            api_key=config.llm.api_key,
+            model=config.llm.model,
+            max_retries=config.llm.max_retries,
+            timeout=config.llm.timeout,
+            logger=self.logger
+        )
+        self.container.register(LLMService, llm_service)
 
-    # Act
-    result = extractor.extract('')
+        # Register other components
+        from .extractor import PytestExtractor
+        from .analyzer import LLMBasedAnalyzer
+        from .suggester import LLMBasedSuggester
+        from .applier import FileSystemApplier
 
-    # Assert
-    assert 'failures' in result
-    assert len(result['failures']) == 0
-    assert 'test_files' in result
-    assert len(result['test_files']) == 0
+        self.container.register(Extractor, PytestExtractor(logger=self.logger))
+        self.container.register(Analyzer, LLMBasedAnalyzer(llm_service, logger=self.logger))
+        self.container.register(Suggester, LLMBasedSuggester(llm_service, logger=self.logger))
+        self.container.register(Applier, FileSystemApplier(logger=self.logger))
 
-def test_extractor_error_handling():
-    # Arrange
-    extractor = PytestExtractor()
+    def analyze_test_failures(self, test_output: str, file_path: str) -> Dict[str, Any]:
+        """Legacy method to analyze test failures and suggest fixes"""
+        self.logger.info("Analyzing test failures using state machine")
 
-    # Act & Assert
-    with pytest.raises(ExtractionError):
-        extractor.extract(None)  # Should raise for None input
+        # Create and run state machine
+        state_machine = AnalyzerStateMachine(
+            extractor=self.container.resolve(Extractor),
+            analyzer=self.container.resolve(Analyzer),
+            suggester=self.container.resolve(Suggester),
+            applier=self.container.resolve(Applier),
+            logger=self.logger
+        )
+
+        state_machine.start(test_output, file_path)
+
+        # Convert state machine results to legacy format
+        result = {
+            "failures": [],
+            "analyses": [],
+            "suggestions": [],
+            "applied": []
+        }
+
+        if "failures" in state_machine.context:
+            result["failures"] = [
+                {"test_name": f.test_name, "error_message": f.error_message, "traceback": f.traceback}
+                for f in state_machine.context["failures"]
+            ]
+
+        if "analyses" in state_machine.context:
+            result["analyses"] = state_machine.context["analyses"]
+
+        if "suggestions" in state_machine.context:
+            result["suggestions"] = state_machine.context["suggestions"]
+
+        if "applied" in state_machine.context:
+            result["applied"] = state_machine.context["applied"]
+
+        if state_machine.current_state == AnalysisState.ERROR and "error" in state_machine.context:
+            result["error"] = state_machine.context["error"]
+
+        return result
+
+    def analyze_and_fix(self, test_output: str, file_path: str) -> bool:
+        """Legacy method to analyze and automatically fix test failures"""
+        result = self.analyze_test_failures(test_output, file_path)
+        return all(result.get("applied", [False]))
 ```
 
-Example integration test for the analysis workflow:
-
-```python
-import pytest
-from pytest_analyzer.di import DIContainer
-from pytest_analyzer.extractors import PytestExtractor
-from pytest_analyzer.analyzers import TestFailureAnalyzer
-from pytest_analyzer.llm import LLMService, LLMConfig
-from pytest_analyzer.prompts import PromptBuilder
-from pytest_analyzer.parsers import ResponseParser, AnalysisModel
-
-@pytest.fixture
-def mock_llm_service(monkeypatch):
-    class MockLLMService:
-        def generate(self, prompt, **kwargs):
-            # Return a predefined response based on the prompt
-            if 'analyze_failure' in prompt:
-                return '{"root_cause": "Test error", "explanation": "This is a test"}'
-            return '{}'
-
-    return MockLLMService()
-
-@pytest.fixture
-def di_container(mock_llm_service):
-    container = DIContainer()
-    container.register(LLMService, mock_llm_service)
-    container.register(PromptBuilder, PromptBuilder())
-    container.register(Extractor, PytestExtractor())
-    container.register_factory(Analyzer, lambda: TestFailureAnalyzer(
-        container.resolve(LLMService),
-        container.resolve(PromptBuilder),
-        ResponseParser(AnalysisModel)
-    ))
-    return container
-
-def test_analysis_workflow(di_container, sample_pytest_output):
-    # Arrange
-    extractor = di_container.resolve(Extractor)
-    analyzer = di_container.resolve(Analyzer)
-
-    # Act
-    extraction_results = extractor.extract(sample_pytest_output)
-    analysis_results = analyzer.analyze(extraction_results)
-
-    # Assert
-    assert 'analyses' in analysis_results
-    assert isinstance(analysis_results['analyses'], list)
-    assert len(analysis_results['analyses']) > 0
-
-    # Check first analysis structure
-    analysis = analysis_results['analyses'][0]
-    assert 'failure' in analysis
-    assert 'analysis' in analysis
-    assert 'root_cause' in analysis['analysis']
-    assert 'explanation' in analysis['analysis']
-```
-
-Implement similar tests for all components and workflows.
+Ensure the implementation maintains the same API and behavior as the original code while using the new architecture internally.
 
 # Test Strategy:
-Run the tests with pytest and verify that all tests pass. Use pytest-cov to measure test coverage and ensure it meets the 80% target. Verify that all components and workflows are properly tested, including error cases.
+Create integration tests that verify the backward compatibility layer works with existing code. Test with the same inputs and expected outputs as the original code. Verify that the new implementation produces the same results as the original. Test error handling and edge cases to ensure consistent behavior.

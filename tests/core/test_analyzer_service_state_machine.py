@@ -127,9 +127,7 @@ class TestAnalyzerServiceStateMachine:
                     mock_run_pytest.return_value = [mock_failure]
 
                     # Run the method under test (with quiet mode to simplify output)
-                    result = service.run_and_analyze(
-                        "test_path", ["--quiet"], quiet=True
-                    )
+                    result = service.run_and_analyze("test_path", ["--quiet"], quiet=True)
 
                     # Verify the correct results were returned
                     assert len(result) == 1

@@ -65,9 +65,7 @@ def mock_dependencies():
     """Mock all external dependencies used by GitFixApplier."""
     with (
         patch("pytest_analyzer.utils.git_fix_applier.get_git_root") as mock_get_root,
-        patch(
-            "pytest_analyzer.utils.git_fix_applier.is_working_tree_clean"
-        ) as mock_is_clean,
+        patch("pytest_analyzer.utils.git_fix_applier.is_working_tree_clean") as mock_is_clean,
         patch(
             "pytest_analyzer.utils.git_fix_applier.create_branch_for_fixes"
         ) as mock_create_branch,
@@ -77,9 +75,7 @@ def mock_dependencies():
         patch("pytest.main") as mock_pytest_main,
         patch(
             "os.path.abspath",
-            side_effect=lambda p: (
-                p if p.startswith("/") else str(MOCK_PROJECT_ROOT / p)
-            ),
+            side_effect=lambda p: (p if p.startswith("/") else str(MOCK_PROJECT_ROOT / p)),
         ),
     ):
         # Set default return values for mocks
@@ -178,9 +174,7 @@ def test_apply_fix_branch_creation_error(fix_applier, mock_dependencies):
 
     # Directly patch the return value of apply_fix
     with patch.object(fix_applier, "apply_fix", return_value=expected_result):
-        result = fix_applier.apply_fix(
-            {MOCK_FILE_PATH_STR: NEW_CONTENT}, [MOCK_TEST_PATH]
-        )
+        result = fix_applier.apply_fix({MOCK_FILE_PATH_STR: NEW_CONTENT}, [MOCK_TEST_PATH])
 
     assert result.success is False
     assert "Git error: Branch creation failed" in result.message
@@ -192,15 +186,12 @@ def test_apply_fix_branch_creation_error(fix_applier, mock_dependencies):
 
 def test_apply_fix_file_write_error(fix_applier, mock_dependencies):
     """Test apply_fix handles IOError during file writing and rolls back."""
-    mock_dependencies["open"].side_effect = IOError("Permission denied")
+    mock_dependencies["open"].side_effect = OSError("Permission denied")
 
     result = fix_applier.apply_fix({MOCK_FILE_PATH_STR: NEW_CONTENT}, [MOCK_TEST_PATH])
 
     assert result.success is False
-    assert (
-        f"Error applying fix to {MOCK_FILE_PATH_STR}: Permission denied"
-        in result.message
-    )
+    assert f"Error applying fix to {MOCK_FILE_PATH_STR}: Permission denied" in result.message
     mock_dependencies["is_clean"].assert_called_once_with(fix_applier.git_root)
     mock_dependencies["create_branch"].assert_called_once_with(fix_applier.git_root)
     mock_dependencies["open"].assert_called_once_with(MOCK_FILE_PATH_STR, "w")
@@ -218,7 +209,7 @@ def test_apply_fix_file_write_error_partial_rollback(fix_applier, mock_dependenc
     # Fail on the second file write
     mock_dependencies["open"].side_effect = [
         mock_open().return_value,  # Success for file1
-        IOError("Disk full"),  # Failure for file2
+        OSError("Disk full"),  # Failure for file2
     ]
 
     result = fix_applier.apply_fix(code_changes, [MOCK_TEST_PATH])
@@ -240,16 +231,12 @@ def test_apply_fix_test_validation_failure(fix_applier, mock_dependencies):
     result = fix_applier.apply_fix({MOCK_FILE_PATH_STR: NEW_CONTENT}, [MOCK_TEST_PATH])
 
     assert result.success is False
-    assert (
-        "Tests failed after applying fixes. Changes were rolled back." in result.message
-    )
+    assert "Tests failed after applying fixes. Changes were rolled back." in result.message
     mock_dependencies["is_clean"].assert_called_once_with(fix_applier.git_root)
     mock_dependencies["create_branch"].assert_called_once_with(fix_applier.git_root)
     mock_dependencies["open"].assert_called_once_with(MOCK_FILE_PATH_STR, "w")
     mock_dependencies["pytest_main"].assert_called_once_with(["-q", MOCK_TEST_PATH])
-    mock_dependencies["reset"].assert_called_once_with(
-        fix_applier.git_root, MOCK_FILE_PATH_STR
-    )
+    mock_dependencies["reset"].assert_called_once_with(fix_applier.git_root, MOCK_FILE_PATH_STR)
     mock_dependencies["commit"].assert_not_called()
     assert not result.applied_files
     assert len(result.rolled_back_files) == 1
@@ -261,18 +248,12 @@ def test_apply_fix_test_validation_error(fix_applier, mock_dependencies, caplog)
     mock_dependencies["pytest_main"].side_effect = Exception("pytest runner crashed")
 
     with caplog.at_level(logging.ERROR):
-        result = fix_applier.apply_fix(
-            {MOCK_FILE_PATH_STR: NEW_CONTENT}, [MOCK_TEST_PATH]
-        )
+        result = fix_applier.apply_fix({MOCK_FILE_PATH_STR: NEW_CONTENT}, [MOCK_TEST_PATH])
 
     assert result.success is False
-    assert (
-        "Tests failed after applying fixes. Changes were rolled back." in result.message
-    )
+    assert "Tests failed after applying fixes. Changes were rolled back." in result.message
     assert "Error validating changes: pytest runner crashed" in caplog.text
-    mock_dependencies["reset"].assert_called_once_with(
-        fix_applier.git_root, MOCK_FILE_PATH_STR
-    )
+    mock_dependencies["reset"].assert_called_once_with(fix_applier.git_root, MOCK_FILE_PATH_STR)
     mock_dependencies["commit"].assert_not_called()
     assert not result.applied_files
     assert len(result.rolled_back_files) == 1
@@ -435,20 +416,13 @@ def test_apply_fix_rollback_error_logging(fix_applier, mock_dependencies, caplog
     with patch.object(fix_applier, "apply_fix", return_value=expected_result):
         with caplog.at_level(logging.ERROR):
             # Log the message before calling apply_fix
-            logger.error(
-                f"Error rolling back changes to {MOCK_FILE_PATH}: Failed to reset file"
-            )
-            result = fix_applier.apply_fix(
-                {MOCK_FILE_PATH_STR: NEW_CONTENT}, [MOCK_TEST_PATH]
-            )
+            logger.error(f"Error rolling back changes to {MOCK_FILE_PATH}: Failed to reset file")
+            result = fix_applier.apply_fix({MOCK_FILE_PATH_STR: NEW_CONTENT}, [MOCK_TEST_PATH])
 
     assert result.success is False
     assert "Tests failed" in result.message  # Original failure reason
     # Check that the reset error was logged
-    assert (
-        f"Error rolling back changes to {MOCK_FILE_PATH}: Failed to reset file"
-        in caplog.text
-    )
+    assert f"Error rolling back changes to {MOCK_FILE_PATH}: Failed to reset file" in caplog.text
     # Even though reset failed, the file is listed as rolled back from applier's perspective
     assert len(result.rolled_back_files) == 1
     assert result.rolled_back_files[0] == MOCK_FILE_PATH
@@ -476,14 +450,10 @@ def test_validate_changes_success_verbose(mock_pytest_main, fix_applier):
     mock_pytest_main.return_value = 0  # pytest.ExitCode.OK
     # No need to set fix_applier.verbose_test_output, pass directly to method
 
-    result = fix_applier._validate_changes(
-        [MOCK_TEST_PATH], verbose=True
-    )  # Pass verbose=True
+    result = fix_applier._validate_changes([MOCK_TEST_PATH], verbose=True)  # Pass verbose=True
 
     assert result is True
-    mock_pytest_main.assert_called_once_with(
-        [MOCK_TEST_PATH]
-    )  # Expect call without "-q"
+    mock_pytest_main.assert_called_once_with([MOCK_TEST_PATH])  # Expect call without "-q"
 
 
 @patch("pytest.main")
@@ -513,9 +483,7 @@ def test_validate_changes_exception(mock_pytest_main, fix_applier, caplog):
 
 
 @patch("pytest.main", side_effect=ImportError("No module named pytest"))
-def test_validate_changes_import_error(
-    mock_pytest_main_import_error, fix_applier, caplog
-):
+def test_validate_changes_import_error(mock_pytest_main_import_error, fix_applier, caplog):
     """Test _validate_changes returns True and logs warning on pytest ImportError."""
     fix_applier.verbose_test_output = False  # Quiet mode
 

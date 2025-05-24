@@ -161,9 +161,7 @@ class BaseTransition(Generic[TContext, TEvent]):
             context: The state machine's context
             event: Optional event data
         """
-        logger.debug(
-            f"Executing transition from '{self.source_state}' to '{self.target_state}'"
-        )
+        logger.debug(f"Executing transition from '{self.source_state}' to '{self.target_state}'")
         if self._action:
             self._action(context, event)
 
@@ -276,9 +274,7 @@ class BaseStateMachine(Generic[TContext, TEvent]):
         # Add the transition
         self._transitions[transition.source_state][transition.trigger] = transition
 
-    def trigger(
-        self, trigger_name: str, event: Optional[TEvent] = None
-    ) -> TransitionResult:
+    def trigger(self, trigger_name: str, event: Optional[TEvent] = None) -> TransitionResult:
         """
         Trigger a transition by name.
 
@@ -417,9 +413,7 @@ class BaseStateMachine(Generic[TContext, TEvent]):
 
         self._fire_event("reset", self._initial_state)
 
-    def add_event_listener(
-        self, event_name: str, callback: Callable[..., None]
-    ) -> None:
+    def add_event_listener(self, event_name: str, callback: Callable[..., None]) -> None:
         """
         Add an event listener for state machine events.
 
@@ -432,9 +426,7 @@ class BaseStateMachine(Generic[TContext, TEvent]):
 
         self._listeners[event_name].append(callback)
 
-    def remove_event_listener(
-        self, event_name: str, callback: Callable[..., None]
-    ) -> None:
+    def remove_event_listener(self, event_name: str, callback: Callable[..., None]) -> None:
         """
         Remove an event listener.
 
@@ -444,9 +436,7 @@ class BaseStateMachine(Generic[TContext, TEvent]):
         """
         if event_name in self._listeners:
             self._listeners[event_name] = [
-                listener
-                for listener in self._listeners[event_name]
-                if listener != callback
+                listener for listener in self._listeners[event_name] if listener != callback
             ]
 
     def _fire_event(self, event_name: str, *args) -> None:

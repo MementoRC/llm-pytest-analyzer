@@ -78,13 +78,9 @@ def create_document_workflow() -> BaseStateMachine:
     def add_approval(ctx: Dict[str, Any], _: Optional[Any] = None) -> None:
         """Called when approving a document."""
         ctx["document"]["approvals"] += 1
-        print(
-            f"Added approval. Document now has {ctx['document']['approvals']} approvals."
-        )
+        print(f"Added approval. Document now has {ctx['document']['approvals']} approvals.")
 
-    def add_rejection_comment(
-        ctx: Dict[str, Any], event: Optional[Dict[str, Any]]
-    ) -> None:
+    def add_rejection_comment(ctx: Dict[str, Any], event: Optional[Dict[str, Any]]) -> None:
         """Called when rejecting a document."""
         if event and "comment" in event:
             ctx["document"]["review_comments"].append(event["comment"])
@@ -106,15 +102,11 @@ def create_document_workflow() -> BaseStateMachine:
     approve = create_transition(
         "review", "approved", "approve", guard=has_enough_approvals, action=add_approval
     )
-    reject = create_transition(
-        "review", "rejected", "reject", action=add_rejection_comment
-    )
+    reject = create_transition("review", "rejected", "reject", action=add_rejection_comment)
     add_approval_transition = create_transition(
         "review", "review", "add_approval", action=add_approval
     )
-    resubmit = create_transition(
-        "rejected", "review", "resubmit", action=clear_approvals
-    )
+    resubmit = create_transition("rejected", "review", "resubmit", action=clear_approvals)
     revise = create_transition("review", "draft", "revise")
 
     # Add transitions to the state machine

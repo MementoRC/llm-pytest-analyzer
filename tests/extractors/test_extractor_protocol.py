@@ -219,9 +219,7 @@ def test_pytest_output_extract_from_path(tmp_path, sample_pytest_output):
     # This is because PytestOutputExtractor finds FAILED/ERROR lines first
     assert len(result["failures"]) > 0
     # Find the failure with the right test name
-    failure = next(
-        (f for f in result["failures"] if "test_function" in f.test_name), None
-    )
+    failure = next((f for f in result["failures"] if "test_function" in f.test_name), None)
     assert failure is not None
     # The error type could be "Error" or "AssertionError" depending on extraction
     assert failure.error_type in ("Error", "AssertionError")
@@ -240,9 +238,7 @@ def test_pytest_output_extract_from_string(sample_pytest_output):
     # This is because PytestOutputExtractor finds FAILED/ERROR lines first
     assert len(result["failures"]) > 0
     # Find the failure with the right test name
-    failure = next(
-        (f for f in result["failures"] if "test_function" in f.test_name), None
-    )
+    failure = next((f for f in result["failures"] if "test_function" in f.test_name), None)
     assert failure is not None
     # The error type could be "Error" or "AssertionError" depending on extraction
     assert failure.error_type in ("Error", "AssertionError")

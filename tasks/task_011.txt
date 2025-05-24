@@ -1,101 +1,163 @@
 # Task ID: 11
-# Title: Implement Suggester Component
-# Status: done
-# Dependencies: 2, 3, 4, 5, 6
-# Priority: medium
-# Description: Create the Suggester component for suggesting fixes according to the Protocol interface.
+# Title: Implement Analyzer State Machine
+# Status: pending
+# Dependencies: 3, 4, 5, 6, 10
+# Priority: high
+# Description: Implement a state machine for the test analysis workflow
 # Details:
-Implement a concrete Suggester that suggests fixes for test failures using the LLM service:
+Implement a state machine for the test analysis workflow. Define states, transitions, and handlers for the complete process from extraction to applying fixes.
 
+Example implementation:
 ```python
-from typing import Dict, Any, List, Optional
+import logging
+from enum import Enum, auto
+from typing import Optional, List
+from .state_machine import StateMachine
+from .interfaces import Extractor, Analyzer, Suggester, Applier, TestFailure
 
-class FixSuggester:
-    def __init__(self, llm_service: LLMService, prompt_builder: PromptBuilder, response_parser: ResponseParser):
-        self.llm_service = llm_service
-        self.prompt_builder = prompt_builder
-        self.response_parser = response_parser
+class AnalysisState(Enum):
+    IDLE = auto()
+    EXTRACTING = auto()
+    ANALYZING = auto()
+    SUGGESTING = auto()
+    APPLYING = auto()
+    COMPLETED = auto()
+    ERROR = auto()
 
-    def suggest(self, analysis_results: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Suggest fixes for analyzed test failures."""
-        analyses = analysis_results.get('analyses', [])
-        if not analyses:
-            return []
+class AnalyzerStateMachine(StateMachine[AnalysisState]):
+    def __init__(self, extractor: Extractor, analyzer: Analyzer,
+                 suggester: Suggester, applier: Applier,
+                 logger: Optional[logging.Logger] = None):
+        super().__init__(AnalysisState.IDLE, logger)
 
+        self.extractor = extractor
+        self.analyzer = analyzer
+        self.suggester = suggester
+        self.applier = applier
+
+        # Define transitions
+        self.add_transition(AnalysisState.IDLE, AnalysisState.EXTRACTING)
+        self.add_transition(AnalysisState.EXTRACTING, AnalysisState.ANALYZING)
+        self.add_transition(AnalysisState.ANALYZING, AnalysisState.SUGGESTING)
+        self.add_transition(AnalysisState.SUGGESTING, AnalysisState.APPLYING)
+        self.add_transition(AnalysisState.APPLYING, AnalysisState.COMPLETED)
+
+        # Error transitions
+        self.add_transition(AnalysisState.EXTRACTING, AnalysisState.ERROR)
+        self.add_transition(AnalysisState.ANALYZING, AnalysisState.ERROR)
+        self.add_transition(AnalysisState.SUGGESTING, AnalysisState.ERROR)
+        self.add_transition(AnalysisState.APPLYING, AnalysisState.ERROR)
+
+        # Define handlers
+        self.add_handler(AnalysisState.IDLE, self._handle_idle)
+        self.add_handler(AnalysisState.EXTRACTING, self._handle_extracting)
+        self.add_handler(AnalysisState.ANALYZING, self._handle_analyzing)
+        self.add_handler(AnalysisState.SUGGESTING, self._handle_suggesting)
+        self.add_handler(AnalysisState.APPLYING, self._handle_applying)
+        self.add_handler(AnalysisState.COMPLETED, self._handle_completed)
+        self.add_handler(AnalysisState.ERROR, self._handle_error)
+
+        # Define error handlers
+        self.add_error_handler(AnalysisState.EXTRACTING, self._handle_extraction_error)
+        self.add_error_handler(AnalysisState.ANALYZING, self._handle_analysis_error)
+        self.add_error_handler(AnalysisState.SUGGESTING, self._handle_suggestion_error)
+        self.add_error_handler(AnalysisState.APPLYING, self._handle_application_error)
+
+    def start(self, test_output: str, file_path: str) -> None:
+        self.context["test_output"] = test_output
+        self.context["file_path"] = file_path
+        self.context["failures"] = []
+        self.context["analyses"] = []
+        self.context["suggestions"] = []
+        self.context["applied"] = []
+
+        self.transition_to(AnalysisState.EXTRACTING)
+        self.run()
+
+    def _handle_idle(self) -> None:
+        self.logger.info("State machine is idle")
+
+    def _handle_extracting(self) -> None:
+        self.logger.info("Extracting test failures")
+        test_output = self.context["test_output"]
+        failures = self.extractor.extract_failures(test_output)
+        self.context["failures"] = failures
+
+        if failures:
+            self.transition_to(AnalysisState.ANALYZING)
+        else:
+            self.logger.info("No failures found, skipping to completed")
+            self.transition_to(AnalysisState.COMPLETED)
+
+    def _handle_analyzing(self) -> None:
+        self.logger.info("Analyzing test failures")
+        failures: List[TestFailure] = self.context["failures"]
+        analyses = []
+
+        for failure in failures:
+            analysis = self.analyzer.analyze_failure(failure)
+            analyses.append(analysis)
+
+        self.context["analyses"] = analyses
+        self.transition_to(AnalysisState.SUGGESTING)
+
+    def _handle_suggesting(self) -> None:
+        self.logger.info("Suggesting fixes")
+        failures: List[TestFailure] = self.context["failures"]
+        analyses: List[str] = self.context["analyses"]
         suggestions = []
-        for analysis_item in analyses:
-            failure = analysis_item.get('failure', {})
-            analysis = analysis_item.get('analysis', {})
 
-            suggestion = self._generate_suggestion(failure, analysis)
+        for failure, analysis in zip(failures, analyses):
+            suggestion = self.suggester.suggest_fix(analysis, failure)
             suggestions.append(suggestion)
 
-        return suggestions
+        self.context["suggestions"] = suggestions
+        self.transition_to(AnalysisState.APPLYING)
 
-    def _generate_suggestion(self, failure: Dict[str, Any], analysis: Dict[str, Any]) -> Dict[str, Any]:
-        # Build prompt for the LLM
-        prompt = self.prompt_builder.build_prompt(
-            'suggest_fix',
-            file_path=failure.get('file_path', ''),
-            test_name=failure.get('test_name', ''),
-            error=failure.get('error', ''),
-            traceback=failure.get('traceback', ''),
-            code_context=failure.get('code_context', {}).get('source_code', ''),
-            root_cause=analysis.get('root_cause', ''),
-            explanation=analysis.get('explanation', '')
-        )
+    def _handle_applying(self) -> None:
+        self.logger.info("Applying fixes")
+        file_path = self.context["file_path"]
+        suggestions: List[str] = self.context["suggestions"]
+        applied = []
 
-        # Get suggestion from LLM
-        response = self.llm_service.generate(prompt)
+        for suggestion in suggestions:
+            success = self.applier.apply_fix(suggestion, file_path)
+            applied.append(success)
 
-        try:
-            # Parse the response
-            suggestion_model = self.response_parser.parse_json(response)
-            suggestion_dict = suggestion_model.dict()
+        self.context["applied"] = applied
+        self.transition_to(AnalysisState.COMPLETED)
 
-            # Add metadata
-            return {
-                **suggestion_dict,
-                'file_path': failure.get('file_path', ''),
-                'test_name': failure.get('test_name', ''),
-                'confidence': self._calculate_confidence(suggestion_dict)
-            }
-        except Exception as e:
-            # Fallback to raw response if parsing fails
-            return {
-                'file_path': failure.get('file_path', ''),
-                'test_name': failure.get('test_name', ''),
-                'fix_type': 'unknown',
-                'description': 'Failed to parse suggestion',
-                'code_changes': [],
-                'confidence': 0.0,
-                'error': str(e),
-                'raw_response': response
-            }
+    def _handle_completed(self) -> None:
+        self.logger.info("Analysis workflow completed")
+        failures = len(self.context.get("failures", []))
+        applied = sum(self.context.get("applied", []))
+        self.logger.info(f"Processed {failures} failures, successfully applied {applied} fixes")
 
-    def _calculate_confidence(self, suggestion: Dict[str, Any]) -> float:
-        # Simple confidence calculation based on suggestion properties
-        confidence = 0.5  # Base confidence
+    def _handle_error(self) -> None:
+        self.logger.error(f"Analysis workflow failed: {self.context.get('error', 'Unknown error')}")
 
-        # Adjust based on fix type
-        fix_type = suggestion.get('fix_type', '').lower()
-        if fix_type in ['simple', 'straightforward', 'obvious']:
-            confidence += 0.3
-        elif fix_type in ['complex', 'uncertain']:
-            confidence -= 0.2
+    def _handle_extraction_error(self, e: Exception) -> None:
+        self.logger.error(f"Extraction error: {str(e)}")
+        self.context["error"] = f"Extraction error: {str(e)}"
+        self.transition_to(AnalysisState.ERROR)
 
-        # Adjust based on code changes
-        code_changes = suggestion.get('code_changes', [])
-        if len(code_changes) == 0:
-            confidence -= 0.3
-        elif len(code_changes) > 5:
-            confidence -= 0.1  # More changes = more uncertainty
+    def _handle_analysis_error(self, e: Exception) -> None:
+        self.logger.error(f"Analysis error: {str(e)}")
+        self.context["error"] = f"Analysis error: {str(e)}"
+        self.transition_to(AnalysisState.ERROR)
 
-        # Ensure confidence is between 0 and 1
-        return max(0.0, min(1.0, confidence))
+    def _handle_suggestion_error(self, e: Exception) -> None:
+        self.logger.error(f"Suggestion error: {str(e)}")
+        self.context["error"] = f"Suggestion error: {str(e)}"
+        self.transition_to(AnalysisState.ERROR)
+
+    def _handle_application_error(self, e: Exception) -> None:
+        self.logger.error(f"Application error: {str(e)}")
+        self.context["error"] = f"Application error: {str(e)}"
+        self.transition_to(AnalysisState.ERROR)
 ```
 
-This implementation should handle generating fix suggestions for test failures by sending analysis results to the LLM service and parsing the responses.
+Ensure the implementation handles all states and transitions properly, with appropriate error handling.
 
 # Test Strategy:
-Create unit tests with mocked LLM service to verify suggestion generation for different types of test failures and analyses. Test both successful suggestions and error handling. Verify confidence calculation with different suggestion properties.
+Create unit tests to verify the state machine transitions through all states correctly. Mock the component dependencies to test each state handler in isolation. Test error handling by simulating failures in each state. Verify that the context is properly updated at each step.

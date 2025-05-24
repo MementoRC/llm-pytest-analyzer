@@ -53,11 +53,13 @@ jobs:
           pixi-version: latest
           manifest-path: pyproject.toml
 
-      - name: Install dependencies with Pixi
-        run: pixi install -e dev -v
+      - name: Install dependencies with Pixi (CI environment)
+        run: pixi install -e ci -v
 
       - name: Run tests with coverage
-        run: pixi run -e dev test
+        run: |
+          export QT_QPA_PLATFORM=offscreen
+          pixi run -e ci pytest --ignore=tests/gui -m "not gui"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3

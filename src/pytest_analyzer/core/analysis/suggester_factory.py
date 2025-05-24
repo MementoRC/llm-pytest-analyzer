@@ -41,12 +41,11 @@ def create_suggester(
 
     if suggester_type == "rule-based":
         return create_rule_based_suggester(config)
-    elif suggester_type == "llm-based":
+    if suggester_type == "llm-based":
         return create_llm_based_suggester(config, llm_service, prompt_builder)
-    elif suggester_type == "composite":
+    if suggester_type == "composite":
         return create_composite_suggester(config, llm_service, prompt_builder)
-    else:
-        raise ValueError(f"Invalid suggester type: {suggester_type}")
+    raise ValueError(f"Invalid suggester type: {suggester_type}")
 
 
 def create_rule_based_suggester(config: Dict[str, Any]) -> FixSuggester:

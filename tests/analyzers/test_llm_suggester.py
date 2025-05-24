@@ -138,9 +138,7 @@ class TestLLMSuggester:
         assert suggestions == []
 
     @patch.object(LLMSuggester, "_build_prompt")
-    def test_suggest_fixes_exception(
-        self, mock_build_prompt, llm_suggester, test_failure
-    ):
+    def test_suggest_fixes_exception(self, mock_build_prompt, llm_suggester, test_failure):
         """Test error handling during fix suggestion."""
         # Cause an exception in _build_prompt
         mock_build_prompt.side_effect = Exception("Test error")
@@ -233,7 +231,7 @@ class TestLLMSuggester:
     ):
         """Test extracting code context when there's an IO error."""
         # Simulate an IO error when opening the file
-        mock_open.side_effect = IOError("Test IO error")
+        mock_open.side_effect = OSError("Test IO error")
 
         # Remove relevant_code to force file reading attempt
         test_failure.relevant_code = None
@@ -338,9 +336,7 @@ class TestLLMSuggester:
         # Should fall back to text extraction
         suggestions = llm_suggester._parse_llm_response(invalid_json, test_failure)
 
-        assert (
-            len(suggestions) >= 0
-        )  # May extract suggestions from text or return empty list
+        assert len(suggestions) >= 0  # May extract suggestions from text or return empty list
 
     def test_parse_llm_response_text(self, llm_suggester, test_failure):
         """Test parsing a plain text response from the LLM."""
@@ -372,9 +368,7 @@ class TestLLMSuggester:
             "code_changes": {"fixed_code": "assert 1 == 1"},
         }
 
-        suggestion = llm_suggester._create_suggestion_from_json(
-            valid_data, test_failure
-        )
+        suggestion = llm_suggester._create_suggestion_from_json(valid_data, test_failure)
 
         assert suggestion is not None
         assert suggestion.suggestion == "Fix the assertion"
@@ -442,9 +436,7 @@ class TestLLMSuggester:
         with patch.object(llm_suggester.llm_client.__class__, "__module__", "openai"):
             response = llm_suggester._make_request_with_client("Test prompt")
 
-            mock_request_openai.assert_called_once_with(
-                "Test prompt", llm_suggester.llm_client
-            )
+            mock_request_openai.assert_called_once_with("Test prompt", llm_suggester.llm_client)
             assert response == "OpenAI response"
 
     @patch.object(LLMSuggester, "_request_with_anthropic")
@@ -462,9 +454,7 @@ class TestLLMSuggester:
         with patch.object(suggester.llm_client.__class__, "__module__", "anthropic"):
             response = suggester._make_request_with_client("Test prompt")
 
-            mock_request_anthropic.assert_called_once_with(
-                "Test prompt", suggester.llm_client
-            )
+            mock_request_anthropic.assert_called_once_with("Test prompt", suggester.llm_client)
             assert response == "Anthropic response"
 
     def test_request_with_openai(self, llm_suggester, mock_openai_client):
@@ -499,9 +489,7 @@ class TestLLMSuggester:
             content=[MagicMock(text="Anthropic API response")]
         )
 
-        response = suggester._request_with_anthropic(
-            "Test prompt", mock_anthropic_client
-        )
+        response = suggester._request_with_anthropic("Test prompt", mock_anthropic_client)
 
         mock_anthropic_client.messages.create.assert_called_once_with(
             model="claude-3-haiku-20240307",
@@ -510,9 +498,7 @@ class TestLLMSuggester:
         )
         assert response == "Anthropic API response"
 
-    def test_request_with_openai_exception_handling(
-        self, llm_suggester, mock_openai_client
-    ):
+    def test_request_with_openai_exception_handling(self, llm_suggester, mock_openai_client):
         """Test handling of API errors with OpenAI."""
         # Setup mock to raise an exception
         mock_openai_client.chat.completions.create.side_effect = Exception("API error")
@@ -532,9 +518,7 @@ class TestLLMSuggester:
         mock_anthropic_client.messages.create.side_effect = Exception("API error")
 
         # The method should catch the exception and return an empty string
-        response = suggester._request_with_anthropic(
-            "Test prompt", mock_anthropic_client
-        )
+        response = suggester._request_with_anthropic("Test prompt", mock_anthropic_client)
 
         assert response == ""  # Should return empty string on error
         mock_anthropic_client.messages.create.assert_called_once()

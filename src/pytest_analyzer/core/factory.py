@@ -39,9 +39,7 @@ def create_analyzer_service(
     # Create LLM service if needed
     llm_service = None
     if settings.use_llm:
-        llm_service = LLMService(
-            llm_client=llm_client, timeout_seconds=settings.llm_timeout
-        )
+        llm_service = LLMService(llm_client=llm_client, timeout_seconds=settings.llm_timeout)
 
     # Create analyzer context
     context = AnalyzerContext(

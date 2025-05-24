@@ -82,7 +82,7 @@ class Registration(Generic[T]):
             and implementation is not None
             and not isinstance(implementation, type)
         ):
-            self.instance = cast(T, implementation)
+            self.instance = cast("T", implementation)
 
 
 class Scope:
@@ -187,9 +187,7 @@ class Container:
             ConfigurationError: If registration conflicts with existing entries
         """
         if interface_type in self._registrations:
-            logger.warning(
-                f"Registration for {interface_type.__name__} is being overridden"
-            )
+            logger.warning(f"Registration for {interface_type.__name__} is being overridden")
 
         # Create and store the registration
         registration = Registration(implementation=implementation, mode=mode)
@@ -237,9 +235,7 @@ class Container:
         """
         self.register(interface_type, implementation, RegistrationMode.SCOPED)
 
-    def register_factory(
-        self, interface_type: Type[T], factory: Callable[[], T]
-    ) -> None:
+    def register_factory(self, interface_type: Type[T], factory: Callable[[], T]) -> None:
         """
         Register a factory function for creating instances.
 
@@ -251,9 +247,7 @@ class Container:
             ConfigurationError: If registration conflicts with existing entries
         """
         if interface_type in self._registrations:
-            logger.warning(
-                f"Registration for {interface_type.__name__} is being overridden"
-            )
+            logger.warning(f"Registration for {interface_type.__name__} is being overridden")
 
         # Create and store the registration
         registration = Registration(
@@ -347,13 +341,13 @@ class Container:
             if registration.mode == RegistrationMode.SINGLETON:
                 return self._resolve_singleton(interface_type, registration)
 
-            elif registration.mode == RegistrationMode.TRANSIENT:
+            if registration.mode == RegistrationMode.TRANSIENT:
                 return self._resolve_transient(interface_type, registration)
 
-            elif registration.mode == RegistrationMode.FACTORY:
+            if registration.mode == RegistrationMode.FACTORY:
                 return self._resolve_factory(interface_type, registration)
 
-            elif registration.mode == RegistrationMode.SCOPED:
+            if registration.mode == RegistrationMode.SCOPED:
                 return self._resolve_scoped(interface_type, registration)
 
             # Should never reach here, but added for completeness
@@ -371,13 +365,9 @@ class Container:
                 pass
 
         # No registration found in this container or parents
-        raise DependencyResolutionError(
-            f"No registration found for {interface_type.__name__}"
-        )
+        raise DependencyResolutionError(f"No registration found for {interface_type.__name__}")
 
-    def _resolve_singleton(
-        self, interface_type: Type[T], registration: Registration[T]
-    ) -> T:
+    def _resolve_singleton(self, interface_type: Type[T], registration: Registration[T]) -> T:
         """
         Resolve a singleton dependency.
 
@@ -390,15 +380,13 @@ class Container:
         """
         # Return existing instance if available
         if registration.instance is not None:
-            return cast(T, registration.instance)
+            return cast("T", registration.instance)
 
         # Create singleton instance if not already created
         if isinstance(registration.implementation, type):
             try:
                 # Create instance using constructor injection
-                instance = self._create_instance(
-                    cast(Type[T], registration.implementation)
-                )
+                instance = self._create_instance(cast("Type[T]", registration.implementation))
             except Exception as e:
                 raise DependencyResolutionError(
                     f"Failed to create instance of {interface_type.__name__}: {str(e)}"
@@ -407,15 +395,12 @@ class Container:
             # Store for future resolutions
             registration.instance = instance
             return instance
-        else:
-            # If implementation is already an instance, store and return it
-            instance = cast(T, registration.implementation)
-            registration.instance = instance
-            return instance
+        # If implementation is already an instance, store and return it
+        instance = cast("T", registration.implementation)
+        registration.instance = instance
+        return instance
 
-    def _resolve_transient(
-        self, interface_type: Type[T], registration: Registration[T]
-    ) -> T:
+    def _resolve_transient(self, interface_type: Type[T], registration: Registration[T]) -> T:
         """
         Resolve a transient dependency.
 
@@ -430,18 +415,16 @@ class Container:
         if isinstance(registration.implementation, type):
             try:
                 # Create instance using constructor injection
-                return self._create_instance(cast(Type[T], registration.implementation))
+                return self._create_instance(cast("Type[T]", registration.implementation))
             except Exception as e:
                 raise DependencyResolutionError(
                     f"Failed to create instance of {interface_type.__name__}: {str(e)}"
                 ) from e
         else:
             # Return the instance directly (not typical for transient)
-            return cast(T, registration.implementation)
+            return cast("T", registration.implementation)
 
-    def _resolve_factory(
-        self, interface_type: Type[T], registration: Registration[T]
-    ) -> T:
+    def _resolve_factory(self, interface_type: Type[T], registration: Registration[T]) -> T:
         """
         Resolve a dependency using its factory function.
 
@@ -454,9 +437,7 @@ class Container:
         """
         # Use factory to create instance
         if registration.factory is None:
-            raise DependencyResolutionError(
-                f"Factory is not defined for {interface_type.__name__}"
-            )
+            raise DependencyResolutionError(f"Factory is not defined for {interface_type.__name__}")
 
         try:
             return registration.factory()
@@ -465,9 +446,7 @@ class Container:
                 f"Factory failed to create instance of {interface_type.__name__}: {str(e)}"
             ) from e
 
-    def _resolve_scoped(
-        self, interface_type: Type[T], registration: Registration[T]
-    ) -> T:
+    def _resolve_scoped(self, interface_type: Type[T], registration: Registration[T]) -> T:
         """
         Resolve a scoped dependency.
 
@@ -514,9 +493,7 @@ class Container:
 
         # Verify it's a scoped registration
         if registration.mode != RegistrationMode.SCOPED:
-            raise DependencyResolutionError(
-                f"Type {type_.__name__} is not registered as scoped"
-            )
+            raise DependencyResolutionError(f"Type {type_.__name__} is not registered as scoped")
 
         # Create the instance
         if isinstance(registration.implementation, type):
@@ -526,9 +503,7 @@ class Container:
                 old_scope = self._current_scope
                 self._current_scope = scope
                 try:
-                    return self._create_instance(
-                        cast(Type[T], registration.implementation)
-                    )
+                    return self._create_instance(cast("Type[T]", registration.implementation))
                 finally:
                     # Restore the original scope
                     self._current_scope = old_scope
@@ -538,7 +513,7 @@ class Container:
                 ) from e
         else:
             # Return the instance directly (not typical for scoped)
-            return cast(T, registration.implementation)
+            return cast("T", registration.implementation)
 
     def _create_instance(self, implementation_type: Type[T]) -> T:
         """

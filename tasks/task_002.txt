@@ -1,33 +1,48 @@
 # Task ID: 2
-# Title: Implement Core Protocol Interfaces
-# Status: done
+# Title: Define Protocol Interfaces
+# Status: pending
 # Dependencies: 1
 # Priority: high
-# Description: Define Protocol interfaces for all major components to establish clear contracts between system parts.
+# Description: Create clear interfaces using Python's Protocol type for all major components
 # Details:
-Create Protocol classes for each major component type:
+Define Protocol classes for all major components in the system: Extractor, Analyzer, Suggester, Applier, and LLM Service. Use Python's typing.Protocol to define these interfaces.
 
+Example implementation:
 ```python
-from typing import Protocol, List, Dict, Any, Optional
+from typing import Protocol, List, Optional
+from dataclasses import dataclass
+
+@dataclass
+class TestFailure:
+    test_name: str
+    error_message: str
+    traceback: str
 
 class Extractor(Protocol):
-    def extract(self, test_results: Any) -> Dict[str, Any]: ...
+    def extract_failures(self, test_output: str) -> List[TestFailure]:
+        ...
 
 class Analyzer(Protocol):
-    def analyze(self, extraction_results: Dict[str, Any]) -> Dict[str, Any]: ...
+    def analyze_failure(self, failure: TestFailure) -> str:
+        ...
 
 class Suggester(Protocol):
-    def suggest(self, analysis_results: Dict[str, Any]) -> List[Dict[str, Any]]: ...
+    def suggest_fix(self, analysis: str, failure: TestFailure) -> str:
+        ...
 
 class Applier(Protocol):
-    def apply(self, suggestions: List[Dict[str, Any]], target_files: List[str]) -> bool: ...
+    def apply_fix(self, suggestion: str, file_path: str) -> bool:
+        ...
 
 class LLMService(Protocol):
-    def generate(self, prompt: str, **kwargs) -> str: ...
-    async def generate_async(self, prompt: str, **kwargs) -> str: ...
+    def generate_completion(self, prompt: str) -> str:
+        ...
+
+    async def generate_completion_async(self, prompt: str) -> str:
+        ...
 ```
 
-Ensure each Protocol has proper type hints and docstrings explaining the expected behavior and contract.
+Ensure all interfaces have proper docstrings explaining their purpose and contract.
 
 # Test Strategy:
-Create test cases that verify implementations conform to the Protocol interfaces. Use mypy or similar static type checking to validate interface compliance.
+Create test cases that verify implementations conform to the protocols. Use mypy or similar static type checkers to verify protocol conformance. Write documentation tests that demonstrate proper usage of each interface.

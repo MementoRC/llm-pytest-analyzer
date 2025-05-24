@@ -46,9 +46,7 @@ class ExtractorFactory:
             ".xml": XmlResultExtractor,
         }
 
-    def get_extractor(
-        self, input_path: Path
-    ) -> Union[JsonResultExtractor, XmlResultExtractor]:
+    def get_extractor(self, input_path: Path) -> Union[JsonResultExtractor, XmlResultExtractor]:
         """
         Get the appropriate extractor for the input path.
 
@@ -89,9 +87,7 @@ class ExtractorFactory:
             )
 
         # Default to JSON extractor with a warning
-        logger.warning(
-            f"Unsupported file type: {file_ext}, defaulting to JSON extractor"
-        )
+        logger.warning(f"Unsupported file type: {file_ext}, defaulting to JSON extractor")
         return JsonResultExtractor(
             path_resolver=self.path_resolver, timeout=self.settings.parser_timeout
         )
@@ -110,9 +106,7 @@ class ExtractorFactory:
             with file_path.open("r") as f:
                 # Read the first 1000 characters to check for JSON content
                 content = f.read(1000)
-                return content.strip().startswith("{") or content.strip().startswith(
-                    "["
-                )
+                return content.strip().startswith("{") or content.strip().startswith("[")
         except Exception:
             return False
 
