@@ -2,13 +2,16 @@ import ast
 import asyncio
 import logging
 import os
+import resource
 import subprocess
 import tempfile
+import time
 from abc import ABC, abstractmethod
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, TypeVar, Union, cast
 
+import psutil
 from rich.progress import Progress, TaskID
 
 from ..utils.path_resolver import PathResolver
@@ -30,6 +33,64 @@ from .extraction.pytest_plugin import collect_failures_with_plugin
 from .models.pytest_failure import FixSuggestion, PytestFailure
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def temporarily_remove_memory_limits():
+    """Context manager to temporarily remove memory limits for subprocess execution.
+
+    This fixes the issue where RLIMIT_AS prevents pytest subprocesses from
+    allocating memory for Qt GUI components, causing SIGABRT crashes.
+
+    If we can't modify limits due to permissions, we'll try alternative approaches.
+    """
+    original_limits = None
+    memory_limit_removed = False
+
+    try:
+        # Save current memory limits
+        original_limits = resource.getrlimit(resource.RLIMIT_AS)
+        logger.debug(f"DEBUG: Original memory limits: {original_limits}")
+
+        # Try to remove memory limits for subprocess execution
+        # Use the current hard limit as the new soft limit if we can't use INFINITY
+        soft_limit, hard_limit = original_limits
+
+        if hard_limit == resource.RLIM_INFINITY:
+            # Can use unlimited
+            new_limit = resource.RLIM_INFINITY
+        else:
+            # Use the hard limit as the new soft limit (maximum possible)
+            new_limit = hard_limit
+
+        resource.setrlimit(resource.RLIMIT_AS, (new_limit, hard_limit))
+        memory_limit_removed = True
+        logger.debug(
+            f"DEBUG: Memory limits temporarily increased for subprocess: ({new_limit}, {hard_limit})"
+        )
+
+        yield
+
+    except (OSError, ValueError) as e:
+        logger.warning(f"DEBUG: Could not modify memory limits: {e}")
+        # If we can't modify limits, still proceed with subprocess but warn user
+        logger.warning(
+            "DEBUG: Running subprocess with original memory limits - may cause Qt allocation failures"
+        )
+        yield
+
+    except Exception as e:
+        logger.error(f"DEBUG: Unexpected error with memory limits: {e}")
+        yield
+
+    finally:
+        if memory_limit_removed and original_limits is not None:
+            try:
+                # Restore original memory limits
+                resource.setrlimit(resource.RLIMIT_AS, original_limits)
+                logger.debug(f"DEBUG: Memory limits restored to: {original_limits}")
+            except Exception as e:
+                logger.warning(f"DEBUG: Could not restore memory limits: {e}")
 
 
 # --- State Machine Implementation ---
@@ -995,70 +1056,184 @@ class PytestAnalyzerService:
             # Important: we need to extend args after defining base command to allow
             # custom args to override the defaults if needed
             cmd.extend(args)
-            logger.debug(f"Executing pytest for JSON report with command: {' '.join(cmd)}")
+            logger.info(f"Executing command for JSON report: {' '.join(cmd)}")
+            logger.info(f"Working directory for JSON report: {self.settings.project_root}")
+
+            # DEBUG: Add comprehensive debugging for GUI pytest execution
+            logger.debug(f"DEBUG: Full command: {cmd}")
+            logger.debug(f"DEBUG: Working directory: {self.settings.project_root}")
+            logger.debug(f"DEBUG: Temp JSON report path: {json_report_path}")
+
+            # Log environment variables that might affect pytest
+            env_vars_to_log = ["PATH", "PYTHONPATH", "QT_QPA_PLATFORM", "DISPLAY", "HOME", "USER"]
+            for var in env_vars_to_log:
+                value = os.environ.get(var, "NOT_SET")
+                logger.debug(f"DEBUG: ENV {var}={value}")
+
+            # Log memory usage before subprocess
+            try:
+                process = psutil.Process()
+                memory_before = process.memory_info().rss / 1024 / 1024  # MB
+                logger.debug(f"DEBUG: Memory usage before subprocess: {memory_before:.1f} MB")
+            except Exception as e:
+                logger.debug(f"DEBUG: Could not get memory info: {e}")
+
+            # Log directory permissions and existence
+            try:
+                logger.debug(
+                    f"DEBUG: Working dir exists: {os.path.exists(self.settings.project_root)}"
+                )
+                logger.debug(
+                    f"DEBUG: Working dir is writable: {os.access(self.settings.project_root, os.W_OK)}"
+                )
+                logger.debug(
+                    f"DEBUG: Temp file dir exists: {os.path.exists(os.path.dirname(json_report_path))}"
+                )
+                logger.debug(
+                    f"DEBUG: Temp file dir is writable: {os.access(os.path.dirname(json_report_path), os.W_OK)}"
+                )
+            except Exception as e:
+                logger.debug(f"DEBUG: Could not check permissions: {e}")
 
             # Determine if we're in quiet mode
             quiet_mode = "-q" in args or "-qq" in args or "--quiet" in args
-            # Determine if we want to show progress (requires -s to avoid pytest capturing output)
-            progress_mode = not quiet_mode and ("-s" in args or "--capture=no" in args)
+            logger.debug(f"DEBUG: Quiet mode: {quiet_mode}")
 
-            if quiet_mode:
-                # When in quiet mode, redirect output to devnull
-                with open(os.devnull, "w") as devnull:
-                    # Run pytest with a timeout, redirecting output to devnull
+            # ALWAYS capture subprocess output for debugging - don't redirect to devnull
+            start_time = time.time()
+            logger.debug(f"DEBUG: Starting subprocess at {start_time}")
+
+            try:
+                # Prepare environment for subprocess to prevent memory allocation failures
+                subprocess_env = os.environ.copy()
+                subprocess_env["QT_QPA_PLATFORM"] = (
+                    "offscreen"  # Use offscreen rendering to reduce memory usage
+                )
+                subprocess_env["MALLOC_ARENA_MAX"] = "1"  # Reduce memory fragmentation
+                logger.debug("DEBUG: Using offscreen Qt platform for subprocess")
+
+                # Try to temporarily remove memory limits to prevent subprocess crashes
+                with temporarily_remove_memory_limits():
+                    # Run pytest with captured output for better debugging
                     result = subprocess.run(
                         cmd,
                         timeout=self.settings.pytest_timeout,
                         check=False,
-                        stdout=devnull,
-                        stderr=devnull,
-                        env=os.environ,
+                        capture_output=True,  # Capture both stdout and stderr
+                        text=True,
+                        env=subprocess_env,  # Use modified environment
                         cwd=self.settings.project_root,
                     )
-            elif progress_mode:
-                # With progress mode enabled, make sure the output isn't being captured
-                from rich.console import Console
 
-                console = Console()
-                console.print("[cyan]Running pytest with JSON report...[/cyan]")
+                end_time = time.time()
+                duration = end_time - start_time
+                logger.debug(f"DEBUG: Subprocess completed in {duration:.2f} seconds")
 
-                # Run pytest with normal output, needed for rich progress display
-                result = subprocess.run(
-                    cmd,
-                    timeout=self.settings.pytest_timeout,
-                    check=False,
-                    env=os.environ,
-                    cwd=self.settings.project_root,
+                # Log subprocess output for debugging
+                logger.debug(f"DEBUG: Subprocess return code: {result.returncode}")
+                if result.stdout:
+                    logger.debug(
+                        f"DEBUG: Subprocess STDOUT: {result.stdout[:1000]}{'...' if len(result.stdout) > 1000 else ''}"
+                    )
+                if result.stderr:
+                    logger.debug(
+                        f"DEBUG: Subprocess STDERR: {result.stderr[:1000]}{'...' if len(result.stderr) > 1000 else ''}"
+                    )
+                    # Also log stderr as warning if there are errors
+                    if result.stderr.strip():
+                        logger.warning(
+                            f"Pytest subprocess stderr: {result.stderr[:500]}{'...' if len(result.stderr) > 500 else ''}"
+                        )
+
+            except subprocess.TimeoutExpired as e:
+                logger.error(
+                    f"DEBUG: Subprocess timed out after {self.settings.pytest_timeout} seconds"
                 )
-            else:
-                # Run pytest with a timeout, normal output but no special progress display
-                result = subprocess.run(
-                    cmd,
-                    timeout=self.settings.pytest_timeout,
-                    check=False,
-                    env=os.environ,
-                    cwd=self.settings.project_root,
+                logger.debug(f"DEBUG: Timeout stdout: {e.stdout if e.stdout else 'None'}")
+                logger.debug(f"DEBUG: Timeout stderr: {e.stderr if e.stderr else 'None'}")
+                raise
+
+            # Log memory usage after subprocess
+            try:
+                memory_after = process.memory_info().rss / 1024 / 1024  # MB
+                memory_delta = memory_after - memory_before
+                logger.debug(
+                    f"DEBUG: Memory usage after subprocess: {memory_after:.1f} MB (delta: {memory_delta:+.1f} MB)"
                 )
+            except Exception as e:
+                logger.debug(f"DEBUG: Could not get post-subprocess memory info: {e}")
 
             logger.debug(f"Pytest process for JSON report exited with code {result.returncode}")
-            report_file_size = (
-                os.path.getsize(json_report_path) if os.path.exists(json_report_path) else -1
-            )
-            logger.debug(
-                f"Generated JSON report file: {json_report_path}, Size: {report_file_size} bytes"
-            )
+
+            # Enhanced file analysis and debugging
+            report_file_exists = os.path.exists(json_report_path)
+            report_file_size = os.path.getsize(json_report_path) if report_file_exists else -1
+
+            logger.debug(f"DEBUG: JSON report file exists: {report_file_exists}")
+            logger.debug(f"DEBUG: JSON report file size: {report_file_size} bytes")
+            logger.debug(f"DEBUG: JSON report file path: {json_report_path}")
+
+            if report_file_exists:
+                try:
+                    # Check file permissions
+                    logger.debug(
+                        f"DEBUG: JSON file readable: {os.access(json_report_path, os.R_OK)}"
+                    )
+
+                    # If file is small, log its contents for debugging
+                    if 0 < report_file_size < 1000:
+                        with open(json_report_path) as f:
+                            content = f.read()
+                            logger.debug(f"DEBUG: Small JSON file contents: {repr(content)}")
+                    elif report_file_size == 0:
+                        logger.warning("DEBUG: JSON report file is empty despite pytest execution")
+                        logger.warning(
+                            "DEBUG: This suggests pytest failed to write output or crashed"
+                        )
+                except Exception as e:
+                    logger.debug(f"DEBUG: Error reading JSON report file: {e}")
+            else:
+                logger.warning(f"DEBUG: JSON report file was not created at {json_report_path}")
+                logger.warning("DEBUG: This suggests pytest never started or crashed immediately")
+
+            # Log the working directory contents for debugging
+            try:
+                files_in_cwd = os.listdir(self.settings.project_root)
+                logger.debug(f"DEBUG: Files in working directory: {len(files_in_cwd)} files")
+                # Log pytest-related files
+                pytest_files = [
+                    f for f in files_in_cwd if "pytest" in f.lower() or ".xml" in f or ".json" in f
+                ]
+                if pytest_files:
+                    logger.debug(f"DEBUG: Pytest-related files in cwd: {pytest_files}")
+            except Exception as e:
+                logger.debug(f"DEBUG: Could not list working directory: {e}")
+
             if report_file_size == 0:
                 logger.warning(f"Generated JSON report file is empty: {json_report_path}")
 
             # Extract failures from JSON output
             if report_file_size > 0:  # Only attempt to parse if file has content
                 extractor = get_extractor(Path(json_report_path), self.settings, self.path_resolver)
-                return extractor.extract_failures(Path(json_report_path))
+                extracted_failures = extractor.extract_failures(Path(json_report_path))
+                logger.info(
+                    f"JSON extractor returned {len(extracted_failures)} failures from {json_report_path}."
+                )
+                logger.debug(f"Failures from JSON extractor: {extracted_failures}")
+                return extracted_failures
+            logger.info(
+                f"JSON report file {json_report_path} is empty or non-existent, returning 0 failures."
+            )
             return []  # Return empty list if report file is empty or non-existent
 
         except subprocess.TimeoutExpired:
             logger.error(
                 f"Pytest execution for JSON report timed out after {self.settings.pytest_timeout} seconds"
+            )
+            return []
+        except Exception as e:
+            logger.error(
+                f"Exception during JSON report generation or extraction: {e}", exc_info=True
             )
             return []
         finally:
@@ -1100,76 +1275,161 @@ class PytestAnalyzerService:
             # Important: we need to extend args after defining base command to allow
             # custom args to override the defaults if needed
             cmd.extend(args)
-            logger.debug(f"Executing pytest for XML report with command: {' '.join(cmd)}")
+            logger.info(f"Executing command for XML report: {' '.join(cmd)}")
+            logger.info(f"Working directory for XML report: {self.settings.project_root}")
+
+            # DEBUG: Add comprehensive debugging for GUI pytest XML execution
+            logger.debug(f"DEBUG XML: Full command: {cmd}")
+            logger.debug(f"DEBUG XML: Working directory: {self.settings.project_root}")
+            logger.debug(f"DEBUG XML: Temp XML report path: {xml_report_path}")
+
+            # Log environment variables that might affect pytest
+            env_vars_to_log = ["PATH", "PYTHONPATH", "QT_QPA_PLATFORM", "DISPLAY", "HOME", "USER"]
+            for var in env_vars_to_log:
+                value = os.environ.get(var, "NOT_SET")
+                logger.debug(f"DEBUG XML: ENV {var}={value}")
+
+            # Log memory usage before subprocess
+            try:
+                process = psutil.Process()
+                memory_before = process.memory_info().rss / 1024 / 1024  # MB
+                logger.debug(f"DEBUG XML: Memory usage before subprocess: {memory_before:.1f} MB")
+            except Exception as e:
+                logger.debug(f"DEBUG XML: Could not get memory info: {e}")
 
             # Determine if we're in quiet mode
             quiet_mode = "-q" in args or "-qq" in args or "--quiet" in args
-            # Determine if we want to show progress (requires -s to avoid pytest capturing output)
-            progress_mode = not quiet_mode and ("-s" in args or "--capture=no" in args)
+            logger.debug(f"DEBUG XML: Quiet mode: {quiet_mode}")
 
-            if quiet_mode:
-                # When in quiet mode, redirect output to devnull
-                with open(os.devnull, "w") as devnull:
-                    # Run pytest with a timeout, redirecting output to devnull
+            # ALWAYS capture subprocess output for debugging - don't redirect to devnull
+            start_time = time.time()
+            logger.debug(f"DEBUG XML: Starting subprocess at {start_time}")
+
+            try:
+                # Prepare environment for subprocess to prevent memory allocation failures
+                subprocess_env = os.environ.copy()
+                subprocess_env["QT_QPA_PLATFORM"] = (
+                    "offscreen"  # Use offscreen rendering to reduce memory usage
+                )
+                subprocess_env["MALLOC_ARENA_MAX"] = "1"  # Reduce memory fragmentation
+                logger.debug("DEBUG XML: Using offscreen Qt platform for subprocess")
+
+                # Try to temporarily remove memory limits to prevent subprocess crashes
+                with temporarily_remove_memory_limits():
+                    # Run pytest with captured output for better debugging
                     result = subprocess.run(
                         cmd,
                         timeout=self.settings.pytest_timeout,
                         check=False,
-                        stdout=devnull,
-                        stderr=devnull,
-                        env=os.environ,
+                        capture_output=True,  # Capture both stdout and stderr
+                        text=True,
+                        env=subprocess_env,  # Use modified environment
                         cwd=self.settings.project_root,
                     )
-            elif progress_mode:
-                # With progress mode enabled, make sure the output isn't being captured
-                from rich.console import Console
 
-                console = Console()
-                console.print("[cyan]Running pytest with XML report...[/cyan]")
+                end_time = time.time()
+                duration = end_time - start_time
+                logger.debug(f"DEBUG XML: Subprocess completed in {duration:.2f} seconds")
 
-                # Run pytest with normal output, needed for rich progress display
-                result = subprocess.run(
-                    cmd,
-                    timeout=self.settings.pytest_timeout,
-                    check=False,
-                    env=os.environ,
-                    cwd=self.settings.project_root,
+                # Log subprocess output for debugging
+                logger.debug(f"DEBUG XML: Subprocess return code: {result.returncode}")
+                if result.stdout:
+                    logger.debug(
+                        f"DEBUG XML: Subprocess STDOUT: {result.stdout[:1000]}{'...' if len(result.stdout) > 1000 else ''}"
+                    )
+                if result.stderr:
+                    logger.debug(
+                        f"DEBUG XML: Subprocess STDERR: {result.stderr[:1000]}{'...' if len(result.stderr) > 1000 else ''}"
+                    )
+                    # Also log stderr as warning if there are errors
+                    if result.stderr.strip():
+                        logger.warning(
+                            f"Pytest XML subprocess stderr: {result.stderr[:500]}{'...' if len(result.stderr) > 500 else ''}"
+                        )
+
+            except subprocess.TimeoutExpired as e:
+                logger.error(
+                    f"DEBUG XML: Subprocess timed out after {self.settings.pytest_timeout} seconds"
                 )
-            else:
-                # Run pytest with a timeout, normal output but no special progress display
-                result = subprocess.run(
-                    cmd,
-                    timeout=self.settings.pytest_timeout,
-                    check=False,
-                    env=os.environ,
-                    cwd=self.settings.project_root,
+                logger.debug(f"DEBUG XML: Timeout stdout: {e.stdout if e.stdout else 'None'}")
+                logger.debug(f"DEBUG XML: Timeout stderr: {e.stderr if e.stderr else 'None'}")
+                raise
+
+            # Log memory usage after subprocess
+            try:
+                memory_after = process.memory_info().rss / 1024 / 1024  # MB
+                memory_delta = memory_after - memory_before
+                logger.debug(
+                    f"DEBUG XML: Memory usage after subprocess: {memory_after:.1f} MB (delta: {memory_delta:+.1f} MB)"
                 )
+            except Exception as e:
+                logger.debug(f"DEBUG XML: Could not get post-subprocess memory info: {e}")
 
             logger.debug(f"Pytest process for XML report exited with code {result.returncode}")
             # Small delay that was present, kept as per instructions not to change unrelated code unless necessary.
             # However, modern systems should handle file flushing properly.
-            import time
-
             time.sleep(0.1)
 
-            report_file_size = (
-                os.path.getsize(xml_report_path) if os.path.exists(xml_report_path) else -1
-            )
-            logger.debug(
-                f"Generated XML report file: {xml_report_path}, Size: {report_file_size} bytes"
-            )
+            # Enhanced file analysis and debugging for XML
+            report_file_exists = os.path.exists(xml_report_path)
+            report_file_size = os.path.getsize(xml_report_path) if report_file_exists else -1
+
+            logger.debug(f"DEBUG XML: XML report file exists: {report_file_exists}")
+            logger.debug(f"DEBUG XML: XML report file size: {report_file_size} bytes")
+            logger.debug(f"DEBUG XML: XML report file path: {xml_report_path}")
+
+            if report_file_exists:
+                try:
+                    # Check file permissions
+                    logger.debug(
+                        f"DEBUG XML: XML file readable: {os.access(xml_report_path, os.R_OK)}"
+                    )
+
+                    # If file is small, log its contents for debugging
+                    if 0 < report_file_size < 1000:
+                        with open(xml_report_path) as f:
+                            content = f.read()
+                            logger.debug(f"DEBUG XML: Small XML file contents: {repr(content)}")
+                    elif report_file_size == 0:
+                        logger.warning(
+                            "DEBUG XML: XML report file is empty despite pytest execution"
+                        )
+                        logger.warning(
+                            "DEBUG XML: This suggests pytest failed to write output or crashed"
+                        )
+                except Exception as e:
+                    logger.debug(f"DEBUG XML: Error reading XML report file: {e}")
+            else:
+                logger.warning(f"DEBUG XML: XML report file was not created at {xml_report_path}")
+                logger.warning(
+                    "DEBUG XML: This suggests pytest never started or crashed immediately"
+                )
+
             if report_file_size == 0:
                 logger.warning(f"Generated XML report file is empty: {xml_report_path}")
 
             # Extract failures from XML output
             if report_file_size > 0:  # Only attempt to parse if file has content
                 extractor = get_extractor(Path(xml_report_path), self.settings, self.path_resolver)
-                return extractor.extract_failures(Path(xml_report_path))
+                extracted_failures = extractor.extract_failures(Path(xml_report_path))
+                logger.info(
+                    f"XML extractor returned {len(extracted_failures)} failures from {xml_report_path}."
+                )
+                logger.debug(f"Failures from XML extractor: {extracted_failures}")
+                return extracted_failures
+            logger.info(
+                f"XML report file {xml_report_path} is empty or non-existent, returning 0 failures."
+            )
             return []  # Return empty list if report file is empty or non-existent
 
         except subprocess.TimeoutExpired:
             logger.error(
                 f"Pytest execution for XML report timed out after {self.settings.pytest_timeout} seconds"
+            )
+            return []
+        except Exception as e:
+            logger.error(
+                f"Exception during XML report generation or extraction: {e}", exc_info=True
             )
             return []
         finally:

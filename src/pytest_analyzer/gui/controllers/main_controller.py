@@ -205,6 +205,8 @@ class MainController(BaseController):
         test_discovery_view.discover_tests_requested.connect(
             self.test_discovery_controller.request_discover_tests
         )
+        test_discovery_view.test_file_selected.connect(self._on_test_file_selected_for_editor)
+        test_discovery_view.selection_changed.connect(self._on_test_selection_for_run_changed)
 
         # --- Controller Signals to Model/View Updates (and Workflow Coordinator) ---
         self.logger.debug("MainController: Connecting Controller signals to Model/View updates...")
@@ -378,6 +380,93 @@ class MainController(BaseController):
             )
         self.logger.debug("MainController: _on_python_file_opened_for_editor finished.")
 
+    @pyqtSlot(str)
+    def _on_test_file_selected_for_editor(self, file_path_str: str) -> None:
+        """Handles a test file selection from TestDiscoveryView for loading into the editor."""
+        self.logger.debug(
+            f"MainController: _on_test_file_selected_for_editor called with path: {file_path_str}"
+        )
+        file_path = Path(file_path_str)
+        self.logger.info(f"Loading Python file into code editor from test discovery: {file_path}")
+        code_editor_view = self.main_window.code_editor_view  # type: ignore
+        if code_editor_view:
+            success = code_editor_view.load_file(file_path)
+            if success:
+                if (
+                    hasattr(self.main_window, "analysis_tabs")
+                    and self.main_window.analysis_tabs is not None
+                ):
+                    try:
+                        # Assuming Code Editor is the 3rd tab (index 2)
+                        # TODO: Make tab indexing more robust if possible (e.g., find by name or store reference)
+                        self.main_window.analysis_tabs.setCurrentIndex(2)
+                        self.logger.info(
+                            f"File {file_path.name} loaded in code editor and tab switched."
+                        )
+                    except Exception as e_tab_switch:
+                        self.logger.error(
+                            f"Error switching to Code Editor tab: {e_tab_switch}", exc_info=True
+                        )
+                else:
+                    self.logger.warning(
+                        "analysis_tabs not available on main_window, cannot switch to Code Editor tab."
+                    )
+
+                # Update TestResultsModel as this file is now the active context
+                self.test_results_model.clear()  # type: ignore
+                self.logger.debug(
+                    "MainController: Cleared TestResultsModel for new file selection from discovery."
+                )
+                self.test_results_model.source_file = file_path  # type: ignore
+                self.test_results_model.source_type = "py"  # type: ignore
+                self.logger.info(
+                    f"MainController: TestResultsModel updated - source_file: {file_path}, source_type: 'py'"
+                )
+                # Optionally, trigger workflow update if needed, though selecting a file for editor
+                # might not directly change workflow state until an action like "Run Tests" is taken.
+                # For now, updating the model is the primary goal.
+                # self.workflow_coordinator.on_file_selected(file_path, "py") # If direct workflow transition is desired
+
+            else:
+                self.logger.error(
+                    f"MainController: Failed to load file {file_path.name} in code editor from test discovery."
+                )
+                QMessageBox.warning(
+                    self.main_window,  # type: ignore
+                    "Load Error",
+                    f"Could not load the selected file: {file_path.name}",
+                )
+        else:
+            self.logger.critical(
+                "MainController: CodeEditorView component is not available. Cannot load Python file from test discovery."
+            )
+            QMessageBox.critical(
+                self.main_window,  # type: ignore
+                "Code Editor Error",
+                "The code editor component could not be loaded. Python files cannot be opened for editing.",
+            )
+        self.logger.debug("MainController: _on_test_file_selected_for_editor finished.")
+
+    @pyqtSlot()
+    def _on_test_selection_for_run_changed(self) -> None:
+        """Handles changes in test selection from TestDiscoveryView for running."""
+        self.logger.debug("MainController: _on_test_selection_for_run_changed called.")
+        test_discovery_view = self.main_window.test_discovery_view  # type: ignore
+        if test_discovery_view:
+            selected_nodes = test_discovery_view.get_selected_node_ids()
+            count = len(selected_nodes)
+            self.logger.info(
+                f"{count} tests selected for running in TestDiscoveryView. First few: {selected_nodes[:5] if count > 5 else selected_nodes}"
+            )
+            # The TestDiscoveryView itself now has a label for this count.
+            # This slot can be used for further actions if needed, e.g. updating a global status.
+            # For now, logging is sufficient as per the immediate requirement.
+        else:
+            self.logger.warning(
+                "MainController: TestDiscoveryView not available to get selected nodes."
+            )
+        self.logger.debug("MainController: _on_test_selection_for_run_changed finished.")
+
     def _get_task_description(self, task_id: str) -> str:
         """Retrieves the cached description for a task, or a fallback."""
         desc = self._task_descriptions.get(task_id, task_id[:8])
@@ -481,12 +570,25 @@ class MainController(BaseController):
         )  # type: ignore
         self.logger.debug(f"MainController: Default directory for QFileDialog: '{default_dir}'")
 
-        file_path_str, _ = QFileDialog.getOpenFileName(
-            self.main_window,  # type: ignore
-            "Open File",
-            default_dir,
-            "Python Files (*.py);;JSON Files (*.json);;XML Files (*.xml);;All Files (*)",
-        )
+        file_path_str: str | None = None
+        try:
+            file_path_str, _ = QFileDialog.getOpenFileName(
+                self.main_window,  # type: ignore
+                "Open File",
+                default_dir,
+                "Python Files (*.py);;JSON Files (*.json);;XML Files (*.xml);;All Files (*)",
+            )
+        except Exception as e:
+            self.logger.error(
+                f"MainController: QFileDialog.getOpenFileName failed: {e}", exc_info=True
+            )
+            QMessageBox.critical(
+                self.main_window,  # type: ignore
+                "File Dialog Error",
+                "Could not open the file dialog due to a system error (e.g., memory allocation failed).\n"
+                "Please try again. If the problem persists, consider restarting the application.",
+            )
+            # file_path_str remains None, so the logic below will treat it as a cancellation/failure.
 
         if file_path_str:
             path = Path(file_path_str)

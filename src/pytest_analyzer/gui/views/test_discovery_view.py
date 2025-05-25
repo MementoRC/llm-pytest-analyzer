@@ -27,7 +27,8 @@ class TestDiscoveryView(QWidget):
     discover_tests_requested = pyqtSignal()  # Emitted when refresh button is clicked
     # Emits list of selected node IDs, could be used by a controller if needed directly
     # For now, selection is primarily retrieved via get_selected_node_ids()
-    selection_changed = pyqtSignal()
+    selection_changed = pyqtSignal()  # Emitted when checkbox selection changes
+    test_file_selected = pyqtSignal(str)  # Emitted with file path when a tree item is clicked
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -48,6 +49,9 @@ class TestDiscoveryView(QWidget):
             self._emit_discover_tests_requested_debug
         )  # Changed connection
         controls_layout.addWidget(self.refresh_button)
+
+        self.selected_tests_label = QLabel("Selected for run: 0 tests")
+        controls_layout.addWidget(self.selected_tests_label)
 
         controls_layout.addStretch()  # Pushes filter to the right
 
@@ -76,6 +80,11 @@ class TestDiscoveryView(QWidget):
         self.test_tree_view.header().setSectionResizeMode(
             1, QHeaderView.ResizeMode.ResizeToContents
         )
+        self.test_tree_view.setToolTip(
+            "Check items to select them for execution.\n"
+            "Click an item to view its source file in the editor (if applicable)."
+        )
+        self.test_tree_view.clicked.connect(self._on_tree_item_clicked)
 
         main_layout.addWidget(self.test_tree_view)
         logger.debug("TestDiscoveryView: UI initialized.")
@@ -180,9 +189,69 @@ class TestDiscoveryView(QWidget):
 
         self.test_tree_view.expandAll()
         self._block_item_changed_signal = False
+        self._update_selected_tests_count_label()
         logger.debug(
             "TestDiscoveryView: Test tree updated and expanded. Signal blocking re-enabled."
         )
+
+    def _get_file_path_from_index(self, index: QModelIndex) -> Optional[str]:
+        """Extracts the file path associated with a tree item index."""
+        if not index.isValid():
+            return None
+
+        # The node ID is stored in the second column (index 1)
+        node_id_index = index.sibling(index.row(), 1)
+        if not node_id_index.isValid():
+            logger.debug(
+                f"TestDiscoveryView: No valid sibling index for node ID at row {index.row()}, col 1."
+            )
+            return None
+
+        node_id_item = self.test_tree_model.itemFromIndex(node_id_index)
+        if not node_id_item:
+            logger.debug(
+                f"TestDiscoveryView: No model item found for node ID index {node_id_index}."
+            )
+            return None
+
+        node_id = node_id_item.text()
+        if not node_id:
+            logger.debug("TestDiscoveryView: Node ID item text is empty.")
+            return None
+
+        # The file path is the part of the node ID before the first '::'
+        # or the whole node_id if '::' is not present (e.g. for top-level file items)
+        file_path_str = node_id.split("::")[0]
+
+        # Basic validation (can be expanded, e.g. check if Path(file_path_str).is_file())
+        if file_path_str:
+            logger.debug(f"TestDiscoveryView: Extracted file path: {file_path_str}")
+            return file_path_str
+        logger.warning(f"TestDiscoveryView: Could not extract file path from node ID: {node_id}")
+        return None
+
+    def _on_tree_item_clicked(self, index: QModelIndex) -> None:
+        """Handles a click on a tree item to potentially load its file."""
+        logger.debug(
+            f"TestDiscoveryView: _on_tree_item_clicked - Index: row {index.row()}, col {index.column()}."
+        )
+        file_path = self._get_file_path_from_index(index)
+        if file_path:
+            from pathlib import Path
+
+            # Check if the path seems like a Python file before emitting
+            # This is a basic check; more robust validation might be needed depending on node_id structure
+            if Path(file_path).suffix == ".py":
+                logger.info(f"TestDiscoveryView: Emitting test_file_selected for: {file_path}")
+                self.test_file_selected.emit(file_path)
+            else:
+                logger.debug(
+                    f"TestDiscoveryView: Extracted path {file_path} is not a .py file, not emitting test_file_selected."
+                )
+        else:
+            logger.debug(
+                "TestDiscoveryView: No valid file path extracted from clicked item, not emitting test_file_selected."
+            )
 
     def _on_item_changed(self, item: QStandardItem) -> None:
         """Handle item check state changes to propagate to children/parents."""
@@ -209,10 +278,26 @@ class TestDiscoveryView(QWidget):
             self._update_parent_check_state(parent)
 
         self._block_item_changed_signal = False
+        self._update_selected_tests_count_label()
         logger.debug(
             f"TestDiscoveryView: Item change propagation complete for '{item.text()}'. Emitting selection_changed signal."
         )
         self.selection_changed.emit()
+
+    def _update_selected_tests_count_label(self) -> None:
+        """Updates the label showing the count of selected tests for running."""
+        if hasattr(self, "selected_tests_label"):
+            count = len(
+                self.get_selected_node_ids(silent=True)
+            )  # Use silent to avoid verbose logging from get_selected_node_ids
+            self.selected_tests_label.setText(f"Selected for run: {count} tests")
+            logger.debug(
+                f"TestDiscoveryView: Updated selected tests count label to: {count} tests."
+            )
+        else:
+            logger.warning(
+                "TestDiscoveryView: selected_tests_label not found, cannot update count."
+            )
 
     def _update_parent_check_state(self, parent_item: QStandardItem) -> None:
         """Update parent's check state based on its children's states."""
@@ -246,11 +331,14 @@ class TestDiscoveryView(QWidget):
         if grandparent:
             self._update_parent_check_state(grandparent)
 
-    def get_selected_node_ids(self) -> List[str]:
+    def get_selected_node_ids(self, silent: bool = False) -> List[str]:
         """
         Returns a list of node IDs for all checked test items (functions/methods).
+        Args:
+            silent: If True, suppress debug logging for this call.
         """
-        logger.debug("TestDiscoveryView: get_selected_node_ids called.")
+        if not silent:
+            logger.debug("TestDiscoveryView: get_selected_node_ids called.")
         selected_ids: List[str] = []
         model = self.test_tree_model
 
@@ -278,7 +366,10 @@ class TestDiscoveryView(QWidget):
                             node_id_item = child_item.child(j, 1)
                             if node_id_item and node_id_item.text():
                                 selected_ids.append(node_id_item.text())
-        logger.debug(f"TestDiscoveryView: Found {len(selected_ids)} selected node IDs.")
+        if not silent:
+            logger.debug(
+                f"TestDiscoveryView: Found {len(selected_ids)} selected node IDs: {selected_ids if len(selected_ids) < 5 else str(selected_ids[:5]) + '...'}"
+            )
         return selected_ids
 
     def clear_tree(self) -> None:
@@ -287,7 +378,8 @@ class TestDiscoveryView(QWidget):
         self.test_tree_model.clear()
         self.test_tree_model.setHorizontalHeaderLabels(["Test / Module / Class", "Node ID"])
         self._block_item_changed_signal = False
-        self._filter_proxy_model = None  # This line was in original, ensure it's still relevant or remove if QSortFilterProxyModel is not used.
+        # self._filter_proxy_model = None # QSortFilterProxyModel is not currently used.
+        self._update_selected_tests_count_label()
         logger.debug("TestDiscoveryView: Tree cleared.")
 
     def _apply_filter(self, text: str) -> None:

@@ -53,79 +53,161 @@ class TestDiscoveryController(BaseController):
             )
             return
 
-        # Common directories to exclude from test discovery
-        # These are relative to the project_root_path
-        excluded_dirs = [
-            ".pixi/",
-            ".venv/",
-            "venv/",  # Common alternative for virtual envs
-            ".env/",
-            "env/",
-            ".hatch/",
-            ".git/",
-            "__pycache__/",
-            ".pytest_cache/",
-            ".tox/",
-            "node_modules/",
-            "dist/",
-            "build/",
-            ".coverage/",
-            ".mypy_cache/",
-            ".ruff_cache/",
-            "site-packages/",  # Often inside venvs but can be elsewhere
-            "docs/",  # Typically not containing tests
-            "examples/",  # Often not part of main test suite
-        ]
-
-        # Ensure project_root_path is a Path object.
         from pathlib import Path
 
         if not isinstance(project_root_path, Path):
-            project_root_path = Path(project_root_path)
+            project_root_path_obj = Path(project_root_path)
+        else:
+            project_root_path_obj = project_root_path
 
         discovered_items: List[PytestFailure] = []
         try:
-            self.logger.info(f"Scanning for test files in {project_root_path}")
+            self.logger.info(
+                f"Starting synchronous test file discovery in '{project_root_path_obj}'"
+            )
 
-            # Using a set to avoid duplicates if rglob patterns overlap
-            # or due to symlinks pointing within the same scanned area.
-            test_file_paths = set()
-            test_file_paths.update(project_root_path.rglob("test_*.py"))
-            test_file_paths.update(project_root_path.rglob("*_test.py"))
+            all_python_files = project_root_path_obj.rglob("*.py")
 
-            for file_path in test_file_paths:
+            for file_path in all_python_files:
                 if not file_path.is_file():
+                    self.logger.debug(f"Skipping non-file item: {file_path}")
                     continue
 
-                relative_file_path_str = str(file_path.relative_to(project_root_path))
+                relative_path = file_path.relative_to(project_root_path_obj)
+                relative_path_str = str(relative_path)
+                path_parts = relative_path.parts
+                lower_path_parts = tuple(part.lower() for part in path_parts)
+                file_name = file_path.name
+                file_name_lower = file_name.lower()
 
-                # Check against excluded directories
+                # --- Early Filename Exclusion ---
+                excluded_filenames = {
+                    "__init__.py",
+                    "conftest.py",
+                    "fixtures.py",
+                    "utils.py",  # Common utility file names in test dirs
+                    "setup.py",  # Setup script, not a test
+                }
+                if file_name_lower in excluded_filenames:
+                    self.logger.debug(
+                        f"Skipping '{relative_path_str}' due to explicitly excluded filename."
+                    )
+                    continue
+
+                # --- Path-based Exclusion Logic ---
                 is_excluded = False
-                for excluded_dir_pattern in excluded_dirs:
-                    # Ensure pattern ends with a slash for directory matching,
-                    # or handle exact file matches if patterns are specific.
-                    # Current patterns like ".venv/" imply directory exclusion.
-                    if relative_file_path_str.startswith(excluded_dir_pattern):
-                        is_excluded = True
-                        break
 
+                # 1. Check for keywords in path components (e.g., .pixi, site-packages, envs)
+                exclusion_keywords_in_parts = {
+                    ".pixi",
+                    "site-packages",
+                    "envs",
+                    ".git",
+                    ".venv",
+                    "venv",
+                    ".env",
+                    ".hatch",
+                    "__pycache__",
+                    ".pytest_cache",
+                    ".tox",
+                    "node_modules",
+                    "dist",
+                    "build",
+                    ".coverage",
+                    ".mypy_cache",
+                    ".ruff_cache",
+                }
+                # Check directory parts (all parts except the filename itself)
+                for i, dir_part_content in enumerate(path_parts[:-1]):
+                    # dir_part_lower for matching, dir_part_content for logging
+                    dir_part_lower = lower_path_parts[i]
+                    for keyword in exclusion_keywords_in_parts:
+                        if keyword in dir_part_lower:
+                            self.logger.debug(
+                                f"Excluding '{relative_path_str}' due to path component "
+                                f"'{dir_part_content}' containing keyword '{keyword}'."
+                            )
+                            is_excluded = True
+                            break
+                    if is_excluded:
+                        break
                 if is_excluded:
-                    self.logger.debug(f"Excluding file due to rule: {file_path}")
                     continue
 
-                # Create a minimal PytestFailure object for the discovered file
-                # Use the relative file path as the node ID to match pytest conventions
+                # 2. Check for specific directory names (e.g., docs, examples, src)
+                #    These are top-level or significant directories to exclude.
+                excluded_exact_segments = {"docs", "examples", "src"}
+                # Check if any *part* of the path is one of these exact segments.
+                # This is more about excluding whole directory trees like 'src/' or 'docs/'.
+                for i, dir_part_content in enumerate(
+                    path_parts[:-1]
+                ):  # Iterate over directory parts
+                    if lower_path_parts[i] in excluded_exact_segments:
+                        # Check if this segment is a top-level segment or a direct child of project_root
+                        # to avoid overly broad exclusions if a nested dir has this name.
+                        # For 'src', we typically mean 'project_root/src'.
+                        # If path_parts = ('src', 'mypkg', 'test_something.py'), lower_path_parts[0] is 'src'.
+                        if i == 0:  # If the segment is the first part of the relative path
+                            self.logger.debug(
+                                f"Excluding '{relative_path_str}' because it is within an excluded top-level directory "
+                                f"segment '{dir_part_content}'."
+                            )
+                            is_excluded = True
+                            break
+                if is_excluded:
+                    continue
+
+                # 3. Check for Python library paths (e.g., .../lib/pythonX.Y/...)
+                for i, dir_part_content in enumerate(path_parts[:-1]):
+                    if lower_path_parts[i] == "lib":
+                        # Check if there's a next segment and it starts with 'python'
+                        if (i + 1) < len(path_parts[:-1]) and lower_path_parts[i + 1].startswith(
+                            "python"
+                        ):
+                            self.logger.debug(
+                                f"Excluding '{relative_path_str}' due to Python lib path pattern "
+                                f"'{dir_part_content}/{path_parts[i + 1]}'."
+                            )
+                            is_excluded = True
+                            break
+                if is_excluded:
+                    continue
+
+                # --- Test File Identification Logic (Refined) ---
+                # A file is considered a test file if its name matches the pattern
+                # AND it's not in an excluded path.
+                # Being in a "tests" directory is a convention, but the filename must still match.
+
+                is_test_file_by_name = file_name_lower.startswith(
+                    "test_"
+                ) or file_name_lower.endswith("_test.py")
+
+                if not is_test_file_by_name:
+                    self.logger.debug(
+                        f"Skipping '{relative_path_str}': does not meet test file name criteria "
+                        f"(must start with 'test_' or end with '_test.py')."
+                    )
+                    continue
+
+                # At this point, the file has a test-like name and is not in an excluded path.
+                # No further checks on directory names like "test" or "tests" are needed for *inclusion*.
+                # The exclusion rules have already handled paths we don't want.
+
+                self.logger.info(
+                    f"Discovered potential test file (passes name and path checks): '{relative_path_str}'"
+                )
                 failure_item = PytestFailure(
-                    test_name=relative_file_path_str,  # Use relative file path as node ID
-                    test_file=relative_file_path_str,
-                    error_type="discovered_file",  # Indicates this is from discovery
-                    error_message="",  # No error for discovered files
-                    traceback="",  # No traceback for discovered files
+                    outcome="discovered",
+                    test_name=relative_path_str,
+                    test_file=relative_path_str,
+                    error_type="discovered_file",
+                    error_message="",
+                    traceback="",
                     line_number=None,
                 )
                 discovered_items.append(failure_item)
 
-            self.logger.info(f"Discovered {len(discovered_items)} test files.")
+            self.logger.info(f"Final count of discovered test files: {len(discovered_items)}.")
             self.tests_discovered.emit(discovered_items)
             self.discovery_finished.emit(
                 f"Test file discovery complete. Found {len(discovered_items)} files."
