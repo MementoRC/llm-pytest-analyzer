@@ -124,6 +124,11 @@ class FailureCollectorPlugin:
         """Get the collected test results."""
         return self.results
 
+    def clear_results(self) -> None:
+        """Clear the collected test results and reset plugin state."""
+        self.results.clear()
+        self.test_items.clear()
+
 
 def collect_failures_with_plugin(pytest_args: List[str]) -> List[PytestFailure]:
     """

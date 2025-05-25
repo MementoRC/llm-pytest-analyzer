@@ -380,3 +380,23 @@ def test_collect_failures_with_plugin(mock_pytest_main):
     assert collected_results[0].outcome == "failed"
     assert collected_results[1].test_name == "test_file.py::test_another_function"
     assert collected_results[1].outcome == "passed"
+
+
+def test_clear_results():
+    """Test that clear_results properly resets plugin state."""
+    plugin = FailureCollectorPlugin()
+
+    # Add some dummy data
+    plugin.results.append(
+        PytestFailure(test_name="test_dummy", test_file="dummy.py", outcome="failed")
+    )
+    plugin.test_items["dummy"] = "test_item"
+
+    # Verify data is present
+    assert len(plugin.results) == 1
+    assert len(plugin.test_items) == 1
+
+    # Clear and verify state is reset
+    plugin.clear_results()
+    assert len(plugin.results) == 0
+    assert len(plugin.test_items) == 0
