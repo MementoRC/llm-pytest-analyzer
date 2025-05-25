@@ -77,7 +77,7 @@ class CodeEditorView(QsciScintilla):
         self.markerDefine(
             QsciScintilla.MarkerSymbol.BoxedMinus, QsciScintilla.SC_MARKNUM_FOLDERMIDTAIL
         )
-        self.markerDefine(QsciScintilla.MarkerSymbol.Empty, QsciScintilla.SC_MARKNUM_FOLDERTAIL)
+        self.markerDefine(QsciScintilla.MarkerSymbol.Invisible, QsciScintilla.SC_MARKNUM_FOLDERTAIL)
         # Set colors for fold margin itself
         self.setFoldMarginColors(QColor("#f0f0f0"), QColor("#e0e0e0"))
 
