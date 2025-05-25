@@ -3,6 +3,7 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 from pprint import pprint
+from typing import TYPE_CHECKING
 
 # Ensure 'src' directory is in sys.path if the script is run from the project root
 # and 'src' is a subdirectory. This helps in locating the project's modules.
@@ -13,8 +14,10 @@ sys.path.insert(0, str(PROJECT_ROOT_DIR))
 
 try:
     from src.pytest_analyzer.core.analyzer_service import PytestAnalyzerService
-    from src.pytest_analyzer.core.models.pytest_failure import PytestFailure
     from src.pytest_analyzer.utils.config_types import Settings
+
+    if TYPE_CHECKING:
+        from src.pytest_analyzer.core.models.pytest_failure import PytestFailure
 except ImportError as e:
     print(f"Error importing project modules: {e}")
     print(

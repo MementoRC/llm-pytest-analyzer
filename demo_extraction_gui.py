@@ -1,11 +1,13 @@
 import logging
 from pathlib import Path
-from typing import List
+from typing import TYPE_CHECKING, List
 
 from pytest_analyzer.core.analyzer_service import PytestAnalyzerService
 from pytest_analyzer.core.extraction.extractor_factory import get_extractor
-from pytest_analyzer.core.models.pytest_failure import PytestFailure
 from pytest_analyzer.utils.settings import Settings
+
+if TYPE_CHECKING:
+    from pytest_analyzer.core.models.pytest_failure import PytestFailure
 
 # Configure basic logging to see output from the script and the library
 logging.basicConfig(

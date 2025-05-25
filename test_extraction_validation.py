@@ -119,7 +119,7 @@ def test_passing():
             try:
                 if os.path.exists(file_path):
                     os.unlink(file_path)
-            except:
+            except OSError:
                 pass
 
 

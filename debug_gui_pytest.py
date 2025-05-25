@@ -9,15 +9,15 @@ import logging
 import sys
 from pathlib import Path
 
+from src.pytest_analyzer.core.analyzer_service import PytestAnalyzerService
+from src.pytest_analyzer.utils.settings import Settings
+
 # Set up debug logging
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler("debug_gui_pytest.log")],
 )
-
-from src.pytest_analyzer.core.analyzer_service import PytestAnalyzerService
-from src.pytest_analyzer.utils.settings import Settings
 
 
 def test_gui_pytest_execution():
