@@ -33,7 +33,7 @@ except ImportError as e:
 
 # --- Configuration ---
 # This is the path to the JSON file generated from a real failing GUI test.
-JSON_REPORT_PATH = Path("/tmp/gui_failures.json")
+JSON_REPORT_PATH = Path("/tmp/gui_multiple_failures.json")
 
 
 def setup_debug_logging():
@@ -93,35 +93,55 @@ def main():
 
         print(f"Successfully extracted {len(failures)} failure(s).")
 
-        # For this test, we expect at least one failure, specifically an "error"
-        failure_to_inspect = None
-        for f in failures:
-            if f.outcome == "error":
-                failure_to_inspect = f
-                break
-
-        if not failure_to_inspect:
-            print("VALIDATION FAILED: No failure with outcome 'error' found.")
-            print("Outcomes found:")
+        # For this test, we expect exactly two failures, both with "error" outcome.
+        if len(failures) != 2:
+            print(f"VALIDATION FAILED: Expected 2 failures, but found {len(failures)}.")
+            print("Details of extracted failures:")
             for i, f in enumerate(failures):
                 print(f"  Failure #{i + 1}: Outcome '{f.outcome}', NodeID: {f.test_name}")
             sys.exit(1)
 
-        print(f"Found a failure with outcome 'error': {failure_to_inspect.test_name}")
-        print_failure_details(failure_to_inspect, JSON_REPORT_PATH)
+        print("Validating that both failures have 'error' outcome...")
 
-        # Basic assertions
-        assert failure_to_inspect.outcome == "error", (
-            f"Expected outcome 'error', got '{failure_to_inspect.outcome}'"
-        )
-        assert failure_to_inspect.test_name, "Test name should be populated"
-        # Add more assertions here as needed to verify specific fields
+        error_failures: List[PytestFailure] = []
+        for f in failures:
+            if f.outcome == "error":
+                error_failures.append(f)
+            else:
+                print(
+                    f"VALIDATION FAILED: Found a failure with outcome '{f.outcome}', expected 'error'."
+                )
+                print(f"Problematic failure NodeID: {f.test_name}")
+                sys.exit(1)
+
+        if len(error_failures) != 2:
+            # This case should ideally be caught by the f.outcome check above,
+            # but it's a good safeguard.
+            print(
+                f"VALIDATION FAILED: Expected 2 'error' failures, but found {len(error_failures)}."
+            )
+            sys.exit(1)
+
+        print("Found 2 failures with outcome 'error'. Details:")
+        for i, failure_to_inspect in enumerate(error_failures):
+            print(f"\n--- Details for Failure #{i + 1} ---")
+            print(f"NodeID: {failure_to_inspect.test_name}")
+            print_failure_details(failure_to_inspect, JSON_REPORT_PATH)
+
+            # Basic assertions for each failure
+            assert failure_to_inspect.outcome == "error", (
+                f"Expected outcome 'error', got '{failure_to_inspect.outcome}' for {failure_to_inspect.test_name}"
+            )
+            assert failure_to_inspect.test_name, (
+                f"Test name should be populated for failure #{i + 1}"
+            )
+            # Add more assertions here as needed to verify specific fields
 
         print(
-            "Validation successful: Extracted 'error' outcome failure and key fields seem populated."
+            "Validation successful: Extracted 2 'error' outcome failures and key fields seem populated."
         )
         print(
-            "Please review the printed details above to confirm all fields are correctly extracted."
+            "Please review the printed details above to confirm all fields are correctly extracted for both failures."
         )
 
     except Exception as e:
