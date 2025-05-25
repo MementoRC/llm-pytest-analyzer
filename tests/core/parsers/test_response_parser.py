@@ -104,9 +104,7 @@ class TestResponseParser:
         assert len(analysis.suggested_fixes) == 0
         assert analysis.confidence == 0.7  # Default confidence
 
-    def test_parse_analysis_response_exception_handling(
-        self, test_failure, monkeypatch
-    ):
+    def test_parse_analysis_response_exception_handling(self, test_failure, monkeypatch):
         """Test exception handling when parsing fails."""
 
         # Mock re.search to raise an exception
@@ -118,9 +116,7 @@ class TestResponseParser:
         with pytest.raises(ParsingError):
             ResponseParser.parse_analysis_response(test_failure, "Some response")
 
-    def test_parse_suggestion_response_with_json_format(
-        self, test_failure, test_analysis
-    ):
+    def test_parse_suggestion_response_with_json_format(self, test_failure, test_analysis):
         """Test parsing a suggestion response in JSON format."""
         response = """
         Here's how to fix the problem:
@@ -153,9 +149,7 @@ class TestResponseParser:
         assert "original_code" in suggestion.code_changes
         assert suggestion.code_changes["fixed_code"] == "assert 1 + 1 == 2"
 
-    def test_parse_suggestion_response_with_malformed_json(
-        self, test_failure, test_analysis
-    ):
+    def test_parse_suggestion_response_with_malformed_json(self, test_failure, test_analysis):
         """Test parsing a suggestion response with malformed JSON."""
         response = """
         Here's how to fix the problem:
@@ -181,9 +175,7 @@ class TestResponseParser:
         assert "source" in suggestions[0].code_changes
         assert suggestions[0].code_changes["source"] == "llm"
 
-    def test_parse_suggestion_response_with_code_blocks(
-        self, test_failure, test_analysis
-    ):
+    def test_parse_suggestion_response_with_code_blocks(self, test_failure, test_analysis):
         """Test parsing a suggestion with Python code blocks."""
         response = """
         Suggestion: Update the test in test_math.py to expect the correct result
@@ -207,9 +199,7 @@ class TestResponseParser:
         assert "code_snippet_1" in suggestion.code_changes
         assert "def test_addition():" in suggestion.code_changes["code_snippet_1"]
 
-    def test_parse_suggestion_response_with_multiple_suggestions(
-        self, test_failure, test_analysis
-    ):
+    def test_parse_suggestion_response_with_multiple_suggestions(self, test_failure, test_analysis):
         """Test parsing a response with multiple suggestions."""
         response = """
         Suggestion 1: Update the test expectation
@@ -250,6 +240,4 @@ class TestResponseParser:
         monkeypatch.setattr("re.findall", mock_findall)
 
         with pytest.raises(ParsingError):
-            ResponseParser.parse_suggestion_response(
-                test_failure, test_analysis, "Some response"
-            )
+            ResponseParser.parse_suggestion_response(test_failure, test_analysis, "Some response")

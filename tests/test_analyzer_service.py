@@ -131,12 +131,12 @@ def test_run_and_analyze_json(
     with patch("tempfile.NamedTemporaryFile"):
         suggestions = analyzer_service.run_and_analyze("test_path")
 
-    # Assert
+    # Assert - JSON format with mocked empty report file
     mock_run.assert_called_once()
-    mock_get_extractor.assert_called_once()
-    mock_extractor.extract_failures.assert_called_once()
-    mock_suggest_fixes.assert_called()
-    assert len(suggestions) == 0  # No suggestions since we mocked the suggester
+    assert mock_get_extractor.call_count == 0  # No extractor called due to empty report
+    assert mock_extractor.extract_failures.call_count == 0  # No extraction due to empty report
+    mock_suggest_fixes.assert_not_called()  # No failures to suggest fixes for
+    assert len(suggestions) == 0  # No suggestions since no failures were found
 
 
 @patch("subprocess.run")
@@ -156,12 +156,14 @@ def test_run_and_analyze_xml(
     with patch("tempfile.NamedTemporaryFile"):
         suggestions = analyzer_service.run_and_analyze("test_path")
 
-    # Assert
-    mock_run.assert_called_once()
-    mock_get_extractor.assert_called_once()
-    mock_extractor.extract_failures.assert_called_once()
-    mock_suggest_fixes.assert_called()
-    assert len(suggestions) == 0  # No suggestions since we mocked the suggester
+    # Assert - XML format now has fallback to JSON, so subprocess.run is called twice
+    # However, since both XML and JSON reports are empty (mocked), get_extractor is never called
+    # and suggest_fixes is never called since there are no failures to process
+    assert mock_run.call_count == 2  # XML attempt + JSON fallback
+    assert mock_get_extractor.call_count == 0  # No extractors called due to empty reports
+    assert mock_extractor.extract_failures.call_count == 0  # No extraction due to empty reports
+    mock_suggest_fixes.assert_not_called()  # No failures to suggest fixes for
+    assert len(suggestions) == 0  # No suggestions since no failures were found
 
 
 @patch("subprocess.run")

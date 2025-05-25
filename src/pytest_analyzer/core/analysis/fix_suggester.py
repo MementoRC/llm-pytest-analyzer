@@ -68,18 +68,17 @@ class FixSuggester:
 
         if "assertion" in error_type_lower:
             return self._suggest_assertion_fixes(failure)
-        elif "attribute" in error_type_lower:
+        if "attribute" in error_type_lower:
             return self._suggest_attribute_fixes(failure)
-        elif "import" in error_type_lower:
+        if "import" in error_type_lower:
             return self._suggest_import_fixes(failure)
-        elif "type" in error_type_lower:
+        if "type" in error_type_lower:
             return self._suggest_type_fixes(failure)
-        elif "name" in error_type_lower:
+        if "name" in error_type_lower:
             return self._suggest_name_fixes(failure)
-        elif "syntax" in error_type_lower:
+        if "syntax" in error_type_lower:
             return self._suggest_syntax_fixes(failure)
-        else:
-            return self._suggest_generic_fixes(failure)
+        return self._suggest_generic_fixes(failure)
 
     def _suggest_assertion_fixes(self, failure: PytestFailure) -> List[FixSuggestion]:
         """
@@ -94,9 +93,7 @@ class FixSuggester:
         suggestions = []
 
         # Extract the actual and expected values from the traceback
-        exp_vs_act_match = re.search(
-            r"E\s+assert\s+(.+?)\s*==\s*(.+)", failure.traceback
-        )
+        exp_vs_act_match = re.search(r"E\s+assert\s+(.+?)\s*==\s*(.+)", failure.traceback)
         if exp_vs_act_match:
             actual = exp_vs_act_match.group(1).strip()
             expected = exp_vs_act_match.group(2).strip()
@@ -133,9 +130,7 @@ class FixSuggester:
 
         # Try to extract from error message if traceback didn't work
         elif "assert" in failure.error_message:
-            exp_vs_act_match = re.search(
-                r"assert\s+(.+?)\s*==\s*(.+)", failure.error_message
-            )
+            exp_vs_act_match = re.search(r"assert\s+(.+?)\s*==\s*(.+)", failure.error_message)
             if exp_vs_act_match:
                 actual = exp_vs_act_match.group(1).strip()
                 expected = exp_vs_act_match.group(2).strip()

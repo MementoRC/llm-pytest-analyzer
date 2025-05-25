@@ -1,147 +1,123 @@
 # Task ID: 14
-# Title: Implement Comprehensive Error Handling
+# Title: Implement Configuration Management
 # Status: pending
-# Dependencies: 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
+# Dependencies: None
 # Priority: medium
-# Description: Implement a consistent error handling mechanism throughout the codebase.
+# Description: Create a configuration management system for the application
 # Details:
-Implement a consistent error handling mechanism:
+Implement a configuration management system. Support loading configuration from files, environment variables, and command-line arguments.
 
+Example implementation:
 ```python
-from typing import Dict, Any, Optional, Type, TypeVar, Generic
+import os
+import json
 import logging
-import traceback
-from contextlib import contextmanager
+from typing import Dict, Any, Optional
+from dataclasses import dataclass, field
 
-T = TypeVar('T')
+@dataclass
+class LLMConfig:
+    api_key: str = ""
+    model: str = "gpt-4"
+    max_retries: int = 3
+    timeout: int = 30
 
-class PytestAnalyzerError(Exception):
-    """Base exception class for pytest-analyzer errors."""
-    def __init__(self, message: str, cause: Optional[Exception] = None):
-        self.message = message
-        self.cause = cause
-        super().__init__(message)
+@dataclass
+class LoggingConfig:
+    log_level: str = "INFO"
+    log_file: Optional[str] = None
+    telemetry_file: Optional[str] = None
 
-class ConfigurationError(PytestAnalyzerError):
-    """Error raised when there's a configuration issue."""
-    pass
+@dataclass
+class AppConfig:
+    llm: LLMConfig = field(default_factory=LLMConfig)
+    logging: LoggingConfig = field(default_factory=LoggingConfig)
+    templates_path: Optional[str] = None
 
-class ExtractionError(PytestAnalyzerError):
-    """Error raised during test result extraction."""
-    pass
-
-class AnalysisError(PytestAnalyzerError):
-    """Error raised during test failure analysis."""
-    pass
-
-class SuggestionError(PytestAnalyzerError):
-    """Error raised during fix suggestion generation."""
-    pass
-
-class ApplicationError(PytestAnalyzerError):
-    """Error raised during fix application."""
-    pass
-
-class LLMServiceError(PytestAnalyzerError):
-    """Error raised during LLM service operations."""
-    pass
-
-class ErrorHandler:
+class ConfigManager:
     def __init__(self, logger: Optional[logging.Logger] = None):
-        self.logger = logger or logging.getLogger('pytest-analyzer')
+        self.logger = logger or logging.getLogger(__name__)
+        self.config = AppConfig()
 
-    @contextmanager
-    def handle_errors(self, error_type: Type[PytestAnalyzerError], operation: str, reraise: bool = True):
-        """Context manager for handling errors in a consistent way."""
+    def load_from_file(self, file_path: str) -> None:
+        self.logger.info(f"Loading configuration from file: {file_path}")
+
+        if not os.path.exists(file_path):
+            self.logger.warning(f"Configuration file not found: {file_path}")
+            return
+
         try:
-            yield
-        except PytestAnalyzerError as e:
-            # Already a known error type, just log and re-raise
-            self.logger.error(f"{operation} failed: {e.message}")
-            if e.cause:
-                self.logger.debug(f"Caused by: {str(e.cause)}\n{traceback.format_exc()}")
-            if reraise:
-                raise
+            with open(file_path, 'r') as f:
+                config_data = json.load(f)
+
+            # Update LLM config
+            if "llm" in config_data:
+                llm_config = config_data["llm"]
+                if "api_key" in llm_config:
+                    self.config.llm.api_key = llm_config["api_key"]
+                if "model" in llm_config:
+                    self.config.llm.model = llm_config["model"]
+                if "max_retries" in llm_config:
+                    self.config.llm.max_retries = llm_config["max_retries"]
+                if "timeout" in llm_config:
+                    self.config.llm.timeout = llm_config["timeout"]
+
+            # Update logging config
+            if "logging" in config_data:
+                logging_config = config_data["logging"]
+                if "log_level" in logging_config:
+                    self.config.logging.log_level = logging_config["log_level"]
+                if "log_file" in logging_config:
+                    self.config.logging.log_file = logging_config["log_file"]
+                if "telemetry_file" in logging_config:
+                    self.config.logging.telemetry_file = logging_config["telemetry_file"]
+
+            # Update other config
+            if "templates_path" in config_data:
+                self.config.templates_path = config_data["templates_path"]
+
+            self.logger.info("Configuration loaded successfully")
         except Exception as e:
-            # Wrap unknown exceptions in the specified error type
-            error_message = f"{operation} failed: {str(e)}"
-            self.logger.error(error_message)
-            self.logger.debug(f"Exception details: {traceback.format_exc()}")
-            if reraise:
-                raise error_type(error_message, e)
+            self.logger.error(f"Error loading configuration: {str(e)}")
 
-class ResultWithError(Generic[T]):
-    """A container for operation results that might include errors."""
-    def __init__(self, value: Optional[T] = None, error: Optional[PytestAnalyzerError] = None):
-        self.value = value
-        self.error = error
+    def load_from_env(self) -> None:
+        self.logger.info("Loading configuration from environment variables")
 
-    @property
-    def success(self) -> bool:
-        return self.error is None
+        # LLM config
+        if "PYTEST_ANALYZER_API_KEY" in os.environ:
+            self.config.llm.api_key = os.environ["PYTEST_ANALYZER_API_KEY"]
+        if "PYTEST_ANALYZER_MODEL" in os.environ:
+            self.config.llm.model = os.environ["PYTEST_ANALYZER_MODEL"]
+        if "PYTEST_ANALYZER_MAX_RETRIES" in os.environ:
+            try:
+                self.config.llm.max_retries = int(os.environ["PYTEST_ANALYZER_MAX_RETRIES"])
+            except ValueError:
+                self.logger.warning("Invalid value for PYTEST_ANALYZER_MAX_RETRIES")
+        if "PYTEST_ANALYZER_TIMEOUT" in os.environ:
+            try:
+                self.config.llm.timeout = int(os.environ["PYTEST_ANALYZER_TIMEOUT"])
+            except ValueError:
+                self.logger.warning("Invalid value for PYTEST_ANALYZER_TIMEOUT")
 
-    def unwrap(self) -> T:
-        """Get the value or raise the error if present."""
-        if self.error:
-            raise self.error
-        return self.value
+        # Logging config
+        if "PYTEST_ANALYZER_LOG_LEVEL" in os.environ:
+            self.config.logging.log_level = os.environ["PYTEST_ANALYZER_LOG_LEVEL"]
+        if "PYTEST_ANALYZER_LOG_FILE" in os.environ:
+            self.config.logging.log_file = os.environ["PYTEST_ANALYZER_LOG_FILE"]
+        if "PYTEST_ANALYZER_TELEMETRY_FILE" in os.environ:
+            self.config.logging.telemetry_file = os.environ["PYTEST_ANALYZER_TELEMETRY_FILE"]
 
-    def map(self, func):
-        """Apply a function to the value if no error, otherwise return self."""
-        if self.error:
-            return self
-        try:
-            return ResultWithError(func(self.value))
-        except Exception as e:
-            if isinstance(e, PytestAnalyzerError):
-                return ResultWithError(error=e)
-            return ResultWithError(error=PytestAnalyzerError(str(e), e))
+        # Other config
+        if "PYTEST_ANALYZER_TEMPLATES_PATH" in os.environ:
+            self.config.templates_path = os.environ["PYTEST_ANALYZER_TEMPLATES_PATH"]
+
+        self.logger.info("Environment configuration loaded successfully")
+
+    def get_config(self) -> AppConfig:
+        return self.config
 ```
 
-Update all components to use this error handling mechanism. For example, update the LLM service:
-
-```python
-class LLMService:
-    def __init__(self, config: LLMConfig, error_handler: Optional[ErrorHandler] = None):
-        self.config = config
-        self.error_handler = error_handler or ErrorHandler()
-
-    def generate(self, prompt: str, **kwargs) -> ResultWithError[str]:
-        with self.error_handler.handle_errors(LLMServiceError, "LLM generation", reraise=False) as result:
-            # Implementation for synchronous API call
-            params = {**self.config.__dict__, **kwargs}
-            response = requests.post(
-                "https://api.openai.com/v1/completions",
-                headers={"Authorization": f"Bearer {self.config.api_key}"},
-                json={"prompt": prompt, **params}
-            )
-            response.raise_for_status()
-            return ResultWithError(response.json()["choices"][0]["text"])
-
-        # If we get here, there was an error
-        return result
-
-    async def generate_async(self, prompt: str, **kwargs) -> ResultWithError[str]:
-        with self.error_handler.handle_errors(LLMServiceError, "Async LLM generation", reraise=False) as result:
-            # Implementation for asynchronous API call
-            params = {**self.config.__dict__, **kwargs}
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "https://api.openai.com/v1/completions",
-                    headers={"Authorization": f"Bearer {self.config.api_key}"},
-                    json={"prompt": prompt, **params}
-                ) as response:
-                    if response.status != 200:
-                        text = await response.text()
-                        raise LLMServiceError(f"API error: {response.status}, {text}")
-                    data = await response.json()
-                    return ResultWithError(data["choices"][0]["text"])
-
-        # If we get here, there was an error
-        return result
-```
-
-Update other components similarly to use the error handling mechanism.
+Ensure the implementation supports loading configuration from multiple sources with appropriate precedence.
 
 # Test Strategy:
-Create unit tests for the error handling mechanism, including the context manager and ResultWithError class. Test error propagation through component chains. Verify that errors are properly logged and wrapped in the appropriate error types.
+Create unit tests to verify configuration loading from files and environment variables. Test with various configuration formats and values. Verify that configuration precedence works correctly. Test error handling for invalid configuration files and values.

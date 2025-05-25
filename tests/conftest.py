@@ -21,9 +21,7 @@ def create_test_project(tmp_path):
     """Factory fixture to create test projects in a temp directory."""
     created_projects = []
 
-    def _create_project(
-        name: str, test_content: str, setup_content: Optional[str] = None
-    ):
+    def _create_project(name: str, test_content: str, setup_content: Optional[str] = None):
         project_dir = tmp_path / name
         project_dir.mkdir()
         test_file = project_dir / f"test_{name}.py"
@@ -36,7 +34,7 @@ def create_test_project(tmp_path):
         created_projects.append(project_dir)
         return project_dir
 
-    yield _create_project
+    return _create_project
 
     # Optional cleanup if needed beyond tmp_path's automatic cleanup
     # for project in created_projects:
@@ -262,9 +260,7 @@ def mock_llm_client():
 
     # Configure the mock to return predefined responses
     mock_response = MagicMock()
-    mock_response.content = [
-        MagicMock(text="LLM Suggestion: This is a mock LLM suggestion.")
-    ]
+    mock_response.content = [MagicMock(text="LLM Suggestion: This is a mock LLM suggestion.")]
     mock_client.messages.create.return_value = mock_response
 
     return mock_client
@@ -277,9 +273,7 @@ def mock_llm_suggester():
         "pytest_analyzer.core.analysis.llm_suggester.LLMSuggester._get_llm_request_function"
     ) as mock_func:
         mock_func.return_value = (
-            lambda prompt: "LLM Suggestion: This is a mock LLM response for: "
-            + prompt[:20]
-            + "..."
+            lambda prompt: "LLM Suggestion: This is a mock LLM response for: " + prompt[:20] + "..."
         )
         yield
 

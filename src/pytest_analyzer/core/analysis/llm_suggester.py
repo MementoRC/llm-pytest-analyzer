@@ -15,7 +15,8 @@ import json
 import logging
 import os
 import re
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from collections.abc import Awaitable
+from typing import Any, Callable, Dict, List, Optional
 
 from ...utils.resource_manager import (
     async_with_timeout,
@@ -121,9 +122,7 @@ class LLMSuggester:
             async with performance_tracker.async_track("async_llm_suggest_fixes"):
                 # Check if we have an async LLM client or request function
                 if not self._async_llm_request_func:
-                    logger.warning(
-                        "No async LLM client available for generating suggestions"
-                    )
+                    logger.warning("No async LLM client available for generating suggestions")
                     return []
 
                 # Build the prompt
@@ -215,13 +214,9 @@ class LLMSuggester:
             return failure.relevant_code
 
         # If we have a file path and line number, try to read the file
-        if (
-            failure.test_file
-            and failure.line_number
-            and os.path.exists(failure.test_file)
-        ):
+        if failure.test_file and failure.line_number and os.path.exists(failure.test_file):
             try:
-                with open(failure.test_file, "r") as f:
+                with open(failure.test_file) as f:
                     lines = f.readlines()
 
                 # Calculate the range of lines to include
@@ -287,9 +282,7 @@ class LLMSuggester:
         # If we can't fit middle sections, just return the essential parts
         return essential_sections
 
-    def _parse_llm_response(
-        self, response: str, failure: PytestFailure
-    ) -> List[FixSuggestion]:
+    def _parse_llm_response(self, response: str, failure: PytestFailure) -> List[FixSuggestion]:
         """
         Parse the LLM response into structured fix suggestions.
 
@@ -311,15 +304,11 @@ class LLMSuggester:
                         data = json.loads(json_str)
                         if isinstance(data, list):
                             for item in data:
-                                suggestion = self._create_suggestion_from_json(
-                                    item, failure
-                                )
+                                suggestion = self._create_suggestion_from_json(item, failure)
                                 if suggestion:
                                     suggestions.append(suggestion)
                         elif isinstance(data, dict):
-                            suggestion = self._create_suggestion_from_json(
-                                data, failure
-                            )
+                            suggestion = self._create_suggestion_from_json(data, failure)
                             if suggestion:
                                 suggestions.append(suggestion)
                     except json.JSONDecodeError:
@@ -363,15 +352,14 @@ class LLMSuggester:
                     explanation=explanation,
                     code_changes=code_changes,
                 )
-            else:
-                # Handle non-dict case
-                return FixSuggestion(
-                    failure=failure,
-                    suggestion=suggestion_text,
-                    confidence=confidence,
-                    explanation=explanation,
-                    code_changes={},
-                )
+            # Handle non-dict case
+            return FixSuggestion(
+                failure=failure,
+                suggestion=suggestion_text,
+                confidence=confidence,
+                explanation=explanation,
+                code_changes={},
+            )
         except Exception as e:
             logger.debug(f"Error creating suggestion from JSON: {e}")
             return None
@@ -398,9 +386,7 @@ class LLMSuggester:
 
             # Extract confidence if present
             confidence = 0.8  # Default confidence
-            confidence_match = re.search(
-                r"confidence:?\s*(\d+(?:\.\d+)?)%?", text, re.IGNORECASE
-            )
+            confidence_match = re.search(r"confidence:?\s*(\d+(?:\.\d+)?)%?", text, re.IGNORECASE)
             if confidence_match:
                 try:
                     confidence_str = confidence_match.group(1)
@@ -421,9 +407,7 @@ class LLMSuggester:
                 code_changes = {"fixed_code": code_matches[0].strip()}
 
             # Generate a fingerprint for deduplication
-            fingerprint = self._generate_suggestion_fingerprint(
-                suggestion_text, "", code_changes
-            )
+            fingerprint = self._generate_suggestion_fingerprint(suggestion_text, "", code_changes)
 
             # Add fingerprint to code changes
             if isinstance(code_changes, dict):
@@ -619,16 +603,15 @@ Provide your analysis:
 
         if "anthropic" in client_module:
             return self._request_with_anthropic(prompt, self.llm_client)
-        elif "openai" in client_module:
+        if "openai" in client_module:
             return self._request_with_openai(prompt, self.llm_client)
-        else:
-            # Generic approach - assume client has a completion method
-            try:
-                response = self.llm_client.generate(prompt=prompt, max_tokens=1000)
-                return str(response)
-            except Exception as e:
-                logger.error(f"Error making request with client: {e}")
-                return ""
+        # Generic approach - assume client has a completion method
+        try:
+            response = self.llm_client.generate(prompt=prompt, max_tokens=1000)
+            return str(response)
+        except Exception as e:
+            logger.error(f"Error making request with client: {e}")
+            return ""
 
     async def _async_make_request_with_client(self, prompt: str) -> str:
         """
@@ -643,27 +626,20 @@ Provide your analysis:
 
         if "anthropic" in client_module:
             # Check if it's already an async client
-            if hasattr(self.llm_client, "messages") and hasattr(
-                self.llm_client.messages, "create"
-            ):
+            if hasattr(self.llm_client, "messages") and hasattr(self.llm_client.messages, "create"):
                 if asyncio.iscoroutinefunction(self.llm_client.messages.create):
-                    return await self._async_request_with_anthropic(
-                        prompt, self.llm_client
-                    )
-                else:
-                    # Create an async client if possible
-                    try:
-                        from anthropic import AsyncAnthropic
+                    return await self._async_request_with_anthropic(prompt, self.llm_client)
+                # Create an async client if possible
+                try:
+                    from anthropic import AsyncAnthropic
 
-                        async_client = AsyncAnthropic(api_key=self.llm_client.api_key)
-                        return await self._async_request_with_anthropic(
-                            prompt, async_client
-                        )
-                    except (ImportError, AttributeError):
-                        # Fall back to sync client in async wrapper
-                        return await asyncio.to_thread(
-                            self._request_with_anthropic, prompt, self.llm_client
-                        )
+                    async_client = AsyncAnthropic(api_key=self.llm_client.api_key)
+                    return await self._async_request_with_anthropic(prompt, async_client)
+                except (ImportError, AttributeError):
+                    # Fall back to sync client in async wrapper
+                    return await asyncio.to_thread(
+                        self._request_with_anthropic, prompt, self.llm_client
+                    )
             else:
                 # Fall back to sync client in async wrapper
                 return await asyncio.to_thread(
@@ -671,34 +647,23 @@ Provide your analysis:
                 )
         elif "openai" in client_module:
             # Check if it's already an async client
-            if hasattr(self.llm_client, "chat") and hasattr(
-                self.llm_client.chat, "completions"
-            ):
+            if hasattr(self.llm_client, "chat") and hasattr(self.llm_client.chat, "completions"):
                 if asyncio.iscoroutinefunction(self.llm_client.chat.completions.create):
-                    return await self._async_request_with_openai(
-                        prompt, self.llm_client
-                    )
-                else:
-                    # Create an async client if possible
-                    try:
-                        import openai
+                    return await self._async_request_with_openai(prompt, self.llm_client)
+                # Create an async client if possible
+                try:
+                    import openai
 
-                        async_client = openai.AsyncOpenAI(
-                            api_key=self.llm_client.api_key
-                        )
-                        return await self._async_request_with_openai(
-                            prompt, async_client
-                        )
-                    except (ImportError, AttributeError):
-                        # Fall back to sync client in async wrapper
-                        return await asyncio.to_thread(
-                            self._request_with_openai, prompt, self.llm_client
-                        )
+                    async_client = openai.AsyncOpenAI(api_key=self.llm_client.api_key)
+                    return await self._async_request_with_openai(prompt, async_client)
+                except (ImportError, AttributeError):
+                    # Fall back to sync client in async wrapper
+                    return await asyncio.to_thread(
+                        self._request_with_openai, prompt, self.llm_client
+                    )
             else:
                 # Fall back to sync client in async wrapper
-                return await asyncio.to_thread(
-                    self._request_with_openai, prompt, self.llm_client
-                )
+                return await asyncio.to_thread(self._request_with_openai, prompt, self.llm_client)
         else:
             # Generic approach - assume client has a completion method
             # Wrap synchronous method in asyncio.to_thread

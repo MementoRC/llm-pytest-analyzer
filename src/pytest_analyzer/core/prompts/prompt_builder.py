@@ -197,9 +197,7 @@ class PromptBuilder:
         if self.templates_dir and self.templates_dir.exists():
             self._load_templates_from_dir()
 
-        logger.debug(
-            "PromptBuilder initialized with max prompt size: %d", max_prompt_size
-        )
+        logger.debug("PromptBuilder initialized with max prompt size: %d", max_prompt_size)
 
     def _load_templates_from_dir(self) -> None:
         """Load templates from the templates directory if available."""
@@ -209,9 +207,7 @@ class PromptBuilder:
                 template_file = self.templates_dir / f"{template_name}_template.txt"
                 if template_file.exists():
                     self.templates[template_name] = template_file.read_text()
-                    logger.debug(
-                        "Loaded %s template from %s", template_name, template_file
-                    )
+                    logger.debug("Loaded %s template from %s", template_name, template_file)
         except Exception as e:
             logger.warning("Failed to load templates from directory: %s", e)
 
@@ -234,8 +230,7 @@ class PromptBuilder:
             "traceback": failure.traceback or "Not available",
             "relevant_code": failure.relevant_code or "Not available",
             "line_number": failure.line_number or "Unknown",
-            "code_context": failure.relevant_code
-            or "Not available",  # Alias for compatibility
+            "code_context": failure.relevant_code or "Not available",  # Alias for compatibility
         }
 
         # Format the template with the failure details
@@ -272,8 +267,7 @@ class PromptBuilder:
             "relevant_code": failure.relevant_code or "Not available",
             "line_number": failure.line_number or "Unknown",
             "root_cause": root_cause or "Unknown",
-            "code_context": failure.relevant_code
-            or "Not available",  # Alias for compatibility
+            "code_context": failure.relevant_code or "Not available",  # Alias for compatibility
         }
 
         # Format the template with the failure details
@@ -341,9 +335,7 @@ class PromptBuilder:
             "error_type": failure.error_type,
             "error_message": failure.error_message,
             "traceback": failure.traceback or "Not available",
-            "line_number": str(failure.line_number)
-            if failure.line_number
-            else "Unknown",
+            "line_number": str(failure.line_number) if failure.line_number else "Unknown",
             "code_context": failure.relevant_code or "Not available",
             "relevant_code": failure.relevant_code
             or "Not available",  # Alias for backward compatibility

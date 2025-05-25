@@ -27,9 +27,7 @@ class ResponseParser:
     """
 
     @staticmethod
-    def parse_analysis_response(
-        failure: PytestFailure, response: str
-    ) -> FailureAnalysis:
+    def parse_analysis_response(failure: PytestFailure, response: str) -> FailureAnalysis:
         """
         Parse an LLM response into a FailureAnalysis object.
 
@@ -45,20 +43,12 @@ class ResponseParser:
         """
         try:
             # Extract root cause (simple heuristic - can be improved)
-            root_cause_match = re.search(
-                r"Root Cause:?\s*(.+?)(?:\n|$)", response, re.IGNORECASE
-            )
-            root_cause = (
-                root_cause_match.group(1).strip() if root_cause_match else "Unknown"
-            )
+            root_cause_match = re.search(r"Root Cause:?\s*(.+?)(?:\n|$)", response, re.IGNORECASE)
+            root_cause = root_cause_match.group(1).strip() if root_cause_match else "Unknown"
 
             # Extract error type (simple heuristic - can be improved)
-            error_type_match = re.search(
-                r"Error Type:?\s*(.+?)(?:\n|$)", response, re.IGNORECASE
-            )
-            error_type = (
-                error_type_match.group(1).strip() if error_type_match else "Unknown"
-            )
+            error_type_match = re.search(r"Error Type:?\s*(.+?)(?:\n|$)", response, re.IGNORECASE)
+            error_type = error_type_match.group(1).strip() if error_type_match else "Unknown"
 
             # Extract suggested fixes (simple heuristic - can be improved)
             fixes = []
@@ -67,11 +57,7 @@ class ResponseParser:
             )
             if fix_section:
                 fix_text = fix_section.group(1).strip()
-                fixes = [
-                    fix.strip()
-                    for fix in re.split(r"\n\s*-\s*", fix_text)
-                    if fix.strip()
-                ]
+                fixes = [fix.strip() for fix in re.split(r"\n\s*-\s*", fix_text) if fix.strip()]
                 # If we didn't find any bullet points, try splitting by newlines
                 if not fixes:
                     fixes = [fix.strip() for fix in fix_text.split("\n") if fix.strip()]
@@ -141,10 +127,8 @@ class ResponseParser:
                         data = json.loads(json_str)
                         if isinstance(data, list):
                             for item in data:
-                                suggestion = (
-                                    ResponseParser._create_suggestion_from_json(
-                                        item, failure, analysis
-                                    )
+                                suggestion = ResponseParser._create_suggestion_from_json(
+                                    item, failure, analysis
                                 )
                                 if suggestion:
                                     suggestions.append(suggestion)
@@ -207,15 +191,14 @@ class ResponseParser:
                     explanation=explanation,
                     code_changes=code_changes,
                 )
-            else:
-                # Handle non-dict case
-                return FixSuggestion(
-                    failure=failure,
-                    suggestion=suggestion_text,
-                    confidence=confidence,
-                    explanation=explanation,
-                    code_changes={},
-                )
+            # Handle non-dict case
+            return FixSuggestion(
+                failure=failure,
+                suggestion=suggestion_text,
+                confidence=confidence,
+                explanation=explanation,
+                code_changes={},
+            )
         except Exception as e:
             logger.debug(f"Error creating suggestion from JSON: {e}")
             return None
@@ -239,10 +222,10 @@ class ResponseParser:
 
         # First try to find explicitly numbered suggestions
         # Look for patterns like "Suggestion 1: ...", "Fix 2: ...", etc.
-        suggestion_pattern = r"(?:Suggestion|Fix)\s+(\d+):\s*(.+?)(?=(?:\n\s*(?:Suggestion|Fix)\s+\d+:)|$)"
-        suggestion_matches = re.findall(
-            suggestion_pattern, text, re.DOTALL | re.IGNORECASE
+        suggestion_pattern = (
+            r"(?:Suggestion|Fix)\s+(\d+):\s*(.+?)(?=(?:\n\s*(?:Suggestion|Fix)\s+\d+:)|$)"
         )
+        suggestion_matches = re.findall(suggestion_pattern, text, re.DOTALL | re.IGNORECASE)
 
         if suggestion_matches:
             # Process numbered suggestions
@@ -298,9 +281,7 @@ class ResponseParser:
         """
         # Extract confidence if present
         confidence = 0.8  # Default confidence
-        confidence_match = re.search(
-            r"confidence:?\s*(\d+(?:\.\d+)?)%?", full_text, re.IGNORECASE
-        )
+        confidence_match = re.search(r"confidence:?\s*(\d+(?:\.\d+)?)%?", full_text, re.IGNORECASE)
         if confidence_match:
             try:
                 confidence_str = confidence_match.group(1)
@@ -322,18 +303,14 @@ class ResponseParser:
         code_matches_full = re.findall(code_pattern, full_text, re.DOTALL)
 
         # Use the suggestion text code matches if available, otherwise use full text
-        code_matches = (
-            code_matches_suggestion if code_matches_suggestion else code_matches_full
-        )
+        code_matches = code_matches_suggestion if code_matches_suggestion else code_matches_full
 
         if code_matches:
             for j, code in enumerate(code_matches):
                 code_changes[f"code_snippet_{j + 1}"] = code.strip()
 
             # Try to identify file paths before code blocks
-            file_pattern = (
-                r"(?:in|for|to|update|modify)\s+['\"]?([\/\w\.-]+\.\w+)['\"]?:\s*```"
-            )
+            file_pattern = r"(?:in|for|to|update|modify)\s+['\"]?([\/\w\.-]+\.\w+)['\"]?:\s*```"
             file_matches = re.findall(file_pattern, full_text, re.IGNORECASE)
             for j, file_path in enumerate(file_matches):
                 if j < len(code_matches):

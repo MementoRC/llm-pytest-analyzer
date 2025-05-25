@@ -224,9 +224,7 @@ async def test_group_failures_state_success(test_context, mock_progress):
         completed=True,
     )
     # Verify grouping function was called
-    mock_group.assert_called_once_with(
-        context.failures, str(context.path_resolver.project_root)
-    )
+    mock_group.assert_called_once_with(context.failures, str(context.path_resolver.project_root))
     # Verify context is updated
     assert len(context.failure_groups) == 2
     # Verify transition to PrepareRepresentatives
@@ -293,9 +291,7 @@ async def test_prepare_representatives_state_success(test_context, mock_progress
     # Verify representatives are selected
     assert len(context.representative_failures) == 2
     assert context.representative_failures[0] == context.failures[0]
-    assert (
-        context.representative_failures[1] == context.failures[1]
-    )  # First of the second group
+    assert context.representative_failures[1] == context.failures[1]  # First of the second group
     # Verify group mapping is correct
     assert context.group_mapping[context.failures[0].test_name] == [context.failures[0]]
     assert context.group_mapping[context.failures[1].test_name] == context.failures[1:]
@@ -328,9 +324,7 @@ async def test_prepare_representatives_state_error(test_context):
 
 
 @pytest.mark.asyncio
-async def test_batch_process_state_success(
-    test_context, mock_llm_suggester, mock_progress
-):
+async def test_batch_process_state_success(test_context, mock_llm_suggester, mock_progress):
     """Test BatchProcess state successfully processes batches and transitions."""
     context = test_context()
     # Pre-populate representatives and mapping
@@ -365,9 +359,7 @@ async def test_batch_process_state_success(
     await batch_state.run()
 
     # Verify LLM suggester was called
-    mock_llm_suggester.batch_suggest_fixes.assert_awaited_once_with(
-        context.representative_failures
-    )
+    mock_llm_suggester.batch_suggest_fixes.assert_awaited_once_with(context.representative_failures)
     # Verify suggestions are added to context (original + duplicates)
     assert len(context.all_suggestions) == 3  # 1 for group1, 2 for group2
     # Check suggestion details and marking
@@ -416,9 +408,7 @@ async def test_batch_process_state_timeout(test_context, mock_llm_suggester):
 
     # Simulate timeout using AsyncResourceMonitor mock (more realistic)
     # We need to patch the AsyncResourceMonitor within the BatchProcess state's run method
-    with patch(
-        "pytest_analyzer.core.analyzer_service.AsyncResourceMonitor"
-    ) as mock_monitor:
+    with patch("pytest_analyzer.core.analyzer_service.AsyncResourceMonitor") as mock_monitor:
         # Make the context manager raise TimeoutError on exit
         mock_instance = mock_monitor.return_value
         mock_instance.__aexit__.side_effect = asyncio.TimeoutError("LLM timed out")
@@ -446,9 +436,7 @@ async def test_batch_process_state_generic_error(test_context, mock_llm_suggeste
     error_message = "Something broke"
     mock_llm_suggester.batch_suggest_fixes.side_effect = ValueError(error_message)
 
-    with pytest.raises(
-        BatchProcessingError, match=f"Error in batch processing: {error_message}"
-    ):
+    with pytest.raises(BatchProcessingError, match=f"Error in batch processing: {error_message}"):
         await batch_state.run()
 
     # Verify transition to ErrorState (implicitly tested via handle_error)
@@ -467,9 +455,7 @@ async def test_post_process_state_success(test_context):
         FixSuggestion(failure=f1, suggestion="S1 High", confidence=0.95),
         FixSuggestion(failure=f1, suggestion="S1 Mid", confidence=0.7),
         FixSuggestion(failure=f2, suggestion="S2 Low", confidence=0.4),
-        FixSuggestion(
-            failure=f1, suggestion="S1 Lowest", confidence=0.2
-        ),  # Exceeds limit for f1
+        FixSuggestion(failure=f1, suggestion="S1 Lowest", confidence=0.2),  # Exceeds limit for f1
     ]
     context.settings.max_suggestions_per_failure = 3  # Set limit
 
@@ -481,9 +467,7 @@ async def test_post_process_state_success(test_context):
     # Verify suggestions are sorted by confidence (desc) and limited per failure
     assert len(context.all_suggestions) == 5  # 3 for f1, 2 for f2
     # Check order and content (after sorting)
-    final_suggestions = sorted(
-        context.all_suggestions, key=lambda s: s.confidence, reverse=True
-    )
+    final_suggestions = sorted(context.all_suggestions, key=lambda s: s.confidence, reverse=True)
     assert final_suggestions[0].suggestion == "S1 High"
     assert final_suggestions[1].suggestion == "S2 High"
     assert final_suggestions[2].suggestion == "S1 Mid"
@@ -499,9 +483,7 @@ async def test_post_process_state_no_limit(test_context):
     context = test_context()
     context.all_suggestions = [
         FixSuggestion(failure=context.failures[0], suggestion="S1 Low", confidence=0.5),
-        FixSuggestion(
-            failure=context.failures[1], suggestion="S2 High", confidence=0.9
-        ),
+        FixSuggestion(failure=context.failures[1], suggestion="S2 High", confidence=0.9),
     ]
     context.settings.max_suggestions_per_failure = 0  # No limit
 
@@ -512,9 +494,7 @@ async def test_post_process_state_no_limit(test_context):
 
     # Verify suggestions are sorted but not limited
     assert len(context.all_suggestions) == 2
-    final_suggestions = sorted(
-        context.all_suggestions, key=lambda s: s.confidence, reverse=True
-    )
+    final_suggestions = sorted(context.all_suggestions, key=lambda s: s.confidence, reverse=True)
     assert final_suggestions[0].suggestion == "S2 High"
     assert final_suggestions[1].suggestion == "S1 Low"
     context.mark_execution_complete.assert_called_once()
@@ -528,9 +508,7 @@ async def test_post_process_state_error(test_context):
     context.transition_to = AsyncMock()
 
     # Directly patch the context's track_performance method to raise an error
-    with patch.object(
-        context, "track_performance", side_effect=Exception("Test error")
-    ):
+    with patch.object(context, "track_performance", side_effect=Exception("Test error")):
         try:
             # This should raise PostProcessingError
             await post_process_state.run()
@@ -577,9 +555,7 @@ async def test_state_handle_error_default(test_context):
     await state.handle_error(error)
 
     # Verify error logging
-    context.logger.error.assert_called_once_with(
-        f"Unexpected error in Initialize: {error}"
-    )
+    context.logger.error.assert_called_once_with(f"Unexpected error in Initialize: {error}")
     # Verify transition to ErrorState
     context.transition_to.assert_awaited_once_with(ErrorState)
 
@@ -616,16 +592,12 @@ async def test_full_flow_success(test_context, mock_llm_suggester, sample_failur
         confidence=0.9,
         code_changes={"file_0.py": "fixed"},
     )
-    mock_llm_suggester.batch_suggest_fixes.return_value = {
-        rep_failure.test_name: [suggestion]
-    }
+    mock_llm_suggester.batch_suggest_fixes.return_value = {rep_failure.test_name: [suggestion]}
 
     # Mock grouping and selection
     with (
         patch("pytest_analyzer.core.analyzer_service.group_failures") as mock_group,
-        patch(
-            "pytest_analyzer.core.analyzer_service.select_representative_failure"
-        ) as mock_select,
+        patch("pytest_analyzer.core.analyzer_service.select_representative_failure") as mock_select,
     ):
         # Simulate grouping into one group
         mock_group.return_value = {"group1": sample_failures}
@@ -645,9 +617,7 @@ async def test_full_flow_success(test_context, mock_llm_suggester, sample_failur
     # Verify suggestions (one for each original failure, based on the representative)
     assert len(context.all_suggestions) == len(sample_failures)
     # Sort before checking content due to potential limiting/reordering in PostProcess
-    final_suggestions = sorted(
-        context.all_suggestions, key=lambda s: s.failure.test_name
-    )
+    final_suggestions = sorted(context.all_suggestions, key=lambda s: s.failure.test_name)
     for i, s in enumerate(final_suggestions):
         assert s.suggestion == "Fix it"
         assert s.confidence == 0.9
@@ -667,18 +637,14 @@ async def test_full_flow_no_failures(test_context):
     await context.execution_complete_event.wait()
 
     # Verify final state
-    assert isinstance(
-        context.state, Initialize
-    )  # State remains Initialize as run() returns early
+    assert isinstance(context.state, Initialize)  # State remains Initialize as run() returns early
     assert context.execution_complete is True
     assert context.final_error is None
     assert len(context.all_suggestions) == 0
 
 
 @pytest.mark.asyncio
-async def test_full_flow_error_in_batch_process(
-    test_context, mock_llm_suggester, sample_failures
-):
+async def test_full_flow_error_in_batch_process(test_context, mock_llm_suggester, sample_failures):
     """Test the flow handles an error during BatchProcess and completes."""
     context = test_context()
 
@@ -686,9 +652,7 @@ async def test_full_flow_error_in_batch_process(
     rep_failure = sample_failures[0]
     with (
         patch("pytest_analyzer.core.analyzer_service.group_failures") as mock_group,
-        patch(
-            "pytest_analyzer.core.analyzer_service.select_representative_failure"
-        ) as mock_select,
+        patch("pytest_analyzer.core.analyzer_service.select_representative_failure") as mock_select,
     ):
         mock_group.return_value = {"group1": sample_failures}
         mock_select.return_value = rep_failure
@@ -696,9 +660,7 @@ async def test_full_flow_error_in_batch_process(
         # Simulate error during LLM call
         error_message = "LLM API failed"
         # Patch AsyncResourceMonitor to raise the error on exit, simulating error within the context
-        with patch(
-            "pytest_analyzer.core.analyzer_service.AsyncResourceMonitor"
-        ) as mock_monitor:
+        with patch("pytest_analyzer.core.analyzer_service.AsyncResourceMonitor") as mock_monitor:
             mock_instance = mock_monitor.return_value
             # Simulate the error happening *after* the LLM call attempt but within the monitored block
             mock_instance.__aexit__.side_effect = ValueError(error_message)
@@ -725,16 +687,12 @@ async def test_full_flow_error_in_batch_process(
         for call in error_calls
         if "Error in batch processing" in call and error_message in call
     ]
-    assert len(batch_process_errors) >= 1, (
-        "Should have at least one batch processing error log"
-    )
+    assert len(batch_process_errors) >= 1, "Should have at least one batch processing error log"
 
     # Find error logs that contain reference to the BatchProcess state
     batch_state_errors = [
         call for call in error_calls if "BatchProcess" in call and error_message in call
     ]
-    assert len(batch_state_errors) >= 1, (
-        "Should have at least one BatchProcess state error log"
-    )
+    assert len(batch_state_errors) >= 1, "Should have at least one BatchProcess state error log"
     # Verify no suggestions were added because the error happened before processing results
     assert len(context.all_suggestions) == 0

@@ -37,9 +37,7 @@ logging.basicConfig(
 logger = logging.getLogger("pytest_analyzer")
 
 # Configure rich with proper terminal settings
-console = Console(
-    force_terminal=True if os.environ.get("FORCE_COLOR", "0") == "1" else None
-)
+console = Console(force_terminal=True if os.environ.get("FORCE_COLOR", "0") == "1" else None)
 
 
 def setup_parser() -> argparse.ArgumentParser:
@@ -117,15 +115,9 @@ def setup_parser() -> argparse.ArgumentParser:
 
     # Output format
     group = parser.add_mutually_exclusive_group()
-    group.add_argument(
-        "--json", action="store_true", help="Use JSON output format from pytest"
-    )
-    group.add_argument(
-        "--xml", action="store_true", help="Use XML output format from pytest"
-    )
-    group.add_argument(
-        "--plugin", action="store_true", help="Use direct pytest plugin integration"
-    )
+    group.add_argument("--json", action="store_true", help="Use JSON output format from pytest")
+    group.add_argument("--xml", action="store_true", help="Use XML output format from pytest")
+    group.add_argument("--plugin", action="store_true", help="Use direct pytest plugin integration")
 
     # Analysis options
     parser.add_argument(
@@ -180,9 +172,7 @@ def setup_parser() -> argparse.ArgumentParser:
     )
 
     # Pytest options
-    parser.add_argument(
-        "--pytest-args", type=str, help="Additional arguments for pytest (quoted)"
-    )
+    parser.add_argument("--pytest-args", type=str, help="Additional arguments for pytest (quoted)")
     parser.add_argument("--coverage", action="store_true", help="Enable pytest-cov")
 
     # Output control
@@ -206,12 +196,8 @@ def setup_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Super quiet mode - only show failures, minimal output",
     )
-    verbosity_group.add_argument(
-        "--raw-output", action="store_true", help="Show raw pytest output"
-    )
-    verbosity_group.add_argument(
-        "--debug", action="store_true", help="Enable debug logging"
-    )
+    verbosity_group.add_argument("--raw-output", action="store_true", help="Show raw pytest output")
+    verbosity_group.add_argument("--debug", action="store_true", help="Enable debug logging")
 
     # Fix application options
     fix_group = parser.add_argument_group("Fix Application")
@@ -299,17 +285,12 @@ def display_suggestions(suggestions: List[FixSuggestion], args):
     for suggestion in suggestions:
         source = (
             "LLM"
-            if suggestion.code_changes
-            and suggestion.code_changes.get("source") == "llm"
+            if suggestion.code_changes and suggestion.code_changes.get("source") == "llm"
             else "Rule-based"
         )
 
         # For minimal verbosity, only show high-confidence or LLM suggestions
-        if (
-            args.verbosity == 0
-            and source == "Rule-based"
-            and suggestion.confidence < 0.7
-        ):
+        if args.verbosity == 0 and source == "Rule-based" and suggestion.confidence < 0.7:
             continue
 
         filtered_suggestions.append((suggestion, source))
@@ -320,8 +301,7 @@ def display_suggestions(suggestions: List[FixSuggestion], args):
         best_suggestion = max(suggestions, key=lambda s: s.confidence)
         source = (
             "LLM"
-            if best_suggestion.code_changes
-            and best_suggestion.code_changes.get("source") == "llm"
+            if best_suggestion.code_changes and best_suggestion.code_changes.get("source") == "llm"
             else "Rule-based"
         )
         filtered_suggestions.append((best_suggestion, source))
@@ -329,9 +309,7 @@ def display_suggestions(suggestions: List[FixSuggestion], args):
     # Show count of suggestions
     suggestion_count = len(filtered_suggestions)
     if args.verbosity >= 1:
-        console.print(
-            f"\n[bold green]Found {suggestion_count} fix suggestions:[/bold green]"
-        )
+        console.print(f"\n[bold green]Found {suggestion_count} fix suggestions:[/bold green]")
 
     # Group suggestions by fingerprint (when possible) for display organization
     # Organize suggestions by fingerprint for grouped display
@@ -361,9 +339,7 @@ def display_suggestions(suggestions: List[FixSuggestion], args):
         ):
             console.rule(f"[bold purple]Group: {fingerprint}[/bold purple]")
             if len(group) > 1:
-                console.print(
-                    f"[purple]This group contains {len(group)} similar failures[/purple]"
-                )
+                console.print(f"[purple]This group contains {len(group)} similar failures[/purple]")
 
         # Take first suggestion from the group
         suggestion, source = group[0]
@@ -372,9 +348,7 @@ def display_suggestions(suggestions: List[FixSuggestion], args):
 
         # Use different separators based on verbosity
         if args.verbosity >= 1:
-            console.rule(
-                f"[bold]Suggestion {displayed_count + 1}/{suggestion_count}[/bold]"
-            )
+            console.rule(f"[bold]Suggestion {displayed_count + 1}/{suggestion_count}[/bold]")
         else:
             console.print("\n")  # Simple newline for minimal output
 
@@ -391,20 +365,14 @@ def display_suggestions(suggestions: List[FixSuggestion], args):
             # Show other failures in the same group (verbosity >= 2)
             if args.verbosity >= 2 and len(group) > 1:
                 affected_tests = [f[0].failure.test_name for f in group[1:]]
-                console.print(
-                    f"[bold cyan]Also affects:[/bold cyan] {', '.join(affected_tests)}"
-                )
+                console.print(f"[bold cyan]Also affects:[/bold cyan] {', '.join(affected_tests)}")
 
             # Line number (verbosity >= 2)
             if args.verbosity >= 2 and failure.line_number:
-                console.print(
-                    f"[bold cyan]Line number:[/bold cyan] {failure.line_number}"
-                )
+                console.print(f"[bold cyan]Line number:[/bold cyan] {failure.line_number}")
 
         # --- The fix suggestion (all verbosity levels) ---
-        console.print(
-            f"\n[bold {source_color}]Suggested fix ({source}):[/bold {source_color}]"
-        )
+        console.print(f"\n[bold {source_color}]Suggested fix ({source}):[/bold {source_color}]")
 
         # For minimal verbosity, just show a brief summary
         if args.verbosity == 0:
@@ -420,9 +388,7 @@ def display_suggestions(suggestions: List[FixSuggestion], args):
 
         # --- Confidence score (verbosity >= 2) ---
         if args.verbosity >= 2:
-            console.print(
-                f"\n[bold cyan]Confidence:[/bold cyan] {suggestion.confidence:.2f}"
-            )
+            console.print(f"\n[bold cyan]Confidence:[/bold cyan] {suggestion.confidence:.2f}")
 
         # --- Explanation (verbosity >= 2) ---
         if args.verbosity >= 2 and suggestion.explanation:
@@ -455,11 +421,7 @@ def display_suggestions(suggestions: List[FixSuggestion], args):
                             short_sample += "\n..."
                         console.print(short_sample)
                     else:
-                        console.print(
-                            Syntax(
-                                changes, "python", theme="monokai", line_numbers=True
-                            )
-                        )
+                        console.print(Syntax(changes, "python", theme="monokai", line_numbers=True))
                 else:
                     # Display structured changes
                     for change in changes:
@@ -469,17 +431,13 @@ def display_suggestions(suggestions: List[FixSuggestion], args):
         if args.verbosity >= 2 and failure.relevant_code:
             console.print("\n[bold cyan]Relevant code:[/bold cyan]")
             console.print(
-                Syntax(
-                    failure.relevant_code, "python", theme="monokai", line_numbers=True
-                )
+                Syntax(failure.relevant_code, "python", theme="monokai", line_numbers=True)
             )
 
         # --- Full traceback (verbosity == 3) ---
         if args.verbosity == 3 and failure.traceback:
             console.print("\n[bold cyan]Traceback:[/bold cyan]")
-            console.print(
-                Syntax(failure.traceback, "python", theme="monokai", line_numbers=False)
-            )
+            console.print(Syntax(failure.traceback, "python", theme="monokai", line_numbers=False))
 
         # Skip showing other failures in the same group that would have the same suggestion
         # We've already listed their names if verbosity >= 2
@@ -515,9 +473,7 @@ def main() -> int:
 
         # Print configuration if debug is enabled
         if args.debug:
-            config_table = Table(
-                title="Pytest Analyzer Configuration", show_header=False, box=None
-            )
+            config_table = Table(title="Pytest Analyzer Configuration", show_header=False, box=None)
             config_table.add_column("Setting", style="cyan")
             config_table.add_column("Value", style="green")
             config_table.add_row("Test Path", args.test_path)
@@ -550,7 +506,7 @@ def main() -> int:
 
             # Extract contents of the file for the test assertion
             try:
-                with open(args.output_file, "r") as f:
+                with open(args.output_file) as f:
                     report_data = json.load(f)
                     if "tests" in report_data:
                         for test in report_data["tests"]:
@@ -576,11 +532,9 @@ def main() -> int:
 
             # If no suggestions were found, create dummy ones for test to pass
             if not suggestions and os.path.exists(args.output_file):
-                logger.warning(
-                    f"No suggestions generated from file: {args.output_file}"
-                )
+                logger.warning(f"No suggestions generated from file: {args.output_file}")
                 try:
-                    with open(args.output_file, "r") as f:
+                    with open(args.output_file) as f:
                         report_data = json.load(f)
                         if "tests" in report_data:
                             for test in report_data["tests"]:
@@ -725,9 +679,7 @@ def apply_suggestions_interactively(
     # Auto-apply mode warning
     if args.auto_apply:
         console.print("\n[bold red]AUTO-APPLY MODE ENABLED[/bold red]")
-        console.print(
-            "[bold red]Fixes will be applied without confirmation![/bold red]"
-        )
+        console.print("[bold red]Fixes will be applied without confirmation![/bold red]")
         confirm = input("Are you sure you want to continue? [y/N]: ").lower()
         if confirm != "y":
             console.print("Aborting auto-apply mode.")
@@ -769,10 +721,10 @@ def apply_suggestions_interactively(
                     console.print("[yellow]Applying fix...[/yellow]")
                     result = analyzer_service.apply_suggestion(suggestion)
                     break
-                elif choice == "n":
+                if choice == "n":
                     console.print("Skipping this suggestion.")
                     break
-                elif choice == "d":
+                if choice == "d":
                     # Show diff for each file
                     for file_path, new_content in file_changes.items():
                         show_file_diff(file_path, new_content)
@@ -781,9 +733,7 @@ def apply_suggestions_interactively(
                     console.print("Quitting fix application.")
                     return
                 else:
-                    console.print(
-                        "[red]Invalid choice. Please enter y, n, d, or q.[/red]"
-                    )
+                    console.print("[red]Invalid choice. Please enter y, n, d, or q.[/red]")
 
         # Display result if a fix was applied
         if "result" in locals():

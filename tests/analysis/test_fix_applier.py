@@ -38,14 +38,10 @@ class TestFixApplier:
             # Check backup was created - now in a temp directory for direct mode
             # Since we're using direct mode with a backup directory, we need to check the result
             assert result.success, "Apply operation should succeed"
-            assert test_file in result.applied_files, (
-                "Applied files should include the test file"
-            )
+            assert test_file in result.applied_files, "Applied files should include the test file"
 
             # Check test file was updated
-            assert test_file.read_text() == "new content", (
-                "File content was not updated"
-            )
+            assert test_file.read_text() == "new content", "File content was not updated"
 
     def test_apply_fix_success(self, tmp_path):
         """Test successful application of changes."""
@@ -72,9 +68,7 @@ class TestFixApplier:
 
             # Check result
             assert result.success, "Apply operation should succeed"
-            assert len(result.applied_files) == 2, (
-                "Should have applied changes to 2 files"
-            )
+            assert len(result.applied_files) == 2, "Should have applied changes to 2 files"
             assert file1 in result.applied_files, "Applied files should include file1"
             assert file2 in result.applied_files, "Applied files should include file2"
 
@@ -85,18 +79,14 @@ class TestFixApplier:
         test_file.write_text("original content")
 
         # Initialize FixApplier with direct mode for test, and verbose mode
-        applier = FixApplier(
-            project_root=tmp_path, use_safe_mode=False, verbose_test_output=True
-        )
+        applier = FixApplier(project_root=tmp_path, use_safe_mode=False, verbose_test_output=True)
 
         # Mock subprocess.run to simulate passing tests
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
 
             # Apply changes with verbose output for validation
-            result = applier.apply_fix(
-                {str(test_file): "new content"}, ["test_module::test_func"]
-            )
+            result = applier.apply_fix({str(test_file): "new content"}, ["test_module::test_func"])
 
             # Check validation was called correctly
             mock_run.assert_called_once()
@@ -105,15 +95,11 @@ class TestFixApplier:
             assert args[0][1] == "-m", "Should use module style"
             assert args[0][2] == "pytest", "Should call pytest for validation"
             assert args[0][3] == "-v", "Should use verbose mode"
-            assert args[0][4] == "test_module::test_func", (
-                "Should call the specified test"
-            )
+            assert args[0][4] == "test_module::test_func", "Should call the specified test"
             assert kwargs["cwd"] == tmp_path, "Should run in the project root"
 
             # Check result
-            assert result.success, (
-                "Apply operation should succeed when validation passes"
-            )
+            assert result.success, "Apply operation should succeed when validation passes"
 
     def test_validation_failure(self, tmp_path):
         """Test changes are rolled back when validation fails."""
@@ -129,9 +115,7 @@ class TestFixApplier:
             mock_run.return_value = MagicMock(returncode=1)
 
             # Apply changes
-            result = applier.apply_fix(
-                {str(test_file): "new content"}, ["test_module::test_func"]
-            )
+            result = applier.apply_fix({str(test_file): "new content"}, ["test_module::test_func"])
 
             # Check validation was called
             mock_run.assert_called_once()
@@ -142,12 +126,8 @@ class TestFixApplier:
             )
 
             # Check result
-            assert not result.success, (
-                "Apply operation should fail when validation fails"
-            )
-            assert len(result.rolled_back_files) >= 1, (
-                "Should have rolled back at least 1 file"
-            )
+            assert not result.success, "Apply operation should fail when validation fails"
+            assert len(result.rolled_back_files) >= 1, "Should have rolled back at least 1 file"
 
     def test_file_not_found(self, tmp_path):
         """Test handling of non-existent files."""
@@ -158,15 +138,11 @@ class TestFixApplier:
         applier = FixApplier(project_root=tmp_path, use_safe_mode=False)
 
         # Apply changes to non-existent file
-        result = applier.apply_fix(
-            {str(non_existent_file): "new content"}, ["dummy_test"]
-        )
+        result = applier.apply_fix({str(non_existent_file): "new content"}, ["dummy_test"])
 
         # Check result
         assert not result.success, "Apply operation should fail for non-existent files"
-        assert "not found" in result.message, (
-            "Error message should indicate file not found"
-        )
+        assert "not found" in result.message, "Error message should indicate file not found"
 
     def test_rollback_success(self, tmp_path):
         """Test rollback restores files correctly."""
@@ -194,12 +170,8 @@ class TestFixApplier:
             # Check result
             assert not result.success, "Apply operation should fail"
             assert len(result.rolled_back_files) == 2, "Should have rolled back 2 files"
-            assert file1 in result.rolled_back_files, (
-                "Rolled back files should include file1"
-            )
-            assert file2 in result.rolled_back_files, (
-                "Rolled back files should include file2"
-            )
+            assert file1 in result.rolled_back_files, "Rolled back files should include file1"
+            assert file2 in result.rolled_back_files, "Rolled back files should include file2"
 
     def test_skip_metadata_keys(self, tmp_path):
         """Test that metadata keys in code_changes are skipped."""
@@ -233,9 +205,7 @@ class TestFixApplier:
 
             # Check result
             assert result.success, "Apply operation should succeed"
-            assert len(result.applied_files) == 1, (
-                "Should have applied changes to 1 file"
-            )
+            assert len(result.applied_files) == 1, "Should have applied changes to 1 file"
 
     def test_show_diff(self, tmp_path):
         """Test diff generation."""
@@ -250,9 +220,7 @@ class TestFixApplier:
         diff = applier.show_diff(test_file, "line1\nmodified line\nline3\n")
 
         # Check diff content
-        assert "--- a/test_file.py" in diff, (
-            "Diff should include filename in 'from' line"
-        )
+        assert "--- a/test_file.py" in diff, "Diff should include filename in 'from' line"
         assert "+++ b/test_file.py" in diff, "Diff should include filename in 'to' line"
         assert "-line2" in diff, "Diff should show removed line"
         assert "+modified line" in diff, "Diff should show added line"
@@ -298,18 +266,11 @@ class TestFixApplier:
             mock_validate_temp.assert_called_once()
 
             # Check the original file was updated
-            assert (
-                test_file.read_text()
-                == "def sample_function():\n    return 'modified'\n"
-            )
+            assert test_file.read_text() == "def sample_function():\n    return 'modified'\n"
 
             # Check result
-            assert result.success, (
-                "Apply operation should succeed when temp validation passes"
-            )
-            assert len(result.applied_files) == 1, (
-                "Should have applied changes to 1 file"
-            )
+            assert result.success, "Apply operation should succeed when temp validation passes"
+            assert len(result.applied_files) == 1, "Should have applied changes to 1 file"
 
     def test_safe_mode_with_validation_failure(self, tmp_path):
         """Test that safe mode doesn't modify original files when validation fails."""
@@ -339,11 +300,7 @@ class TestFixApplier:
         ) as mock_validate_temp:
             # Apply a change that should fail validation
             result = applier.apply_fix(
-                {
-                    str(
-                        test_file
-                    ): "def sample_function():\n    return 'will fail validation'\n"
-                },
+                {str(test_file): "def sample_function():\n    return 'will fail validation'\n"},
                 ["tests/test_sample.py::test_sample"],
             )
 
@@ -351,15 +308,10 @@ class TestFixApplier:
             mock_validate_temp.assert_called_once()
 
             # Check the original file was NOT modified
-            assert (
-                test_file.read_text()
-                == "def sample_function():\n    return 'original'\n"
-            )
+            assert test_file.read_text() == "def sample_function():\n    return 'original'\n"
 
             # Check result
-            assert not result.success, (
-                "Apply operation should fail when temp validation fails"
-            )
+            assert not result.success, "Apply operation should fail when temp validation fails"
             assert len(result.applied_files) == 0, "Should not have applied any changes"
             assert "Original files untouched" in result.message
 
@@ -385,11 +337,7 @@ class TestFixApplier:
                 ) as mock_temp_validate:
                     # Apply changes
                     result = applier.apply_fix(
-                        {
-                            str(
-                                test_file
-                            ): "def sample_function():\n    return 'modified'\n"
-                        },
+                        {str(test_file): "def sample_function():\n    return 'modified'\n"},
                         ["dummy_test"],
                     )
 
@@ -399,8 +347,7 @@ class TestFixApplier:
 
                     # Verify file was modified
                     assert (
-                        test_file.read_text()
-                        == "def sample_function():\n    return 'modified'\n"
+                        test_file.read_text() == "def sample_function():\n    return 'modified'\n"
                     )
 
                     # Check result

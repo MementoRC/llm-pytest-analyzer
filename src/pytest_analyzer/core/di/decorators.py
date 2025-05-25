@@ -157,14 +157,13 @@ def inject(
         # Called with no args like @inject
         # Return a decorator that will use the global container
         return lambda func: _create_inject_wrapper(func, None)
-    elif isinstance(container_or_func, Container):
+    if isinstance(container_or_func, Container):
         # Called with a container like @inject(container)
         # Return a decorator that will use the provided container
         return lambda func: _create_inject_wrapper(func, container_or_func)
-    else:
-        # Called like @inject without parentheses
-        # container_or_func is actually the function to decorate
-        return _create_inject_wrapper(container_or_func, None)
+    # Called like @inject without parentheses
+    # container_or_func is actually the function to decorate
+    return _create_inject_wrapper(container_or_func, None)
 
 
 def _create_inject_wrapper(func: Callable, container: Optional[Container]) -> Callable:
@@ -222,10 +221,7 @@ def _create_inject_wrapper(func: Callable, container: Optional[Container]) -> Ca
                     param_type = hints[name]
 
                     # Inject the dependency if it has no default or default is None
-                    if (
-                        param.default is inspect.Parameter.empty
-                        or param.default is None
-                    ):
+                    if param.default is inspect.Parameter.empty or param.default is None:
                         try:
                             injected_kwargs[name] = container_to_use.resolve(param_type)
                         except Exception:

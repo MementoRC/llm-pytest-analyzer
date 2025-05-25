@@ -1,106 +1,87 @@
 # Task ID: 9
-# Title: Implement Extractor Component
-# Status: done
-# Dependencies: 2, 3
+# Title: Implement ResponseParser Component
+# Status: pending
+# Dependencies: 7
 # Priority: medium
-# Description: Create the Extractor component for parsing test results according to the Protocol interface.
+# Description: Create a ResponseParser component for parsing responses from the LLM service
 # Details:
-Implement a concrete Extractor that parses pytest test results:
+Implement a component for parsing responses from the LLM service. Support extracting structured data, code blocks, and handling various response formats.
 
+Example implementation:
 ```python
-from typing import Dict, Any, List, Optional
+import logging
 import re
-import os
+from typing import Dict, Any, List, Optional, Union
 
-class PytestExtractor:
-    def extract(self, test_results: str) -> Dict[str, Any]:
-        """Extract relevant information from pytest test results."""
-        failures = []
-        test_files = set()
+class ResponseParser:
+    def __init__(self, logger: Optional[logging.Logger] = None):
+        self.logger = logger or logging.getLogger(__name__)
 
-        # Extract test failures using regex patterns
-        failure_pattern = r'(FAILED|ERROR) (.+?)::(.+?)\s'
-        for match in re.finditer(failure_pattern, test_results):
-            status, file_path, test_name = match.groups()
+    def extract_code_blocks(self, response: str) -> List[str]:
+        self.logger.debug("Extracting code blocks from response")
 
-            # Find the error message and traceback
-            error_section = self._extract_error_section(test_results, file_path, test_name)
+        code_pattern = r"```(?:python)?\n([\s\S]+?)\n```"
+        code_blocks = re.findall(code_pattern, response)
 
-            failures.append({
-                'status': status,
-                'file_path': file_path,
-                'test_name': test_name,
-                'error': error_section.get('error', ''),
-                'traceback': error_section.get('traceback', ''),
-                'code_context': self._extract_code_context(file_path, error_section)
-            })
+        self.logger.debug(f"Extracted {len(code_blocks)} code blocks")
+        return code_blocks
 
-            test_files.add(file_path)
+    def extract_json(self, response: str) -> Optional[Dict[str, Any]]:
+        self.logger.debug("Extracting JSON from response")
 
-        return {
-            'failures': failures,
-            'test_files': list(test_files),
-            'raw_output': test_results
-        }
+        json_pattern = r"```json\n([\s\S]+?)\n```"
+        json_match = re.search(json_pattern, response)
 
-    def _extract_error_section(self, test_results: str, file_path: str, test_name: str) -> Dict[str, str]:
-        # Find the section containing the error for this specific test
-        pattern = f"{file_path}::{test_name}[\s\S]+?(?=\n\n|$)"
-        match = re.search(pattern, test_results)
-        if not match:
-            return {'error': '', 'traceback': ''}
+        if not json_match:
+            self.logger.warning("No JSON block found in response")
+            return None
 
-        section = match.group(0)
-
-        # Extract traceback and error message
-        traceback_lines = []
-        error_message = ''
-
-        in_traceback = False
-        for line in section.split('\n'):
-            if line.strip().startswith('E '):
-                if 'Error:' in line or 'Exception:' in line or 'AssertionError:' in line:
-                    error_message = line.strip()[2:]
-                else:
-                    traceback_lines.append(line.strip()[2:])
-            elif line.strip().startswith('_ _ _'):
-                in_traceback = True
-            elif in_traceback and line.strip():
-                traceback_lines.append(line.strip())
-
-        return {
-            'error': error_message,
-            'traceback': '\n'.join(traceback_lines)
-        }
-
-    def _extract_code_context(self, file_path: str, error_section: Dict[str, str]) -> Dict[str, Any]:
-        # Extract line numbers from traceback
-        line_pattern = f"{file_path}:(\d+)"
-        line_matches = re.findall(line_pattern, error_section.get('traceback', ''))
-
-        if not line_matches or not os.path.exists(file_path):
-            return {'source_code': '', 'line_number': 0}
-
+        import json
         try:
-            line_number = int(line_matches[0])
-            with open(file_path, 'r') as f:
-                lines = f.readlines()
+            json_str = json_match.group(1)
+            json_data = json.loads(json_str)
+            self.logger.debug(f"Extracted JSON data with keys: {list(json_data.keys())}")
+            return json_data
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Error parsing JSON: {str(e)}")
+            return None
 
-            # Get context (5 lines before and after)
-            start = max(0, line_number - 6)
-            end = min(len(lines), line_number + 5)
-            context_lines = lines[start:end]
+    def parse_structured_response(self, response: str, expected_sections: List[str]) -> Dict[str, str]:
+        self.logger.debug(f"Parsing structured response with sections: {expected_sections}")
 
-            return {
-                'source_code': ''.join(context_lines),
-                'line_number': line_number,
-                'start_line': start + 1  # 1-based line numbering
-            }
-        except Exception as e:
-            return {'source_code': f"Error extracting code: {str(e)}", 'line_number': 0}
+        result = {}
+        current_section = None
+        current_content = []
+
+        for line in response.split('\n'):
+            # Check if line is a section header
+            for section in expected_sections:
+                if line.strip().lower() == section.lower() + ':' or line.strip().lower() == '## ' + section.lower():
+                    # Save previous section if it exists
+                    if current_section:
+                        result[current_section] = '\n'.join(current_content).strip()
+                        current_content = []
+                    current_section = section
+                    break
+            else:
+                # If not a section header and we're in a section, add to content
+                if current_section:
+                    current_content.append(line)
+
+        # Save the last section
+        if current_section and current_content:
+            result[current_section] = '\n'.join(current_content).strip()
+
+        # Check if all expected sections were found
+        missing_sections = [s for s in expected_sections if s not in result]
+        if missing_sections:
+            self.logger.warning(f"Missing sections in response: {missing_sections}")
+
+        self.logger.debug(f"Parsed {len(result)} sections from response")
+        return result
 ```
 
-This implementation should handle parsing pytest output to extract test failures, error messages, tracebacks, and code context.
+Ensure the implementation can handle various response formats and extract structured data reliably.
 
 # Test Strategy:
-Create unit tests with sample pytest output to verify extraction of failures, error messages, and code context. Test with different pytest output formats and error types. Verify handling of edge cases like missing files or malformed output.
+Create unit tests with sample LLM responses to verify extraction of code blocks, JSON data, and structured sections. Test error handling for malformed responses. Verify that the parser correctly identifies missing sections and handles edge cases.

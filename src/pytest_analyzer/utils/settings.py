@@ -47,9 +47,7 @@ def get_config_manager(
     # Determine if a reload is needed or if the specified config file differs
     needs_init_or_reload = _config_manager_instance is None or force_reload
     config_file_specified_without_reload = (
-        config_file is not None
-        and _config_manager_instance is not None
-        and not force_reload
+        config_file is not None and _config_manager_instance is not None and not force_reload
     )
 
     if needs_init_or_reload:
@@ -73,9 +71,7 @@ def get_config_manager(
 
     elif config_file_specified_without_reload:
         # Warn if called with a specific file but not reloading the existing instance
-        current_config_path = getattr(
-            _config_manager_instance, "_config_file_path", "N/A"
-        )
+        current_config_path = getattr(_config_manager_instance, "_config_file_path", "N/A")
         logger.warning(
             f"get_config_manager called with config_file='{config_file}' but "
             f"force_reload=False. Returning existing manager instance which might be "

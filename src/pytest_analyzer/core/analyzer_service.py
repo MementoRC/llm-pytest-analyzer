@@ -1,13 +1,17 @@
+import ast
 import asyncio
 import logging
 import os
+import resource
 import subprocess
 import tempfile
+import time
 from abc import ABC, abstractmethod
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, TypeVar, Union, cast
 
+import psutil
 from rich.progress import Progress, TaskID
 
 from ..utils.path_resolver import PathResolver
@@ -29,6 +33,64 @@ from .extraction.pytest_plugin import collect_failures_with_plugin
 from .models.pytest_failure import FixSuggestion, PytestFailure
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def temporarily_remove_memory_limits():
+    """Context manager to temporarily remove memory limits for subprocess execution.
+
+    This fixes the issue where RLIMIT_AS prevents pytest subprocesses from
+    allocating memory for Qt GUI components, causing SIGABRT crashes.
+
+    If we can't modify limits due to permissions, we'll try alternative approaches.
+    """
+    original_limits = None
+    memory_limit_removed = False
+
+    try:
+        # Save current memory limits
+        original_limits = resource.getrlimit(resource.RLIMIT_AS)
+        logger.debug(f"DEBUG: Original memory limits: {original_limits}")
+
+        # Try to remove memory limits for subprocess execution
+        # Use the current hard limit as the new soft limit if we can't use INFINITY
+        soft_limit, hard_limit = original_limits
+
+        if hard_limit == resource.RLIM_INFINITY:
+            # Can use unlimited
+            new_limit = resource.RLIM_INFINITY
+        else:
+            # Use the hard limit as the new soft limit (maximum possible)
+            new_limit = hard_limit
+
+        resource.setrlimit(resource.RLIMIT_AS, (new_limit, hard_limit))
+        memory_limit_removed = True
+        logger.debug(
+            f"DEBUG: Memory limits temporarily increased for subprocess: ({new_limit}, {hard_limit})"
+        )
+
+        yield
+
+    except (OSError, ValueError) as e:
+        logger.warning(f"DEBUG: Could not modify memory limits: {e}")
+        # If we can't modify limits, still proceed with subprocess but warn user
+        logger.warning(
+            "DEBUG: Running subprocess with original memory limits - may cause Qt allocation failures"
+        )
+        yield
+
+    except Exception as e:
+        logger.error(f"DEBUG: Unexpected error with memory limits: {e}")
+        yield
+
+    finally:
+        if memory_limit_removed and original_limits is not None:
+            try:
+                # Restore original memory limits
+                resource.setrlimit(resource.RLIMIT_AS, original_limits)
+                logger.debug(f"DEBUG: Memory limits restored to: {original_limits}")
+            except Exception as e:
+                logger.warning(f"DEBUG: Could not restore memory limits: {e}")
 
 
 # --- State Machine Implementation ---
@@ -84,9 +146,7 @@ class State(ABC):
         if isinstance(error, PytestAnalyzerError):
             self.context.log_error(f"{error.__class__.__name__}: {error}")
         else:
-            self.context.log_error(
-                f"Unexpected error in {self.__class__.__name__}: {error}"
-            )
+            self.context.log_error(f"Unexpected error in {self.__class__.__name__}: {error}")
 
         await self.context.transition_to(ErrorState)
 
@@ -125,7 +185,7 @@ class Context:
         self.path_resolver = path_resolver
         self.settings = settings
         self.llm_suggester = llm_suggester
-        self.logger = cast(logging.Logger, logger)
+        self.logger = cast("logging.Logger", logger)
         self.performance_tracker = performance_tracker
 
         # State data
@@ -184,9 +244,7 @@ class Context:
         """Log a warning message."""
         self.logger.warning(message)
 
-    def create_progress_task(
-        self, key: str, description: str, **kwargs
-    ) -> Optional[TaskID]:
+    def create_progress_task(self, key: str, description: str, **kwargs) -> Optional[TaskID]:
         """
         Create a progress task and store its ID for later reference.
 
@@ -296,9 +354,7 @@ class Initialize(State):
             await self.context.transition_to(GroupFailures)
 
         except Exception as e:
-            raise InitializationError(
-                f"Failed to initialize suggestion generation: {e}"
-            ) from e
+            raise InitializationError(f"Failed to initialize suggestion generation: {e}") from e
 
 
 class GroupFailures(State):
@@ -306,9 +362,7 @@ class GroupFailures(State):
 
     async def run(self) -> None:
         # Add task for grouping
-        self.context.create_progress_task(
-            "grouping", "[cyan]Grouping similar failures...", total=1
-        )
+        self.context.create_progress_task("grouping", "[cyan]Grouping similar failures...", total=1)
 
         try:
             # Group similar failures
@@ -318,9 +372,7 @@ class GroupFailures(State):
                     if self.context.path_resolver
                     else None
                 )
-                self.context.failure_groups = group_failures(
-                    self.context.failures, project_root
-                )
+                self.context.failure_groups = group_failures(self.context.failures, project_root)
 
             # Update progress
             self.context.update_progress(
@@ -339,9 +391,7 @@ class GroupFailures(State):
                 await self.context.transition_to(PrepareRepresentatives)
             else:
                 # Skip to post-processing if no groups were found
-                self.context.log_info(
-                    "No failure groups found, skipping to post-processing"
-                )
+                self.context.log_info("No failure groups found, skipping to post-processing")
                 await self.context.transition_to(PostProcess)
 
         except Exception as e:
@@ -395,14 +445,10 @@ class BatchProcess(State):
         try:
             async with self.context.track_performance("batch_process_failures"):
                 # Start resource monitoring with timeout
-                async with AsyncResourceMonitor(
-                    max_time_seconds=self.context.settings.llm_timeout
-                ):
+                async with AsyncResourceMonitor(max_time_seconds=self.context.settings.llm_timeout):
                     # Get suggestions for all representatives
-                    suggestions_by_test = (
-                        await self.context.llm_suggester.batch_suggest_fixes(
-                            self.context.representative_failures
-                        )
+                    suggestions_by_test = await self.context.llm_suggester.batch_suggest_fixes(
+                        self.context.representative_failures
                     )
 
                     # Process suggestions for all groups
@@ -412,9 +458,7 @@ class BatchProcess(State):
                             continue
 
                         # Get the representative failure
-                        representative = next(
-                            (f for f in group if f.test_name == test_name), None
-                        )
+                        representative = next((f for f in group if f.test_name == test_name), None)
 
                         if representative and suggestions:
                             # Process all suggestions for this group
@@ -468,9 +512,7 @@ class BatchProcess(State):
                         explanation=suggestion.explanation,
                         confidence=suggestion.confidence,
                         code_changes=(
-                            dict(suggestion.code_changes)
-                            if suggestion.code_changes
-                            else None
+                            dict(suggestion.code_changes) if suggestion.code_changes else None
                         ),
                     )
                     # Add marked duplicate suggestion
@@ -486,9 +528,7 @@ class PostProcess(State):
         try:
             async with self.context.track_performance("async_post_processing"):
                 # Sort suggestions by confidence
-                self.context.all_suggestions.sort(
-                    key=lambda s: s.confidence, reverse=True
-                )
+                self.context.all_suggestions.sort(key=lambda s: s.confidence, reverse=True)
 
                 # Limit suggestions per failure if specified
                 if self.context.settings.max_suggestions_per_failure > 0:
@@ -556,7 +596,7 @@ class PytestAnalyzerService:
 
     def __init__(
         self,
-        settings: Optional[Settings] = None,
+        settings: Settings,
         llm_client: Optional[Any] = None,
         use_async: bool = False,
         batch_size: int = 5,
@@ -571,7 +611,7 @@ class PytestAnalyzerService:
         :param batch_size: Number of failures to process in each batch
         :param max_concurrency: Maximum number of concurrent LLM requests
         """
-        self.settings = settings or Settings()
+        self.settings = settings
         self.settings.use_llm = True  # Force LLM usage
         self.path_resolver = PathResolver(self.settings.project_root)
         self.analyzer = FailureAnalyzer(max_suggestions=self.settings.max_suggestions)
@@ -588,19 +628,51 @@ class PytestAnalyzerService:
         if self.settings.check_git:
             project_root = str(self.path_resolver.project_root)
             self.git_available = confirm_git_setup(project_root)
-            logger.info(
-                f"Git integration {'enabled' if self.git_available else 'disabled'}"
+            logger.info(f"Git integration {'enabled' if self.git_available else 'disabled'}")
+
+        # Initialize LLM client based on settings
+        llm_api_client: Optional[Any] = None
+        try:
+            if self.settings.llm_provider == "openai" and self.settings.llm_api_key_openai:
+                import openai
+
+                llm_api_client = openai.OpenAI(api_key=self.settings.llm_api_key_openai)
+                logger.info(
+                    f"OpenAI client initialized for model: {self.settings.llm_model_openai}"
+                )
+            elif self.settings.llm_provider == "anthropic" and self.settings.llm_api_key_anthropic:
+                from anthropic import Anthropic
+
+                llm_api_client = Anthropic(api_key=self.settings.llm_api_key_anthropic)
+                logger.info(
+                    f"Anthropic client initialized for model: {self.settings.llm_model_anthropic}"
+                )
+            elif self.settings.llm_provider != "none":
+                logger.warning(
+                    f"LLM provider '{self.settings.llm_provider}' selected, but API key is missing or provider is unsupported by direct init."
+                )
+        except ImportError as e:
+            logger.error(
+                f"Failed to import LLM client library for {self.settings.llm_provider}: {e}"
             )
+            llm_api_client = None  # Ensure client is None if import fails
+        except Exception as e:
+            logger.error(f"Failed to initialize LLM client for {self.settings.llm_provider}: {e}")
+            llm_api_client = None
+
+        # Use the provided llm_client if available (e.g., for testing)
+        if llm_client is not None:
+            llm_api_client = llm_client
+            logger.info("Using provided LLM client (e.g., for testing)")
 
         # Always initialize LLM suggester - no rule-based suggester
         self.llm_suggester = LLMSuggester(
-            llm_client=llm_client,
+            llm_client=llm_api_client,
             min_confidence=self.settings.min_confidence,
             timeout_seconds=self.settings.llm_timeout,
             batch_size=batch_size,
             max_concurrency=max_concurrency,
         )
-
         # Prepare fix_applier attribute to accept different implementations
         self.fix_applier: Any = None
         # Initialize fix applier for applying suggestions
@@ -608,13 +680,13 @@ class PytestAnalyzerService:
             from ..utils.git_fix_applier import GitFixApplier
 
             self.fix_applier = GitFixApplier(
-                project_root=cast(Path, self.settings.project_root),
+                project_root=cast("Path", self.settings.project_root),
                 verbose_test_output=False,  # Default to quiet mode for validation
             )
         else:
             # Fallback to traditional file backup approach
             self.fix_applier = FixApplier(
-                project_root=cast(Path, self.settings.project_root),
+                project_root=cast("Path", self.settings.project_root),
                 backup_suffix=".pytest-analyzer.bak",
                 verbose_test_output=False,  # Default to quiet mode for validation
             )
@@ -628,14 +700,10 @@ class PytestAnalyzerService:
                 asyncio.set_event_loop(asyncio.new_event_loop())
 
         logger.info(f"Async processing: {'enabled' if self.use_async else 'disabled'}")
-        logger.info(
-            f"Batch size: {self.batch_size}, Max concurrency: {self.max_concurrency}"
-        )
+        logger.info(f"Batch size: {self.batch_size}, Max concurrency: {self.max_concurrency}")
 
     @with_timeout(300)
-    def analyze_pytest_output(
-        self, output_path: Union[str, Path]
-    ) -> List[FixSuggestion]:
+    def analyze_pytest_output(self, output_path: Union[str, Path]) -> List[FixSuggestion]:
         """
         Analyze pytest output from a file and generate fix suggestions.
 
@@ -718,9 +786,7 @@ class PytestAnalyzerService:
                 # Suppress pytest output (using super quiet mode)
                 if "-qq" not in args_copy:
                     # First remove any existing -q flags
-                    args_copy = [
-                        arg for arg in args_copy if arg != "-q" and arg != "--quiet"
-                    ]
+                    args_copy = [arg for arg in args_copy if arg != "-q" and arg != "--quiet"]
                     # Add super quiet mode flag
                     args_copy.append("-qq")
                 # Add short traceback flag for cleaner output
@@ -731,23 +797,35 @@ class PytestAnalyzerService:
                     args_copy.append("--disable-warnings")
 
             # Choose extraction strategy based on settings
+            failures: List[PytestFailure] = []
             if self.settings.preferred_format == "plugin":
                 # Use direct pytest plugin integration
                 all_args = [test_path]
                 all_args.extend(args_copy)
-
                 failures = collect_failures_with_plugin(all_args)
-
-            elif self.settings.preferred_format == "json":
-                # Generate JSON output and parse it
-                failures = self._run_and_extract_json(test_path, args_copy)
-
             elif self.settings.preferred_format == "xml":
-                # Generate XML output and parse it
+                logger.info("Attempting XML report extraction.")
                 failures = self._run_and_extract_xml(test_path, args_copy)
-
+                if not failures:
+                    logger.warning(
+                        "XML extraction yielded no failures. Attempting JSON extraction as a fallback."
+                    )
+                    failures = self._run_and_extract_json(test_path, args_copy)
+                    if failures:
+                        logger.info(
+                            f"JSON fallback successfully extracted {len(failures)} failures."
+                        )
+                    else:
+                        logger.info("JSON fallback also yielded no failures.")
+            elif self.settings.preferred_format == "json":
+                logger.info("Attempting JSON report extraction.")
+                failures = self._run_and_extract_json(test_path, args_copy)
+                # Optional: Could add fallback to XML here if JSON fails, but not requested.
             else:
-                # Default to JSON format
+                # Default to JSON format if preferred_format is unrecognized
+                logger.warning(
+                    f"Unknown preferred_format '{self.settings.preferred_format}', defaulting to JSON."
+                )
                 failures = self._run_and_extract_json(test_path, args_copy)
 
             # Update progress if active
@@ -825,9 +903,7 @@ class PytestAnalyzerService:
             # Make sure quiet mode is reflected in pytest args (using super quiet mode)
             if "-qq" not in pytest_args:
                 # First remove any existing -q flags
-                pytest_args = [
-                    arg for arg in pytest_args if arg != "-q" and arg != "--quiet"
-                ]
+                pytest_args = [arg for arg in pytest_args if arg != "-q" and arg != "--quiet"]
                 # Add super quiet mode flag
                 pytest_args.append("-qq")
             # Add short traceback flag for cleaner output
@@ -853,9 +929,7 @@ class PytestAnalyzerService:
                     task_id=main_task_id,
                 )
 
-                progress.update(
-                    main_task_id, advance=1, description="Analyzing failures..."
-                )
+                progress.update(main_task_id, advance=1, description="Analyzing failures...")
 
                 try:
                     # Limit the number of failures to analyze
@@ -865,9 +939,7 @@ class PytestAnalyzerService:
                     # Group failures to detect common issues
                     if failures:
                         project_root = (
-                            str(self.path_resolver.project_root)
-                            if self.path_resolver
-                            else None
+                            str(self.path_resolver.project_root) if self.path_resolver else None
                         )
                         from .analysis.failure_grouper import group_failures
 
@@ -889,15 +961,11 @@ class PytestAnalyzerService:
                         use_async=use_async,
                     )
 
-                    progress.update(
-                        main_task_id, description="Analysis complete!", completed=True
-                    )
+                    progress.update(main_task_id, description="Analysis complete!", completed=True)
                     return suggestions
 
                 except Exception as e:
-                    progress.update(
-                        main_task_id, description=f"Error: {e}", completed=True
-                    )
+                    progress.update(main_task_id, description=f"Error: {e}", completed=True)
                     logger.error(f"Error analyzing tests: {e}")
                     return []
         else:
@@ -921,9 +989,7 @@ class PytestAnalyzerService:
                     task_id=main_task_id,
                 )
 
-                progress.update(
-                    main_task_id, advance=1, description="[cyan]Analyzing failures..."
-                )
+                progress.update(main_task_id, advance=1, description="[cyan]Analyzing failures...")
 
                 try:
                     # Limit the number of failures to analyze
@@ -977,6 +1043,10 @@ class PytestAnalyzerService:
         try:
             args = pytest_args or []
             cmd = [
+                "pixi",
+                "run",
+                "-e",
+                "dev",
                 "pytest",
                 test_path,
                 "--json-report",
@@ -986,52 +1056,184 @@ class PytestAnalyzerService:
             # Important: we need to extend args after defining base command to allow
             # custom args to override the defaults if needed
             cmd.extend(args)
+            logger.info(f"Executing command for JSON report: {' '.join(cmd)}")
+            logger.info(f"Working directory for JSON report: {self.settings.project_root}")
+
+            # DEBUG: Add comprehensive debugging for GUI pytest execution
+            logger.debug(f"DEBUG: Full command: {cmd}")
+            logger.debug(f"DEBUG: Working directory: {self.settings.project_root}")
+            logger.debug(f"DEBUG: Temp JSON report path: {json_report_path}")
+
+            # Log environment variables that might affect pytest
+            env_vars_to_log = ["PATH", "PYTHONPATH", "QT_QPA_PLATFORM", "DISPLAY", "HOME", "USER"]
+            for var in env_vars_to_log:
+                value = os.environ.get(var, "NOT_SET")
+                logger.debug(f"DEBUG: ENV {var}={value}")
+
+            # Log memory usage before subprocess
+            try:
+                process = psutil.Process()
+                memory_before = process.memory_info().rss / 1024 / 1024  # MB
+                logger.debug(f"DEBUG: Memory usage before subprocess: {memory_before:.1f} MB")
+            except Exception as e:
+                logger.debug(f"DEBUG: Could not get memory info: {e}")
+
+            # Log directory permissions and existence
+            try:
+                logger.debug(
+                    f"DEBUG: Working dir exists: {os.path.exists(self.settings.project_root)}"
+                )
+                logger.debug(
+                    f"DEBUG: Working dir is writable: {os.access(self.settings.project_root, os.W_OK)}"
+                )
+                logger.debug(
+                    f"DEBUG: Temp file dir exists: {os.path.exists(os.path.dirname(json_report_path))}"
+                )
+                logger.debug(
+                    f"DEBUG: Temp file dir is writable: {os.access(os.path.dirname(json_report_path), os.W_OK)}"
+                )
+            except Exception as e:
+                logger.debug(f"DEBUG: Could not check permissions: {e}")
 
             # Determine if we're in quiet mode
             quiet_mode = "-q" in args or "-qq" in args or "--quiet" in args
-            # Determine if we want to show progress (requires -s to avoid pytest capturing output)
-            progress_mode = not quiet_mode and ("-s" in args or "--capture=no" in args)
+            logger.debug(f"DEBUG: Quiet mode: {quiet_mode}")
 
-            if quiet_mode:
-                # When in quiet mode, redirect output to devnull
-                with open(os.devnull, "w") as devnull:
-                    # Run pytest with a timeout, redirecting output to devnull
-                    subprocess.run(
+            # ALWAYS capture subprocess output for debugging - don't redirect to devnull
+            start_time = time.time()
+            logger.debug(f"DEBUG: Starting subprocess at {start_time}")
+
+            try:
+                # Prepare environment for subprocess to prevent memory allocation failures
+                subprocess_env = os.environ.copy()
+                subprocess_env["QT_QPA_PLATFORM"] = (
+                    "offscreen"  # Use offscreen rendering to reduce memory usage
+                )
+                subprocess_env["MALLOC_ARENA_MAX"] = "1"  # Reduce memory fragmentation
+                logger.debug("DEBUG: Using offscreen Qt platform for subprocess")
+
+                # Try to temporarily remove memory limits to prevent subprocess crashes
+                with temporarily_remove_memory_limits():
+                    # Run pytest with captured output for better debugging
+                    result = subprocess.run(
                         cmd,
                         timeout=self.settings.pytest_timeout,
                         check=False,
-                        stdout=devnull,
-                        stderr=devnull,
+                        capture_output=True,  # Capture both stdout and stderr
+                        text=True,
+                        env=subprocess_env,  # Use modified environment
+                        cwd=self.settings.project_root,
                     )
-            elif progress_mode:
-                # With progress mode enabled, make sure the output isn't being captured
-                from rich.console import Console
 
-                console = Console()
-                console.print("[cyan]Running pytest with JSON report...[/cyan]")
+                end_time = time.time()
+                duration = end_time - start_time
+                logger.debug(f"DEBUG: Subprocess completed in {duration:.2f} seconds")
 
-                # Run pytest with normal output, needed for rich progress display
-                result = subprocess.run(
-                    cmd, timeout=self.settings.pytest_timeout, check=False
+                # Log subprocess output for debugging
+                logger.debug(f"DEBUG: Subprocess return code: {result.returncode}")
+                if result.stdout:
+                    logger.debug(
+                        f"DEBUG: Subprocess STDOUT: {result.stdout[:1000]}{'...' if len(result.stdout) > 1000 else ''}"
+                    )
+                if result.stderr:
+                    logger.debug(
+                        f"DEBUG: Subprocess STDERR: {result.stderr[:1000]}{'...' if len(result.stderr) > 1000 else ''}"
+                    )
+                    # Also log stderr as warning if there are errors
+                    if result.stderr.strip():
+                        logger.warning(
+                            f"Pytest subprocess stderr: {result.stderr[:500]}{'...' if len(result.stderr) > 500 else ''}"
+                        )
+
+            except subprocess.TimeoutExpired as e:
+                logger.error(
+                    f"DEBUG: Subprocess timed out after {self.settings.pytest_timeout} seconds"
                 )
+                logger.debug(f"DEBUG: Timeout stdout: {e.stdout if e.stdout else 'None'}")
+                logger.debug(f"DEBUG: Timeout stderr: {e.stderr if e.stderr else 'None'}")
+                raise
 
-                if result.returncode != 0 and not quiet_mode:
-                    console.print(
-                        f"[yellow]Pytest exited with code {result.returncode}[/yellow]"
+            # Log memory usage after subprocess
+            try:
+                memory_after = process.memory_info().rss / 1024 / 1024  # MB
+                memory_delta = memory_after - memory_before
+                logger.debug(
+                    f"DEBUG: Memory usage after subprocess: {memory_after:.1f} MB (delta: {memory_delta:+.1f} MB)"
+                )
+            except Exception as e:
+                logger.debug(f"DEBUG: Could not get post-subprocess memory info: {e}")
+
+            logger.debug(f"Pytest process for JSON report exited with code {result.returncode}")
+
+            # Enhanced file analysis and debugging
+            report_file_exists = os.path.exists(json_report_path)
+            report_file_size = os.path.getsize(json_report_path) if report_file_exists else -1
+
+            logger.debug(f"DEBUG: JSON report file exists: {report_file_exists}")
+            logger.debug(f"DEBUG: JSON report file size: {report_file_size} bytes")
+            logger.debug(f"DEBUG: JSON report file path: {json_report_path}")
+
+            if report_file_exists:
+                try:
+                    # Check file permissions
+                    logger.debug(
+                        f"DEBUG: JSON file readable: {os.access(json_report_path, os.R_OK)}"
                     )
+
+                    # If file is small, log its contents for debugging
+                    if 0 < report_file_size < 1000:
+                        with open(json_report_path) as f:
+                            content = f.read()
+                            logger.debug(f"DEBUG: Small JSON file contents: {repr(content)}")
+                    elif report_file_size == 0:
+                        logger.warning("DEBUG: JSON report file is empty despite pytest execution")
+                        logger.warning(
+                            "DEBUG: This suggests pytest failed to write output or crashed"
+                        )
+                except Exception as e:
+                    logger.debug(f"DEBUG: Error reading JSON report file: {e}")
             else:
-                # Run pytest with a timeout, normal output but no special progress display
-                subprocess.run(cmd, timeout=self.settings.pytest_timeout, check=False)
+                logger.warning(f"DEBUG: JSON report file was not created at {json_report_path}")
+                logger.warning("DEBUG: This suggests pytest never started or crashed immediately")
+
+            # Log the working directory contents for debugging
+            try:
+                files_in_cwd = os.listdir(self.settings.project_root)
+                logger.debug(f"DEBUG: Files in working directory: {len(files_in_cwd)} files")
+                # Log pytest-related files
+                pytest_files = [
+                    f for f in files_in_cwd if "pytest" in f.lower() or ".xml" in f or ".json" in f
+                ]
+                if pytest_files:
+                    logger.debug(f"DEBUG: Pytest-related files in cwd: {pytest_files}")
+            except Exception as e:
+                logger.debug(f"DEBUG: Could not list working directory: {e}")
+
+            if report_file_size == 0:
+                logger.warning(f"Generated JSON report file is empty: {json_report_path}")
 
             # Extract failures from JSON output
-            extractor = get_extractor(
-                Path(json_report_path), self.settings, self.path_resolver
+            if report_file_size > 0:  # Only attempt to parse if file has content
+                extractor = get_extractor(Path(json_report_path), self.settings, self.path_resolver)
+                extracted_failures = extractor.extract_failures(Path(json_report_path))
+                logger.info(
+                    f"JSON extractor returned {len(extracted_failures)} failures from {json_report_path}."
+                )
+                logger.debug(f"Failures from JSON extractor: {extracted_failures}")
+                return extracted_failures
+            logger.info(
+                f"JSON report file {json_report_path} is empty or non-existent, returning 0 failures."
             )
-            return extractor.extract_failures(Path(json_report_path))
+            return []  # Return empty list if report file is empty or non-existent
 
         except subprocess.TimeoutExpired:
             logger.error(
-                f"Pytest execution timed out after {self.settings.pytest_timeout} seconds"
+                f"Pytest execution for JSON report timed out after {self.settings.pytest_timeout} seconds"
+            )
+            return []
+        except Exception as e:
+            logger.error(
+                f"Exception during JSON report generation or extraction: {e}", exc_info=True
             )
             return []
         finally:
@@ -1039,8 +1241,8 @@ class PytestAnalyzerService:
             try:
                 if os.path.exists(json_report_path):
                     os.remove(json_report_path)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Error deleting temporary JSON report file {json_report_path}: {e}")
 
     def _run_and_extract_xml(
         self, test_path: str, pytest_args: Optional[List[str]] = None
@@ -1060,57 +1262,174 @@ class PytestAnalyzerService:
 
         try:
             args = pytest_args or []
-            cmd = ["pytest", test_path, f"--junit-xml={xml_report_path}"]
+            cmd = [
+                "pixi",
+                "run",
+                "-e",
+                "dev",
+                "pytest",
+                test_path,
+                f"--junit-xml={xml_report_path}",
+            ]
 
             # Important: we need to extend args after defining base command to allow
             # custom args to override the defaults if needed
             cmd.extend(args)
+            logger.info(f"Executing command for XML report: {' '.join(cmd)}")
+            logger.info(f"Working directory for XML report: {self.settings.project_root}")
+
+            # DEBUG: Add comprehensive debugging for GUI pytest XML execution
+            logger.debug(f"DEBUG XML: Full command: {cmd}")
+            logger.debug(f"DEBUG XML: Working directory: {self.settings.project_root}")
+            logger.debug(f"DEBUG XML: Temp XML report path: {xml_report_path}")
+
+            # Log environment variables that might affect pytest
+            env_vars_to_log = ["PATH", "PYTHONPATH", "QT_QPA_PLATFORM", "DISPLAY", "HOME", "USER"]
+            for var in env_vars_to_log:
+                value = os.environ.get(var, "NOT_SET")
+                logger.debug(f"DEBUG XML: ENV {var}={value}")
+
+            # Log memory usage before subprocess
+            try:
+                process = psutil.Process()
+                memory_before = process.memory_info().rss / 1024 / 1024  # MB
+                logger.debug(f"DEBUG XML: Memory usage before subprocess: {memory_before:.1f} MB")
+            except Exception as e:
+                logger.debug(f"DEBUG XML: Could not get memory info: {e}")
 
             # Determine if we're in quiet mode
             quiet_mode = "-q" in args or "-qq" in args or "--quiet" in args
-            # Determine if we want to show progress (requires -s to avoid pytest capturing output)
-            progress_mode = not quiet_mode and ("-s" in args or "--capture=no" in args)
+            logger.debug(f"DEBUG XML: Quiet mode: {quiet_mode}")
 
-            if quiet_mode:
-                # When in quiet mode, redirect output to devnull
-                with open(os.devnull, "w") as devnull:
-                    # Run pytest with a timeout, redirecting output to devnull
-                    subprocess.run(
+            # ALWAYS capture subprocess output for debugging - don't redirect to devnull
+            start_time = time.time()
+            logger.debug(f"DEBUG XML: Starting subprocess at {start_time}")
+
+            try:
+                # Prepare environment for subprocess to prevent memory allocation failures
+                subprocess_env = os.environ.copy()
+                subprocess_env["QT_QPA_PLATFORM"] = (
+                    "offscreen"  # Use offscreen rendering to reduce memory usage
+                )
+                subprocess_env["MALLOC_ARENA_MAX"] = "1"  # Reduce memory fragmentation
+                logger.debug("DEBUG XML: Using offscreen Qt platform for subprocess")
+
+                # Try to temporarily remove memory limits to prevent subprocess crashes
+                with temporarily_remove_memory_limits():
+                    # Run pytest with captured output for better debugging
+                    result = subprocess.run(
                         cmd,
                         timeout=self.settings.pytest_timeout,
                         check=False,
-                        stdout=devnull,
-                        stderr=devnull,
+                        capture_output=True,  # Capture both stdout and stderr
+                        text=True,
+                        env=subprocess_env,  # Use modified environment
+                        cwd=self.settings.project_root,
                     )
-            elif progress_mode:
-                # With progress mode enabled, make sure the output isn't being captured
-                from rich.console import Console
 
-                console = Console()
-                console.print("[cyan]Running pytest with XML report...[/cyan]")
+                end_time = time.time()
+                duration = end_time - start_time
+                logger.debug(f"DEBUG XML: Subprocess completed in {duration:.2f} seconds")
 
-                # Run pytest with normal output, needed for rich progress display
-                result = subprocess.run(
-                    cmd, timeout=self.settings.pytest_timeout, check=False
+                # Log subprocess output for debugging
+                logger.debug(f"DEBUG XML: Subprocess return code: {result.returncode}")
+                if result.stdout:
+                    logger.debug(
+                        f"DEBUG XML: Subprocess STDOUT: {result.stdout[:1000]}{'...' if len(result.stdout) > 1000 else ''}"
+                    )
+                if result.stderr:
+                    logger.debug(
+                        f"DEBUG XML: Subprocess STDERR: {result.stderr[:1000]}{'...' if len(result.stderr) > 1000 else ''}"
+                    )
+                    # Also log stderr as warning if there are errors
+                    if result.stderr.strip():
+                        logger.warning(
+                            f"Pytest XML subprocess stderr: {result.stderr[:500]}{'...' if len(result.stderr) > 500 else ''}"
+                        )
+
+            except subprocess.TimeoutExpired as e:
+                logger.error(
+                    f"DEBUG XML: Subprocess timed out after {self.settings.pytest_timeout} seconds"
+                )
+                logger.debug(f"DEBUG XML: Timeout stdout: {e.stdout if e.stdout else 'None'}")
+                logger.debug(f"DEBUG XML: Timeout stderr: {e.stderr if e.stderr else 'None'}")
+                raise
+
+            # Log memory usage after subprocess
+            try:
+                memory_after = process.memory_info().rss / 1024 / 1024  # MB
+                memory_delta = memory_after - memory_before
+                logger.debug(
+                    f"DEBUG XML: Memory usage after subprocess: {memory_after:.1f} MB (delta: {memory_delta:+.1f} MB)"
+                )
+            except Exception as e:
+                logger.debug(f"DEBUG XML: Could not get post-subprocess memory info: {e}")
+
+            logger.debug(f"Pytest process for XML report exited with code {result.returncode}")
+            # Small delay that was present, kept as per instructions not to change unrelated code unless necessary.
+            # However, modern systems should handle file flushing properly.
+            time.sleep(0.1)
+
+            # Enhanced file analysis and debugging for XML
+            report_file_exists = os.path.exists(xml_report_path)
+            report_file_size = os.path.getsize(xml_report_path) if report_file_exists else -1
+
+            logger.debug(f"DEBUG XML: XML report file exists: {report_file_exists}")
+            logger.debug(f"DEBUG XML: XML report file size: {report_file_size} bytes")
+            logger.debug(f"DEBUG XML: XML report file path: {xml_report_path}")
+
+            if report_file_exists:
+                try:
+                    # Check file permissions
+                    logger.debug(
+                        f"DEBUG XML: XML file readable: {os.access(xml_report_path, os.R_OK)}"
+                    )
+
+                    # If file is small, log its contents for debugging
+                    if 0 < report_file_size < 1000:
+                        with open(xml_report_path) as f:
+                            content = f.read()
+                            logger.debug(f"DEBUG XML: Small XML file contents: {repr(content)}")
+                    elif report_file_size == 0:
+                        logger.warning(
+                            "DEBUG XML: XML report file is empty despite pytest execution"
+                        )
+                        logger.warning(
+                            "DEBUG XML: This suggests pytest failed to write output or crashed"
+                        )
+                except Exception as e:
+                    logger.debug(f"DEBUG XML: Error reading XML report file: {e}")
+            else:
+                logger.warning(f"DEBUG XML: XML report file was not created at {xml_report_path}")
+                logger.warning(
+                    "DEBUG XML: This suggests pytest never started or crashed immediately"
                 )
 
-                if result.returncode != 0 and not quiet_mode:
-                    console.print(
-                        f"[yellow]Pytest exited with code {result.returncode}[/yellow]"
-                    )
-            else:
-                # Run pytest with a timeout, normal output but no special progress display
-                subprocess.run(cmd, timeout=self.settings.pytest_timeout, check=False)
+            if report_file_size == 0:
+                logger.warning(f"Generated XML report file is empty: {xml_report_path}")
 
             # Extract failures from XML output
-            extractor = get_extractor(
-                Path(xml_report_path), self.settings, self.path_resolver
+            if report_file_size > 0:  # Only attempt to parse if file has content
+                extractor = get_extractor(Path(xml_report_path), self.settings, self.path_resolver)
+                extracted_failures = extractor.extract_failures(Path(xml_report_path))
+                logger.info(
+                    f"XML extractor returned {len(extracted_failures)} failures from {xml_report_path}."
+                )
+                logger.debug(f"Failures from XML extractor: {extracted_failures}")
+                return extracted_failures
+            logger.info(
+                f"XML report file {xml_report_path} is empty or non-existent, returning 0 failures."
             )
-            return extractor.extract_failures(Path(xml_report_path))
+            return []  # Return empty list if report file is empty or non-existent
 
         except subprocess.TimeoutExpired:
             logger.error(
-                f"Pytest execution timed out after {self.settings.pytest_timeout} seconds"
+                f"Pytest execution for XML report timed out after {self.settings.pytest_timeout} seconds"
+            )
+            return []
+        except Exception as e:
+            logger.error(
+                f"Exception during XML report generation or extraction: {e}", exc_info=True
             )
             return []
         finally:
@@ -1118,8 +1437,8 @@ class PytestAnalyzerService:
             try:
                 if os.path.exists(xml_report_path):
                     os.remove(xml_report_path)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Error deleting temporary XML report file {xml_report_path}: {e}")
 
     def _generate_suggestions(
         self,
@@ -1218,9 +1537,7 @@ class PytestAnalyzerService:
                 with performance_tracker.track("failure_grouping"):
                     # Group similar failures to avoid redundant LLM calls
                     project_root = (
-                        str(self.path_resolver.project_root)
-                        if self.path_resolver
-                        else None
+                        str(self.path_resolver.project_root) if self.path_resolver else None
                     )
                     failure_groups = group_failures(failures, project_root)
 
@@ -1269,16 +1586,12 @@ class PytestAnalyzerService:
                             logger.info(
                                 f"Generating LLM suggestions for group: {fingerprint} ({len(group)} similar failures)"
                             )
-                            logger.info(
-                                f"Representative test: {representative.test_name}"
-                            )
+                            logger.info(f"Representative test: {representative.test_name}")
 
                         # Generate suggestions for the representative failure
                         try:
                             with performance_tracker.track(f"llm_suggestion_{i}"):
-                                with ResourceMonitor(
-                                    max_time_seconds=self.settings.llm_timeout
-                                ):
+                                with ResourceMonitor(max_time_seconds=self.settings.llm_timeout):
                                     llm_suggestions = self.llm_suggester.suggest_fixes(
                                         representative
                                     )
@@ -1308,9 +1621,7 @@ class PytestAnalyzerService:
                                                         else None
                                                     ),
                                                 )
-                                                all_suggestions.append(
-                                                    duplicate_suggestion
-                                                )
+                                                all_suggestions.append(duplicate_suggestion)
                         except Exception as e:
                             logger.error(
                                 f"Error generating LLM suggestions for group {fingerprint}: {e}"
@@ -1349,9 +1660,7 @@ class PytestAnalyzerService:
                     limited_suggestions: List[FixSuggestion] = []
                     for group_suggestions in suggestions_by_failure.values():
                         limited_suggestions.extend(
-                            group_suggestions[
-                                : self.settings.max_suggestions_per_failure
-                            ]
+                            group_suggestions[: self.settings.max_suggestions_per_failure]
                         )
                     return limited_suggestions
 
@@ -1408,9 +1717,7 @@ class PytestAnalyzerService:
 
                 # If there was an error, log it
                 if context.final_error:
-                    logger.error(
-                        f"State machine execution failed: {context.final_error}"
-                    )
+                    logger.error(f"State machine execution failed: {context.final_error}")
 
             except asyncio.TimeoutError:
                 # Handle timeout from the async_with_timeout decorator
@@ -1427,6 +1734,138 @@ class PytestAnalyzerService:
 
             # Return results from context (even if partial due to errors)
             return context.all_suggestions
+
+    def discover_tests_filesystem(
+        self,
+        project_root: Path,
+        excluded_dirs: List[str],
+        progress: Optional[Progress] = None,
+        parent_task_id: Optional[TaskID] = None,
+    ) -> List[PytestFailure]:
+        """
+        Discovers tests by scanning Python files and parsing their AST.
+        This is a lightweight alternative to 'pytest --collect-only'.
+
+        Args:
+            project_root: The root directory of the project to scan.
+            excluded_dirs: A list of directory paths (relative to project_root) to exclude.
+            progress: Optional rich.progress.Progress object for reporting.
+            parent_task_id: Optional rich.progress.TaskID for parent task.
+
+        Returns:
+            A list of PytestFailure objects representing discovered tests.
+        """
+        discovered_tests: List[PytestFailure] = []
+
+        discovery_progress_id: Optional[TaskID] = None
+        if progress and parent_task_id:
+            discovery_progress_id = progress.add_task(
+                "Discovering tests (filesystem scan)...",
+                total=None,  # Indeterminate for now
+                parent=parent_task_id,
+            )
+
+        logger.info(f"Starting filesystem test discovery in: {project_root}")
+
+        # Normalize excluded_dirs to ensure they end with a separator for proper prefix matching
+        normalized_excluded_dirs = [
+            (d + os.sep) if not d.endswith(os.sep) else d for d in excluded_dirs
+        ]
+
+        file_count = 0
+        test_file_count = 0
+
+        for abs_py_file_path in project_root.rglob("*.py"):
+            file_count += 1
+            if not abs_py_file_path.is_file():
+                continue
+
+            try:
+                relative_file_path_str = str(abs_py_file_path.relative_to(project_root))
+            except ValueError:
+                # Should not happen if rglob is from project_root, but defensive
+                logger.warning(f"Could not get relative path for {abs_py_file_path}")
+                continue
+
+            # Check exclusion
+            is_excluded = False
+            for excluded_path_prefix in normalized_excluded_dirs:
+                if relative_file_path_str.startswith(excluded_path_prefix):
+                    is_excluded = True
+                    break
+            if is_excluded:
+                continue
+
+            # Check if it's a test file
+            file_name = abs_py_file_path.name
+            if not (file_name.startswith("test_") or file_name.endswith("_test.py")):
+                continue
+
+            test_file_count += 1
+
+            try:
+                with open(abs_py_file_path, encoding="utf-8") as source_file:
+                    source_code = source_file.read()
+                tree = ast.parse(source_code, filename=str(abs_py_file_path))
+
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.FunctionDef) and node.name.startswith("test_"):
+                        # Check if function is at module level (not nested in another function)
+                        # A simple check: iterate upwards in the AST tree.
+                        # For simplicity here, we assume functions directly under module or class are relevant.
+                        # This check can be refined if needed.
+                        parent = next(
+                            (p for p in ast.walk(tree) if node in getattr(p, "body", [])), None
+                        )
+                        if isinstance(parent, ast.Module):  # Top-level function
+                            nodeid = f"{relative_file_path_str}::{node.name}"
+                            discovered_tests.append(
+                                PytestFailure(
+                                    nodeid=nodeid,
+                                    outcome="discovered",  # Custom outcome
+                                    file_path=str(abs_py_file_path),
+                                    line_number=node.lineno,
+                                    error_message=None,
+                                    traceback=None,
+                                )
+                            )
+                    elif isinstance(node, ast.ClassDef) and node.name.startswith("Test"):
+                        for method_node in node.body:
+                            if isinstance(
+                                method_node, ast.FunctionDef
+                            ) and method_node.name.startswith("test_"):
+                                nodeid = (
+                                    f"{relative_file_path_str}::{node.name}::{method_node.name}"
+                                )
+                                discovered_tests.append(
+                                    PytestFailure(
+                                        nodeid=nodeid,
+                                        outcome="discovered",
+                                        file_path=str(abs_py_file_path),
+                                        line_number=method_node.lineno,
+                                        error_message=None,
+                                        traceback=None,
+                                    )
+                                )
+            except FileNotFoundError:
+                logger.warning(f"File not found during AST parsing: {abs_py_file_path}")
+            except SyntaxError:
+                logger.warning(f"Syntax error in file {abs_py_file_path}, skipping AST parsing.")
+            except Exception as e:
+                logger.error(f"Error parsing {abs_py_file_path}: {e}")
+
+        logger.info(
+            f"Filesystem discovery: Scanned {file_count} .py files, found {test_file_count} potential test files, discovered {len(discovered_tests)} test items."
+        )
+
+        if progress and discovery_progress_id is not None:
+            progress.update(
+                discovery_progress_id,
+                completed=True,
+                description=f"[green]Filesystem discovery complete. Found {len(discovered_tests)} items.",
+            )
+
+        return discovered_tests
 
     def apply_suggestion(self, suggestion: FixSuggestion) -> FixApplicationResult:
         """
@@ -1488,10 +1927,7 @@ class PytestAnalyzerService:
             tests_to_validate = []
             if hasattr(suggestion, "validation_tests") and suggestion.validation_tests:
                 tests_to_validate = suggestion.validation_tests
-            elif (
-                hasattr(suggestion.failure, "test_name")
-                and suggestion.failure.test_name
-            ):
+            elif hasattr(suggestion.failure, "test_name") and suggestion.failure.test_name:
                 # Use the original failing test for validation
                 tests_to_validate = [suggestion.failure.test_name]
             else:

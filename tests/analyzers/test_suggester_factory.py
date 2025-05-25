@@ -58,9 +58,7 @@ class TestSuggesterFactory(unittest.TestCase):
             "prompt_templates": mock_prompt_templates,
         }
 
-        suggester = create_llm_based_suggester(
-            config, self.llm_service, self.prompt_builder
-        )
+        suggester = create_llm_based_suggester(config, self.llm_service, self.prompt_builder)
 
         # Verify result
         self.assertIsInstance(suggester, LLMSuggester)
@@ -92,9 +90,7 @@ class TestSuggesterFactory(unittest.TestCase):
             ],
         }
 
-        suggester = create_composite_suggester(
-            config, self.llm_service, self.prompt_builder
-        )
+        suggester = create_composite_suggester(config, self.llm_service, self.prompt_builder)
 
         # Verify result
         self.assertIsInstance(suggester, CompositeSuggester)
@@ -147,9 +143,7 @@ class TestSuggesterFactory(unittest.TestCase):
         # Create a composite suggester without specifying suggesters
         config = {"min_confidence": 0.6}
 
-        suggester = create_composite_suggester(
-            config, self.llm_service, self.prompt_builder
-        )
+        suggester = create_composite_suggester(config, self.llm_service, self.prompt_builder)
 
         # Verify result
         self.assertIsInstance(suggester, CompositeSuggester)
@@ -169,9 +163,7 @@ class TestSuggesterFactory(unittest.TestCase):
         }
 
         # Should not raise exception, but log error and continue
-        suggester = create_composite_suggester(
-            config, self.llm_service, self.prompt_builder
-        )
+        suggester = create_composite_suggester(config, self.llm_service, self.prompt_builder)
 
         # Verify result
         self.assertIsInstance(suggester, CompositeSuggester)

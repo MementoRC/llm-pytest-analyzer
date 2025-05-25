@@ -108,12 +108,8 @@ def test_extract_failures_no_tests(tmp_path, json_extractor):
     assert failures == []
 
 
-@patch(
-    "pytest_analyzer.core.extraction.json_extractor.JsonResultExtractor._parse_json_report"
-)
-def test_extract_failures_timeout(
-    mock_parse_json, tmp_path, json_extractor, sample_json_data
-):
+@patch("pytest_analyzer.core.extraction.json_extractor.JsonResultExtractor._parse_json_report")
+def test_extract_failures_timeout(mock_parse_json, tmp_path, json_extractor, sample_json_data):
     """Test handling of timeout during extraction (simulating @with_timeout triggering)."""
     # Configure the mock _parse_json_report to raise TimeoutError
     mock_parse_json.side_effect = TimeoutError("Simulated Timeout")

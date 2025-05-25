@@ -9,7 +9,8 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Pattern, Tuple, Union
+from re import Pattern
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from ...utils.path_resolver import PathResolver
 from ...utils.resource_manager import ResourceMonitor, with_timeout
@@ -40,9 +41,7 @@ class PytestOutputExtractor(Extractor):
         self.timeout = timeout
 
         # Patterns for extracting information from pytest output
-        self.failure_pattern: Pattern = re.compile(
-            r"(FAILED|ERROR)\s+(.+?)::(.+?)(?:\s|$)"
-        )
+        self.failure_pattern: Pattern = re.compile(r"(FAILED|ERROR)\s+(.+?)::(.+?)(?:\s|$)")
         self.test_section_pattern: Pattern = re.compile(
             r"_{3,}\s+(.+?)\s+_{3,}(.*?)(?=_{3,}|\Z)", re.DOTALL
         )
@@ -84,9 +83,7 @@ class PytestOutputExtractor(Extractor):
             if isinstance(test_results, Path):
                 return self._extract_from_path(test_results)
 
-            raise ExtractionError(
-                f"Unsupported test_results type: {type(test_results)}"
-            )
+            raise ExtractionError(f"Unsupported test_results type: {type(test_results)}")
         except Exception as e:
             logger.error(f"Error extracting from pytest output: {e}")
             raise ExtractionError(f"Failed to extract from pytest output: {e}") from e
@@ -135,7 +132,7 @@ class PytestOutputExtractor(Extractor):
 
         try:
             with ResourceMonitor(max_time_seconds=self.timeout):
-                with open(input_path, "r", encoding="utf-8") as f:
+                with open(input_path, encoding="utf-8") as f:
                     content = f.read()
                 failures = self.extract_failures_from_text(content)
                 return {
@@ -168,7 +165,7 @@ class PytestOutputExtractor(Extractor):
 
         try:
             with ResourceMonitor(max_time_seconds=self.timeout):
-                with open(input_path, "r", encoding="utf-8") as f:
+                with open(input_path, encoding="utf-8") as f:
                     content = f.read()
                 return self.extract_failures_from_text(content)
         except Exception as e:
@@ -199,16 +196,26 @@ class PytestOutputExtractor(Extractor):
 
         # Process each failed test
         for test_file, test_name in failed_tests:
-            # Look for a matching test section - handle both formats: test_file::test_name or just test_name
+            # Look for a matching test section - handle multiple formats:
+            # 1. test_file::test_name (standard pytest format)
+            # 2. just test_name (simplified)
+            # 3. ERROR at setup of TestClass.test_name (error format)
             test_id = f"{test_file}::{test_name}"
             test_name_only = test_name
 
             # Try to find the section first by full test id, then by just test name
             section = next((s for s in test_sections if test_id in s[0]), None)
             if not section:
-                section = next(
-                    (s for s in test_sections if test_name_only in s[0]), None
-                )
+                section = next((s for s in test_sections if test_name_only in s[0]), None)
+
+            # If still not found, try matching test names from ERROR headers
+            if not section:
+                # Extract test name without class prefix for matching error headers
+                if "::" in test_name_only:
+                    simple_test_name = test_name_only.split("::")[-1]
+                else:
+                    simple_test_name = test_name_only
+                section = next((s for s in test_sections if simple_test_name in s[0]), None)
 
             if not section:
                 logger.warning(f"No detailed section found for test {test_id}")
@@ -225,8 +232,8 @@ class PytestOutputExtractor(Extractor):
                 continue
 
             # Extract error details
-            error_type, error_message, traceback, line_number = (
-                self._extract_error_details(section[1])
+            error_type, error_message, traceback, line_number = self._extract_error_details(
+                section[1]
             )
 
             # Extract relevant code
@@ -298,12 +305,11 @@ class PytestOutputExtractor(Extractor):
             header, content = match.groups()
             sections.append((header.strip(), content.strip()))
 
-        # If no sections were found, try a different approach
+        # If no sections were found, try different approaches
         if not sections:
             # Check if there's a FAILURES section
             if "=== FAILURES ===" in text:
                 failures_section = text.split("=== FAILURES ===", 1)[1]
-
                 # Split the failures section by test headers (they typically look like ___ test_name ___)
                 section_splits = [s for s in failures_section.split("___") if s.strip()]
 
@@ -315,11 +321,60 @@ class PytestOutputExtractor(Extractor):
                         if header:
                             sections.append((header, content))
 
+            # Check if there's an ERRORS section
+            if "==== ERRORS ====" in text or "=== ERRORS ===" in text:
+                # Try both formats
+                errors_marker = (
+                    "==== ERRORS ====" if "==== ERRORS ====" in text else "=== ERRORS ==="
+                )
+                errors_section = text.split(errors_marker, 1)[1]
+
+                # Split by test error headers - these use a different format like:
+                # _ ERROR at setup of TestClass.test_method _
+                # The pattern needs to capture each error section between headers
+                error_lines = errors_section.split("\n")
+                current_section_lines = []
+                current_header = None
+
+                for i, line in enumerate(error_lines):
+                    # Match various underscore patterns: _, ___, _____, etc.
+                    if (
+                        "ERROR at" in line
+                        and line.strip().startswith("_")
+                        and line.strip().endswith("_")
+                    ):
+                        # Start of a new error section
+                        if current_header and current_section_lines:
+                            # Save the previous section
+                            content = "\n".join(current_section_lines).strip()
+                            if content:
+                                sections.append((current_header, content))
+
+                        # Start new section
+                        current_header = line.strip()
+                        current_section_lines = []
+                    elif current_header:
+                        # Check for section termination (start of next section or end)
+                        if line.startswith("=") and "=" in line:
+                            # This is likely a section separator, save current and stop
+                            content = "\n".join(current_section_lines).strip()
+                            if content:
+                                sections.append((current_header, content))
+                            current_header = None
+                            current_section_lines = []
+                            break
+                        # Accumulate lines for current section
+                        current_section_lines.append(line)
+
+                # Don't forget the last section
+                if current_header and current_section_lines:
+                    content = "\n".join(current_section_lines).strip()
+                    if content:
+                        sections.append((current_header, content))
+
         return sections
 
-    def _extract_error_details(
-        self, section_text: str
-    ) -> Tuple[str, str, str, Optional[int]]:
+    def _extract_error_details(self, section_text: str) -> Tuple[str, str, str, Optional[int]]:
         """
         Extract error details from a test section.
 
@@ -381,9 +436,7 @@ class PytestOutputExtractor(Extractor):
 
         return error_type, error_message, traceback, line_number
 
-    def _extract_relevant_code(
-        self, test_file: str, line_number: Optional[int]
-    ) -> Optional[str]:
+    def _extract_relevant_code(self, test_file: str, line_number: Optional[int]) -> Optional[str]:
         """
         Extract relevant code from the test file.
 
@@ -409,7 +462,7 @@ class PytestOutputExtractor(Extractor):
                 logger.warning(f"Test file not found: {file_path}")
                 return None
 
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 lines = f.readlines()
 
             # Extract context (5 lines before and after)

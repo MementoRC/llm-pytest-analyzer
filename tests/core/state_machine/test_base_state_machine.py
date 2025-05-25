@@ -517,13 +517,9 @@ class TestBaseStateMachine:
 
         # Create transitions
         submit = create_transition("draft", "review", "submit", action=submit_action)
-        approve = create_transition(
-            "review", "approved", "approve", action=approve_action
-        )
+        approve = create_transition("review", "approved", "approve", action=approve_action)
         reject = create_transition("review", "rejected", "reject", action=reject_action)
-        resubmit = create_transition(
-            "rejected", "review", "resubmit", action=resubmit_action
-        )
+        resubmit = create_transition("rejected", "review", "resubmit", action=resubmit_action)
 
         # Add transitions to machine
         state_machine.add_transition(submit)

@@ -70,9 +70,7 @@ def test_analyze_failure_max_suggestions(failure_analyzer):
 def test_analyze_failure_exception(mock_logger_error, failure_analyzer, test_failure):
     """Test error handling during failure analysis."""
     # Mock the _get_base_error_type method to raise an exception
-    failure_analyzer._get_base_error_type = MagicMock(
-        side_effect=Exception("Test error")
-    )
+    failure_analyzer._get_base_error_type = MagicMock(side_effect=Exception("Test error"))
 
     # Analyze the failure
     suggestions = failure_analyzer.analyze_failure(test_failure)
@@ -85,10 +83,7 @@ def test_analyze_failure_exception(mock_logger_error, failure_analyzer, test_fai
 def test_get_base_error_type(failure_analyzer):
     """Test extracting the base error type."""
     # Test with qualified name
-    assert (
-        failure_analyzer._get_base_error_type("unittest.AssertionError")
-        == "AssertionError"
-    )
+    assert failure_analyzer._get_base_error_type("unittest.AssertionError") == "AssertionError"
 
     # Test with simple name
     assert failure_analyzer._get_base_error_type("ValueError") == "ValueError"
@@ -111,37 +106,15 @@ def test_error_type_mapping(failure_analyzer):
     assert "SyntaxError" in failure_analyzer.error_analyzers
 
     # Verify that the method references are correct
-    assert (
-        failure_analyzer.error_analyzers["AssertionError"].__name__
-        == "_analyze_assertion_error"
-    )
-    assert (
-        failure_analyzer.error_analyzers["AttributeError"].__name__
-        == "_analyze_attribute_error"
-    )
-    assert (
-        failure_analyzer.error_analyzers["ImportError"].__name__
-        == "_analyze_import_error"
-    )
-    assert (
-        failure_analyzer.error_analyzers["TypeError"].__name__ == "_analyze_type_error"
-    )
-    assert (
-        failure_analyzer.error_analyzers["NameError"].__name__ == "_analyze_name_error"
-    )
-    assert (
-        failure_analyzer.error_analyzers["IndexError"].__name__
-        == "_analyze_index_error"
-    )
+    assert failure_analyzer.error_analyzers["AssertionError"].__name__ == "_analyze_assertion_error"
+    assert failure_analyzer.error_analyzers["AttributeError"].__name__ == "_analyze_attribute_error"
+    assert failure_analyzer.error_analyzers["ImportError"].__name__ == "_analyze_import_error"
+    assert failure_analyzer.error_analyzers["TypeError"].__name__ == "_analyze_type_error"
+    assert failure_analyzer.error_analyzers["NameError"].__name__ == "_analyze_name_error"
+    assert failure_analyzer.error_analyzers["IndexError"].__name__ == "_analyze_index_error"
     assert failure_analyzer.error_analyzers["KeyError"].__name__ == "_analyze_key_error"
-    assert (
-        failure_analyzer.error_analyzers["ValueError"].__name__
-        == "_analyze_value_error"
-    )
-    assert (
-        failure_analyzer.error_analyzers["SyntaxError"].__name__
-        == "_analyze_syntax_error"
-    )
+    assert failure_analyzer.error_analyzers["ValueError"].__name__ == "_analyze_value_error"
+    assert failure_analyzer.error_analyzers["SyntaxError"].__name__ == "_analyze_syntax_error"
 
     # Test the fallback mechanism
     assert (
@@ -179,7 +152,9 @@ def test_analyze_assert_statement(failure_analyzer, test_failure):
 def test_analyze_assert_statement_with_expected_actual(failure_analyzer, test_failure):
     """Test analyzing an assert statement with expected vs. actual values."""
     # Set up a traceback with expected vs. actual values
-    test_failure.traceback = "E       assert actual_value == expected_value\nE         +  where actual_value = func()"
+    test_failure.traceback = (
+        "E       assert actual_value == expected_value\nE         +  where actual_value = func()"
+    )
 
     # Analyze the assert statement
     suggestion, confidence = failure_analyzer._analyze_assert_statement(test_failure)
@@ -527,9 +502,7 @@ def test_analyze_generic_error(failure_analyzer):
     assert len(suggestions) > 0
 
     # Test with relevant code
-    failure.relevant_code = (
-        "def function():\n    raise CustomError('Something went wrong')"
-    )
+    failure.relevant_code = "def function():\n    raise CustomError('Something went wrong')"
     suggestions = failure_analyzer._analyze_generic_error(failure)
     assert isinstance(suggestions, list)
     assert len(suggestions) > 0
