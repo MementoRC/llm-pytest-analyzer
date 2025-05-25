@@ -6,9 +6,9 @@ from typing import Any, Dict, List, Optional
 class PytestFailure:
     """Represents a single test failure from pytest output."""
 
-    outcome: str  # e.g., "passed", "failed", "error", "skipped"
     test_name: str
     test_file: str
+    outcome: str = "failed"  # e.g., "passed", "failed", "error", "skipped"
     error_type: Optional[str] = None
     error_message: Optional[str] = None
     traceback: Optional[str] = None

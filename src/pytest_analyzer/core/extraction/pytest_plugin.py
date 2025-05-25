@@ -108,9 +108,9 @@ class FailureCollectorPlugin:
         # For "passed" outcome, specific error fields remain at their initial None or "" values.
 
         result_entry = PytestFailure(
-            outcome=test_outcome,
             test_name=test_name,
             test_file=test_file,
+            outcome=test_outcome,
             line_number=line_number,
             error_type=error_type,
             error_message=error_message,
