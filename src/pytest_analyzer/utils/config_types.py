@@ -23,7 +23,7 @@ class Settings:
 
     # Extraction settings
     max_failures: int = 100  # Maximum number of failures to process
-    preferred_format: str = "xml"  # Preferred output format: json, xml, or text
+    preferred_format: str = "json"  # Preferred output format: json, xml, or text
 
     # Analysis settings
     max_suggestions: int = 3  # Maximum suggestions overall
