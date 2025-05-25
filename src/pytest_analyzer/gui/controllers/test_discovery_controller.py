@@ -1,8 +1,8 @@
 import logging
 from typing import TYPE_CHECKING, List, Optional
 
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
-from PyQt6.QtWidgets import QMessageBox
+from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtWidgets import QMessageBox
 
 from ...core.models.pytest_failure import PytestFailure
 from .base_controller import BaseController
@@ -17,10 +17,10 @@ logger = logging.getLogger(__name__)
 class TestDiscoveryController(BaseController):
     """Controller for discovering test files using synchronous filesystem scanning."""
 
-    tests_discovered = pyqtSignal(list)  # Emits List[PytestFailure] (node IDs)
-    discovery_task_started = pyqtSignal(str)  # Emits task_id (no longer emitted)
-    discovery_started = pyqtSignal(str)  # Emits a message
-    discovery_finished = pyqtSignal(str)  # Emits a message (success or failure)
+    tests_discovered = Signal(list)  # Emits List[PytestFailure] (node IDs)
+    discovery_task_started = Signal(str)  # Emits task_id (no longer emitted)
+    discovery_started = Signal(str)  # Emits a message
+    discovery_finished = Signal(str)  # Emits a message (success or failure)
 
     def __init__(
         self,
@@ -36,7 +36,7 @@ class TestDiscoveryController(BaseController):
 
         # Task manager signal connections are removed as tasks are no longer used here.
 
-    @pyqtSlot()
+    @Slot()
     def request_discover_tests(self) -> None:
         """Initiates synchronous test file discovery using filesystem scan."""
         # Synchronous operation, no check for existing discovery needed.

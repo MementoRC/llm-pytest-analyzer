@@ -2,9 +2,8 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, List, Optional
 
-from PyQt6.QtCore import QObject, pyqtSlot
+from PySide6.QtCore import QObject, Slot
 
-from ...core.models.pytest_failure import PytestFailure
 from ..models.test_results_model import (  # Assuming TestResult might be used
     AnalysisStatus,
     TestResult,
@@ -114,7 +113,7 @@ class WorkflowCoordinator(QObject):
         # The model's `dataChanged` signal is too generic.
         # We'll use the `task_completed` for analysis tasks for now.
 
-    @pyqtSlot(str, str)
+    @Slot(str, str)
     def _on_state_changed_update_guide(self, old_state_val: str, new_state_val: str) -> None:
         try:
             new_state = WorkflowState(new_state_val)
@@ -122,17 +121,17 @@ class WorkflowCoordinator(QObject):
         except ValueError:
             logger.error(f"Invalid state value received: {new_state_val}")
 
-    @pyqtSlot(Path)
+    @Slot(Path)
     def _handle_python_file_opened(self, path: Path) -> None:
         """Handles selection of a Python test file."""
         self.state_machine.to_file_selected(file_path=path, file_type="py")
 
-    @pyqtSlot(Path)
+    @Slot(Path)
     def _handle_directory_opened(self, path: Path) -> None:
         """Handles selection of a test directory."""
         self.state_machine.to_file_selected(file_path=path, file_type="directory")
 
-    @pyqtSlot(list, Path, str)
+    @Slot(list, Path, str)
     def _handle_report_parsed(
         self, results: List[Any], source_file: Path, source_type: str
     ) -> None:
@@ -152,15 +151,15 @@ class WorkflowCoordinator(QObject):
             file_type=source_type,
         )
 
-    @pyqtSlot(str)
+    @Slot(str)
     def _handle_discovery_started(self, message: str) -> None:
         self.state_machine.to_tests_discovering()
 
-    @pyqtSlot(list)
+    @Slot(list)
     def _handle_tests_discovered(self, discovered_tests: list) -> None:
         self.state_machine.to_tests_discovered(test_count=len(discovered_tests))
 
-    @pyqtSlot(str)
+    @Slot(str)
     def _handle_discovery_outcome_message(self, message: str) -> None:
         """Handles the discovery_finished signal from TestDiscoveryController."""
         # Check if the message indicates a failure
@@ -173,7 +172,7 @@ class WorkflowCoordinator(QObject):
         # the _handle_tests_discovered slot (connected to tests_discovered signal)
         # should have already handled the state transition. No action needed here for success.
 
-    @pyqtSlot(str, str)
+    @Slot(str, str)
     def _handle_task_started_for_workflow(self, task_id: str, description: str) -> None:
         # Check if it's a test execution task
         if description == self.test_execution_controller.analyzer_service.run_pytest_only.__name__:
@@ -190,9 +189,12 @@ class WorkflowCoordinator(QObject):
         # elif self.fix_controller and description == self.fix_controller.applier.apply_fix_suggestion.__name__:
         #     self.state_machine.to_applying_fixes()
 
-    @pyqtSlot(list)  # List[PytestFailure]
-    def _handle_test_execution_completed(self, pytest_failures: List[PytestFailure]) -> None:
+    @Slot(list)  # List[PytestFailure]
+    def _handle_test_execution_completed(self, ignored_param=None) -> None:
         # This signal comes from TestExecutionController after its _handle_task_completed.
+        # Get failures from controller cache to avoid Qt memory allocation issues
+        pytest_failures = self.test_execution_controller.get_last_failures()
+
         # The result (pytest_failures) is already processed by TestResultsController
         # to update the model. We can get counts from the model or the list.
         total_results = (
@@ -204,7 +206,7 @@ class WorkflowCoordinator(QObject):
             failure_count=failure_count,
         )
 
-    @pyqtSlot(str, str)
+    @Slot(str, str)
     def _handle_task_failed_for_workflow(self, task_id: str, error_message: str) -> None:
         # This is a generic handler. If a task fails, set workflow to error.
         # Specific controllers might handle their own task failures more gracefully first.
@@ -230,7 +232,7 @@ class WorkflowCoordinator(QObject):
     # We can listen to model changes or have AnalysisController emit a specific signal.
     # Let's refine _handle_task_completed_for_workflow to check task description.
 
-    @pyqtSlot(str, object)
+    @Slot(str, object)
     def _handle_task_completed_for_workflow(self, task_id: str, result: Any) -> None:
         # This is connected to task_manager.task_completed
         # We need to identify if this completed task was an analysis task.
@@ -262,7 +264,7 @@ class WorkflowCoordinator(QObject):
         # Let's assume AnalysisController's model `analysis_status_changed` can be used.
         pass  # This will be handled by specific task type handlers or model change listeners.
 
-    @pyqtSlot(str)  # test_name
+    @Slot(str)  # test_name
     def _handle_analysis_status_changed_for_workflow(self, test_name: str) -> None:
         # This signal comes from TestResultsModel when a test's analysis status is updated.
         if self.state_machine.current_state != WorkflowState.ANALYSIS_RUNNING:

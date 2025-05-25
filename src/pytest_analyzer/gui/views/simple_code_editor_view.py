@@ -2,9 +2,9 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtGui import QFont
-from PyQt6.QtWidgets import QTextEdit, QWidget
+from PySide6.QtCore import Signal
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import QTextEdit, QWidget
 
 logger = logging.getLogger(__name__)
 
@@ -15,10 +15,10 @@ class SimpleCodeEditorView(QTextEdit):
     Provides basic code viewing functionality with monospace font.
     """
 
-    file_loaded = pyqtSignal(Path)
-    file_saved = pyqtSignal(Path)
-    content_changed = pyqtSignal()
-    status_message = pyqtSignal(str)
+    file_loaded = Signal(Path)
+    file_saved = Signal(Path)
+    content_changed = Signal()
+    status_message = Signal(str)
 
     def __init__(self, parent: Optional[QWidget] = None):
         """

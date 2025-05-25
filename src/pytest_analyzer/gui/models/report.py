@@ -13,7 +13,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from PyQt6.QtCore import QObject, QThread, pyqtSignal
+from PySide6.QtCore import QObject, QThread, Signal
 
 from .session import SessionData
 from .test_results_model import TestResult, TestStatus
@@ -102,8 +102,8 @@ class ReportStatistics:
 class ReportGenerator(QObject):
     """Generates comprehensive reports from test analysis data."""
 
-    report_generated = pyqtSignal(str, bool)  # file_path, success
-    progress_updated = pyqtSignal(int)  # percentage
+    report_generated = Signal(str, bool)  # file_path, success
+    progress_updated = Signal(int)  # percentage
 
     def __init__(self, parent: Optional[QObject] = None):
         super().__init__(parent)
@@ -767,9 +767,9 @@ class ReportGenerator(QObject):
 class ReportGeneratorWorker(QThread):
     """Worker thread for generating reports without blocking the UI."""
 
-    progress = pyqtSignal(int)
-    finished = pyqtSignal(str, bool)  # file_path, success
-    error = pyqtSignal(str)
+    progress = Signal(int)
+    finished = Signal(str, bool)  # file_path, success
+    error = Signal(str)
 
     def __init__(
         self,

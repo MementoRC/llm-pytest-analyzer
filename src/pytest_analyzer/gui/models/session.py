@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from PyQt6.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 
 from .test_results_model import AnalysisStatus, TestResult, TestStatus
 
@@ -224,11 +224,11 @@ class SessionData:
 class SessionManager(QObject):
     """Manages session operations including save, load, and history."""
 
-    session_saved = pyqtSignal(str)  # session_id
-    session_loaded = pyqtSignal(SessionData)
-    session_deleted = pyqtSignal(str)  # session_id
-    bookmark_added = pyqtSignal(SessionBookmark)
-    bookmark_removed = pyqtSignal(str)  # test_name
+    session_saved = Signal(str)  # session_id
+    session_loaded = Signal(SessionData)
+    session_deleted = Signal(str)  # session_id
+    bookmark_added = Signal(SessionBookmark)
+    bookmark_removed = Signal(str)  # test_name
 
     def __init__(self, sessions_dir: Optional[Path] = None, parent: Optional[QObject] = None):
         super().__init__(parent)

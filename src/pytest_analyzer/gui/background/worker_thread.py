@@ -3,7 +3,7 @@ import threading
 import traceback
 from typing import Any, Callable, Dict, Optional, Tuple
 
-from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
+from PySide6.QtCore import QObject, QThread, Signal, Slot
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +22,12 @@ class WorkerThread(QThread):
                           This signal is typically connected from a ProgressBridge.
     """
 
-    result_ready = pyqtSignal(str, object)  # task_id, result
-    error_occurred = pyqtSignal(str, str)  # task_id, error_message
+    result_ready = Signal(str, object)  # task_id, result
+    error_occurred = Signal(str, str)  # task_id, error_message
     # This signal will be connected to by TaskManager, and ProgressBridge will emit to it.
     # Or, TaskManager connects directly to ProgressBridge's signal.
     # Let's have WorkerThread emit its own progress signal, which ProgressBridge can trigger.
-    progress_updated = pyqtSignal(str, int, str)  # task_id, percentage, message
+    progress_updated = Signal(str, int, str)  # task_id, percentage, message
 
     def __init__(
         self,
@@ -87,7 +87,7 @@ class WorkerThread(QThread):
         logger.info(f"WorkerThread (task_id: {self.task_id}): Cancellation requested.")
         self._is_cancelled.set()
 
-    @pyqtSlot(str, int, str)
+    @Slot(str, int, str)
     def on_progress_bridge_update(self, task_id: str, percentage: int, message: str) -> None:
         """Slot to receive progress from ProgressBridge and re-emit."""
         if task_id == self.task_id:  # Ensure it's for this worker's task

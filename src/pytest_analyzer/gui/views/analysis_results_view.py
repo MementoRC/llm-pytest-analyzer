@@ -10,11 +10,11 @@ import logging
 from html import escape
 from typing import Dict, Optional
 
-from PyQt6.QtCore import QUrl, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import (  # QDesktopServices imported as per user spec
+from PySide6.QtCore import QUrl, Signal, Slot
+from PySide6.QtGui import (  # QDesktopServices imported as per user spec
     QAction,
 )
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QApplication,
     QLabel,
     QStyle,
@@ -39,8 +39,8 @@ class AnalysisResultsView(QWidget):
     Widget for displaying LLM analysis results for a selected test failure.
     """
 
-    reanalyze_requested = pyqtSignal(TestResult)
-    view_code_requested = pyqtSignal(FixSuggestion)  # New signal
+    reanalyze_requested = Signal(TestResult)
+    view_code_requested = Signal(FixSuggestion)  # New signal
 
     def __init__(self, model: TestResultsModel, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -117,7 +117,7 @@ class AnalysisResultsView(QWidget):
                 "AnalysisResultsView: _connect_signals called but results_model is None."
             )
 
-    @pyqtSlot(str)
+    @Slot(str)
     def _on_model_data_updated(self, updated_test_name: str) -> None:
         logger.debug(
             f"AnalysisResultsView: _on_model_data_updated signal received for test: '{updated_test_name}'."
@@ -140,7 +140,7 @@ class AnalysisResultsView(QWidget):
                 f"AnalysisResultsView: Updated test '{updated_test_name}' is not the current test ('{self.current_test.name if self.current_test else 'None'}'). No view refresh."
             )
 
-    @pyqtSlot(QUrl)
+    @Slot(QUrl)
     def _on_anchor_clicked(self, url: QUrl) -> None:
         scheme = url.scheme()
         logger.debug(
@@ -383,7 +383,7 @@ class AnalysisResultsView(QWidget):
             f"AnalysisResultsView: Updating button states. Reanalyze: {self.reanalyze_button.isEnabled()}, Copy: {self.copy_button.isEnabled()}, Clear: {self.clear_button.isEnabled()}."
         )
 
-    @pyqtSlot()
+    @Slot()
     def _on_reanalyze_clicked(self) -> None:
         if self.current_test:
             logger.info(
@@ -396,7 +396,7 @@ class AnalysisResultsView(QWidget):
                 "AnalysisResultsView: Re-analyze button clicked, but no current test selected."
             )
 
-    @pyqtSlot()
+    @Slot()
     def _on_copy_clicked(self) -> None:
         logger.debug("AnalysisResultsView: Copy HTML button clicked.")
         clipboard = QApplication.clipboard()

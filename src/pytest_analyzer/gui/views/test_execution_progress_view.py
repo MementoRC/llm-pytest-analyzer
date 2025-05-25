@@ -1,8 +1,8 @@
 import logging
 from typing import Optional
 
-from PyQt6.QtCore import QObject, Qt, QTimer, pyqtSignal
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QObject, Qt, QTimer, Signal
+from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -23,7 +23,7 @@ class TestExecutionProgressView(QWidget):
     View for displaying test execution progress.
     """
 
-    cancel_requested = pyqtSignal()
+    cancel_requested = Signal()
 
     def __init__(self, parent: Optional[QObject] = None):
         super().__init__(parent)

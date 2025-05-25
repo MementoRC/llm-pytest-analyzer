@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Callable, Dict, Optional, Tuple
 
-from PyQt6.QtCore import QObject
+from PySide6.QtCore import QObject
 
 # Forward declaration for type hinting if TaskManager is in a different module
 # and to avoid circular imports if BaseController is imported by TaskManager's module.

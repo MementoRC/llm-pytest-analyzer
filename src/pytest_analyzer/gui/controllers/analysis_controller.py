@@ -2,8 +2,8 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
-from PyQt6.QtCore import QObject, pyqtSlot
-from PyQt6.QtWidgets import QMessageBox
+from PySide6.QtCore import QObject, Slot
+from PySide6.QtWidgets import QMessageBox
 
 from ...core.analysis.failure_grouper import extract_failure_fingerprint
 from ...core.analyzer_service import PytestAnalyzerService
@@ -58,7 +58,7 @@ class AnalysisController(BaseController):
             self.logger.debug("AnalysisController: No TaskManager provided.")
         self.logger.debug("AnalysisController: Initialization complete.")
 
-    @pyqtSlot()
+    @Slot()
     def on_run_tests(self) -> None:
         """Handle the Run Tests action by running tests in the background."""
         self.logger.debug("AnalysisController: on_run_tests triggered.")
@@ -122,7 +122,7 @@ class AnalysisController(BaseController):
             )
         self.logger.debug("AnalysisController: on_run_tests finished.")
 
-    @pyqtSlot()
+    @Slot()
     def on_analyze(self) -> None:
         """Handle the Analyze action by running analysis in the background."""
         self.logger.debug("AnalysisController: on_analyze triggered.")
@@ -244,7 +244,7 @@ class AnalysisController(BaseController):
                     analysis_status=AnalysisStatus.ANALYSIS_FAILED,
                 )
 
-    @pyqtSlot(str, object)
+    @Slot(str, object)
     def _handle_task_completion(self, task_id: str, result: Any) -> None:
         """Handle completion of tasks initiated by this controller."""
         self.logger.info(
@@ -268,11 +268,12 @@ class AnalysisController(BaseController):
                 self.logger.error(
                     f"Source path not found in model for completed task {task_id}. Cannot load results."
                 )
-                QMessageBox.warning(
-                    None,
-                    "Test Run Error",
-                    "Could not determine source of test run to load results.",
-                )
+                # Skip QMessageBox to avoid Qt memory allocation issues
+                # QMessageBox.warning(
+                #     None,
+                #     "Test Run Error",
+                #     "Could not determine source of test run to load results.",
+                # )
                 return
 
             self.test_results_model.load_test_run_results(
@@ -280,18 +281,23 @@ class AnalysisController(BaseController):
             )
 
             num_results = len(self.test_results_model.results)
+            # Skip QMessageBox calls to avoid Qt memory allocation issues - rely on status bar and logs instead
             if not pytest_failures:  # No failures from the run
-                QMessageBox.information(
-                    None,
-                    "Tests Run",
-                    f"Tests executed from '{source_path.name}'. No failures reported.",
-                )
+                self.logger.info(f"Tests executed from '{source_path.name}'. No failures reported.")
+                # QMessageBox.information(
+                #     None,
+                #     "Tests Run",
+                #     f"Tests executed from '{source_path.name}'. No failures reported.",
+                # )
             else:
-                QMessageBox.information(
-                    None,
-                    "Tests Run",
-                    f"Tests executed from '{source_path.name}'. Found {num_results} failures/errors.",
+                self.logger.info(
+                    f"Tests executed from '{source_path.name}'. Found {num_results} failures/errors."
                 )
+                # QMessageBox.information(
+                #     None,
+                #     "Tests Run",
+                #     f"Tests executed from '{source_path.name}'. Found {num_results} failures/errors.",
+                # )
 
         elif isinstance(result, list) and (not result or isinstance(result[0], FixSuggestion)):
             # Result from _generate_suggestions (List[FixSuggestion])
@@ -365,7 +371,7 @@ class AnalysisController(BaseController):
                 f"Task {task_id} completed with unhandled result type: {type(result)}"
             )
 
-    @pyqtSlot(TestResult)
+    @Slot(TestResult)
     def on_analyze_single_test(self, test_result_to_analyze: TestResult) -> None:
         """Handle request to analyze a single test."""
         self.logger.info(f"Single test analysis requested for: {test_result_to_analyze.name}")
@@ -454,7 +460,7 @@ class AnalysisController(BaseController):
                 analysis_status=AnalysisStatus.ANALYSIS_FAILED,
             )
 
-    @pyqtSlot(str, str)
+    @Slot(str, str)
     def _handle_task_failure(self, task_id: str, error_message: str) -> None:
         """Handle failure of tasks initiated by this controller."""
         self.logger.error(

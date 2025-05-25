@@ -2,7 +2,7 @@ import logging
 import re
 from typing import List, Optional
 
-from PyQt6.QtGui import (
+from PySide6.QtGui import (
     QAction,
     QColor,
     QFont,
@@ -11,7 +11,7 @@ from PyQt6.QtGui import (
     QTextCharFormat,
     QTextCursor,
 )
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QLabel,

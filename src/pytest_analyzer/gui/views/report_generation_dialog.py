@@ -3,8 +3,8 @@
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import QThread, pyqtSignal, pyqtSlot
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QThread, Signal, Slot
+from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
@@ -26,10 +26,10 @@ from ..models.report import ReportConfig, ReportFormat, ReportGenerator, ReportT
 class ReportGenerationWorker(QThread):
     """Worker thread for generating reports in the background."""
 
-    progress_updated = pyqtSignal(int)
-    status_updated = pyqtSignal(str)
-    finished = pyqtSignal(str)  # file_path
-    error_occurred = pyqtSignal(str)
+    progress_updated = Signal(int)
+    status_updated = Signal(str)
+    finished = Signal(str)  # file_path
+    error_occurred = Signal(str)
 
     def __init__(self, config: ReportConfig, test_results, analysis_results, parent=None):
         super().__init__(parent)
@@ -64,7 +64,7 @@ class ReportGenerationWorker(QThread):
 class ReportGenerationDialog(QDialog):
     """Dialog for configuring and generating analysis reports."""
 
-    report_generated = pyqtSignal(str)  # file_path
+    report_generated = Signal(str)  # file_path
 
     def __init__(self, test_results=None, analysis_results=None, parent=None):
         super().__init__(parent)
@@ -274,7 +274,7 @@ class ReportGenerationDialog(QDialog):
             include_fix_suggestions=self.include_fixes_check.isChecked(),
         )
 
-    @pyqtSlot(str)
+    @Slot(str)
     def _on_report_finished(self, file_path: str):
         """Handle successful report generation."""
         self.status_label.setText(f"Report saved to: {file_path}")
@@ -282,7 +282,7 @@ class ReportGenerationDialog(QDialog):
         self.generate_button.setText("Generate Another")
         self.report_generated.emit(file_path)
 
-    @pyqtSlot(str)
+    @Slot(str)
     def _on_report_error(self, error_message: str):
         """Handle report generation error."""
         self.status_label.setText(f"Error: {error_message}")

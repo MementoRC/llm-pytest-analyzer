@@ -1,7 +1,7 @@
 import logging
 from typing import TYPE_CHECKING, Any, List, Optional
 
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
+from PySide6.QtCore import QObject, Signal, Slot
 
 from ...core.models.pytest_failure import PytestFailure
 from .base_controller import BaseController
@@ -26,10 +26,10 @@ class TestExecutionController(BaseController):
     """
 
     # Signal to emit received output text, to be connected to TestOutputView
-    output_received = pyqtSignal(str)
-    test_execution_completed = pyqtSignal(list)  # Emits List[PytestFailure]
+    output_received = Signal(str)
+    test_execution_completed = Signal(list)  # Emits List[PytestFailure]
     # Signal to emit test counts: passed, failed, skipped, errors
-    test_counts_updated = pyqtSignal(int, int, int, int)
+    test_counts_updated = Signal(int, int, int, int)
 
     def __init__(
         self,
@@ -47,6 +47,9 @@ class TestExecutionController(BaseController):
         self.output_view = output_view  # Added
         self.analyzer_service = analyzer_service  # For future use, e.g. parsing specific output
         self._current_task_id: Optional[str] = None
+        self._cached_failures: List[
+            PytestFailure
+        ] = []  # Cache for avoiding Qt signal memory issues
 
         self._connect_signals()
         self.logger.debug("TestExecutionController: Initialization complete.")
@@ -118,7 +121,7 @@ class TestExecutionController(BaseController):
         self.logger.debug(f"TestExecutionController: Task is execution task: {is_exec_task}")
         return is_exec_task
 
-    @pyqtSlot(str, str)
+    @Slot(str, str)
     def _handle_task_started(self, task_id: str, description: str) -> None:
         """Handle a task starting."""
         self.logger.debug(
@@ -128,21 +131,79 @@ class TestExecutionController(BaseController):
             self.logger.info(
                 f"Test execution task '{task_id}' ({description}) started. Showing progress view."
             )
+
+            # Memory monitoring for test execution
+            try:
+                from PyQt6.QtWidgets import QApplication
+
+                app = QApplication.instance()
+                if hasattr(app, "memory_monitor"):
+                    app.memory_monitor.log_memory_state(f"TEST_START_{task_id[:8]}")
+            except Exception as e:
+                self.logger.debug(f"Memory monitoring error: {e}")
             self._current_task_id = task_id
             self.logger.debug(f"TestExecutionController: Set _current_task_id to {task_id}")
-            self.output_view.clear_output()  # Clear previous output
-            self.logger.debug("TestExecutionController: Called output_view.clear_output()")
-            self.progress_view.reset_view()
-            self.logger.debug("TestExecutionController: Called progress_view.reset_view()")
-            self.test_counts_updated.emit(0, 0, 0, 0)  # Reset counts in status bar
-            self.logger.debug(
-                "TestExecutionController: Emitted test_counts_updated(0,0,0,0) for new run."
-            )
-            self.progress_view.show()
-            self.logger.debug("TestExecutionController: Called progress_view.show()")
-            self.progress_view.update_progress(0, "Running tests...")
-            self.progress_view.start_timer()
-            self.logger.debug("TestExecutionController: Called progress_view.start_timer()")
+
+            # Force garbage collection before GUI operations to prevent Qt memory issues
+            import gc
+
+            gc.collect()
+            self.logger.debug("TestExecutionController: Forced garbage collection before GUI start")
+
+            try:
+                self.logger.debug(
+                    "TestExecutionController: About to call output_view.clear_output()"
+                )
+                self.output_view.clear_output()  # Clear previous output
+                self.logger.debug(
+                    "TestExecutionController: Successfully called output_view.clear_output()"
+                )
+
+                self.logger.debug(
+                    "TestExecutionController: About to call progress_view.reset_view()"
+                )
+                self.progress_view.reset_view()
+                self.logger.debug(
+                    "TestExecutionController: Successfully called progress_view.reset_view()"
+                )
+
+                self.logger.debug(
+                    "TestExecutionController: About to emit test_counts_updated signal"
+                )
+                self.test_counts_updated.emit(0, 0, 0, 0)  # Reset counts in status bar
+                self.logger.debug(
+                    "TestExecutionController: Successfully emitted test_counts_updated(0,0,0,0)"
+                )
+
+                self.logger.debug("TestExecutionController: About to call progress_view.show()")
+                self.progress_view.show()
+                self.logger.debug(
+                    "TestExecutionController: Successfully called progress_view.show()"
+                )
+
+                self.logger.debug(
+                    "TestExecutionController: About to call progress_view.update_progress()"
+                )
+                self.progress_view.update_progress(0, "Running tests...")
+                self.logger.debug(
+                    "TestExecutionController: Successfully called progress_view.update_progress()"
+                )
+
+                self.logger.debug(
+                    "TestExecutionController: About to call progress_view.start_timer()"
+                )
+                self.progress_view.start_timer()
+                self.logger.debug(
+                    "TestExecutionController: Successfully called progress_view.start_timer()"
+                )
+
+            except Exception as e:
+                self.logger.error(f"TestExecutionController: Qt operation failed: {e}")
+                self.logger.error(f"TestExecutionController: Exception type: {type(e)}")
+                import traceback
+
+                self.logger.error(f"TestExecutionController: Traceback: {traceback.format_exc()}")
+                raise
         else:
             # If another task starts while one is active, we might want to log or ignore
             if self._current_task_id:
@@ -155,7 +216,7 @@ class TestExecutionController(BaseController):
                 )
         self.logger.debug("TestExecutionController: _handle_task_started finished.")
 
-    @pyqtSlot(str, int, str)
+    @Slot(str, int, str)
     def _handle_task_progress(self, task_id: str, percentage: int, message: str) -> None:
         """Handle progress updates for a task."""
         self.logger.debug(
@@ -176,13 +237,23 @@ class TestExecutionController(BaseController):
             )
         self.logger.debug("TestExecutionController: _handle_task_progress finished.")
 
-    @pyqtSlot(str, object)
+    @Slot(str, object)
     def _handle_task_completed(self, task_id: str, result: Any) -> None:
         """Handle a task completing."""
         self.logger.debug(
             f"TestExecutionController: _handle_task_completed - task_id: {task_id}, result type: {type(result)}"
         )
         if task_id == self._current_task_id:
+            # Memory monitoring for test completion
+            try:
+                from PyQt6.QtWidgets import QApplication
+
+                app = QApplication.instance()
+                if hasattr(app, "memory_monitor"):
+                    app.memory_monitor.log_memory_state(f"TEST_COMPLETE_{task_id[:8]}")
+            except Exception as e:
+                self.logger.debug(f"Memory monitoring error: {e}")
+
             self.logger.info(f"Test execution task '{task_id}' completed.")
             self.progress_view.stop_timer()
             self.logger.debug("TestExecutionController: Called progress_view.stop_timer()")
@@ -219,11 +290,23 @@ class TestExecutionController(BaseController):
                 )
                 # If result is not what's expected, pytest_failures remains an empty list
 
-            # Emit the signal with the raw PytestFailure list
-            self.test_execution_completed.emit(pytest_failures)
+            # Store failures in the controller instead of passing through signals to avoid Qt memory issues
+            self._cached_failures = pytest_failures
+
+            # Emit signal with just the count to avoid Qt memory allocation issues
+            self.test_execution_completed.emit(
+                []
+            )  # Empty list - data accessed via get_last_failures()
             self.logger.debug(
-                f"TestExecutionController: Emitted test_execution_completed signal with {len(pytest_failures)} PytestFailure(s)."
+                f"TestExecutionController: Emitted test_execution_completed signal. {len(pytest_failures)} PytestFailure(s) cached."
             )
+
+            # Force memory cleanup before GUI updates
+            import gc
+
+            gc.collect()
+            gc.collect()  # Double cleanup for more thorough collection
+            self.logger.debug("Forced aggressive garbage collection before GUI updates")
 
             self.progress_view.update_stats(passed_count, failed_count, skipped_count, error_count)
             self.logger.debug(
@@ -240,14 +323,19 @@ class TestExecutionController(BaseController):
             # Optionally hide the view after a delay or keep it visible with final stats
             # self.progress_view.hide() # Or a method to set to a "completed" state
             self._current_task_id = None
-            self.logger.debug("TestExecutionController: Cleared _current_task_id.")
+
+            # Clear cached failures after GUI updates to prevent accumulation
+            self._cached_failures.clear()
+            self.logger.debug(
+                "TestExecutionController: Cleared _current_task_id and cached failures."
+            )
         else:
             self.logger.debug(
                 f"TestExecutionController: Task completion for non-current task '{task_id}'. Ignoring."
             )
         self.logger.debug("TestExecutionController: _handle_task_completed finished.")
 
-    @pyqtSlot(str, str)
+    @Slot(str, str)
     def _handle_task_failed(self, task_id: str, error_message: str) -> None:
         """Handle a task failing."""
         self.logger.debug(
@@ -276,7 +364,7 @@ class TestExecutionController(BaseController):
             )
         self.logger.debug("TestExecutionController: _handle_task_failed finished.")
 
-    @pyqtSlot()
+    @Slot()
     def _handle_cancel_request(self) -> None:
         """Handle cancel request from the progress view."""
         self.logger.debug("TestExecutionController: _handle_cancel_request called.")
@@ -299,3 +387,10 @@ class TestExecutionController(BaseController):
         else:
             self.logger.debug("TestExecutionController: No current task or task manager to cancel.")
         self.logger.debug("TestExecutionController: _handle_cancel_request finished.")
+
+    def get_last_failures(self) -> List[PytestFailure]:
+        """
+        Get the cached failures from the last test execution.
+        This avoids Qt memory allocation issues when passing large lists through signals.
+        """
+        return self._cached_failures.copy()  # Return a copy to prevent modification

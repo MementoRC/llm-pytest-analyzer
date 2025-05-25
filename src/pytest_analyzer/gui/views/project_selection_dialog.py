@@ -8,9 +8,9 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
-from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QStandardItem, QStandardItemModel
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtGui import QStandardItem, QStandardItemModel
+from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 class ProjectSelectionDialog(QDialog):
     """Dialog for selecting and managing projects."""
 
-    project_selected = pyqtSignal(Project)
+    project_selected = Signal(Project)
 
     def __init__(self, project_manager: ProjectManager, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -146,7 +146,7 @@ class ProjectSelectionDialog(QDialog):
                 except Exception as e:
                     logger.error(f"Failed to load project {project_path}: {e}")
 
-    @pyqtSlot()
+    @Slot()
     def _on_recent_project_selected(self) -> None:
         """Handle recent project selection."""
         indexes = self.recent_list.selectedIndexes()
@@ -163,13 +163,13 @@ class ProjectSelectionDialog(QDialog):
         if project:
             self._select_project(project)
 
-    @pyqtSlot()
+    @Slot()
     def _on_recent_project_double_clicked(self) -> None:
         """Handle double-click on recent project."""
         if self.selected_project:
             self.accept()
 
-    @pyqtSlot()
+    @Slot()
     def _on_open_project(self) -> None:
         """Handle open project button click."""
         project_dir = QFileDialog.getExistingDirectory(
@@ -189,7 +189,7 @@ class ProjectSelectionDialog(QDialog):
             except Exception as e:
                 logger.error(f"Failed to open project {project_dir}: {e}")
 
-    @pyqtSlot()
+    @Slot()
     def _on_create_project(self) -> None:
         """Handle create project button click."""
         dialog = CreateProjectDialog(self)
@@ -204,7 +204,7 @@ class ProjectSelectionDialog(QDialog):
             except Exception as e:
                 logger.error(f"Failed to create project: {e}")
 
-    @pyqtSlot()
+    @Slot()
     def _on_discover_projects(self) -> None:
         """Handle discover projects button click."""
         root_dir = QFileDialog.getExistingDirectory(
@@ -265,7 +265,7 @@ class ProjectSelectionDialog(QDialog):
         item.setToolTip(f"{project.path}\n{project.metadata.description}")
         self.recent_model.insertRow(0, item)
 
-    @pyqtSlot()
+    @Slot()
     def _on_description_changed(self) -> None:
         """Handle description text changes."""
         if self.selected_project:
@@ -336,7 +336,7 @@ class CreateProjectDialog(QDialog):
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
 
-    @pyqtSlot()
+    @Slot()
     def _browse_location(self) -> None:
         """Browse for project location."""
         location = QFileDialog.getExistingDirectory(
@@ -416,7 +416,7 @@ class DiscoveredProjectsDialog(QDialog):
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
 
-    @pyqtSlot()
+    @Slot()
     def _on_project_selected(self) -> None:
         """Handle project selection."""
         indexes = self.projects_list.selectedIndexes()

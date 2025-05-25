@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
+from PySide6.QtCore import QObject, Signal, Slot
 
 from ...core.models.pytest_failure import FixSuggestion
 from ...core.protocols import Applier
@@ -34,25 +34,25 @@ class FixController(BaseController):
     """Controller for applying fixes and managing change history."""
 
     # Signals
-    fix_applied_successfully = pyqtSignal(str, dict)  # task_id, application_result
-    fix_application_failed = pyqtSignal(str, str)  # task_id, error_message
-    batch_operation_completed = pyqtSignal(
+    fix_applied_successfully = Signal(str, dict)  # task_id, application_result
+    fix_application_failed = Signal(str, str)  # task_id, error_message
+    batch_operation_completed = Signal(
         str, int, int, list
     )  # task_id, succeeded_count, failed_count, errors
-    diff_generated = pyqtSignal(str, dict)  # task_id, diff_results (file_path_str: diff_text)
-    diff_generation_failed = pyqtSignal(str, str)  # task_id, error_message
-    change_history_updated = pyqtSignal(list)  # new_history_list
+    diff_generated = Signal(str, dict)  # task_id, diff_results (file_path_str: diff_text)
+    diff_generation_failed = Signal(str, str)  # task_id, error_message
+    change_history_updated = Signal(list)  # new_history_list
 
     # Git specific signals
-    git_repo_status_checked = pyqtSignal(
+    git_repo_status_checked = Signal(
         bool, str, str
     )  # is_git_repo, git_root_path_str, error_message
-    git_status_updated = pyqtSignal(str, dict)  # task_id, {file_path_str: status_str}
-    git_status_update_failed = pyqtSignal(str, str)  # task_id, error_message
-    branch_created = pyqtSignal(str, str, str)  # task_id, new_branch_name, original_branch_name
-    branch_creation_failed = pyqtSignal(str, str)  # task_id, error_message
-    commit_succeeded = pyqtSignal(str, str, str)  # task_id, commit_hash, commit_message
-    commit_failed = pyqtSignal(str, str)  # task_id, error_message
+    git_status_updated = Signal(str, dict)  # task_id, {file_path_str: status_str}
+    git_status_update_failed = Signal(str, str)  # task_id, error_message
+    branch_created = Signal(str, str, str)  # task_id, new_branch_name, original_branch_name
+    branch_creation_failed = Signal(str, str)  # task_id, error_message
+    commit_succeeded = Signal(str, str, str)  # task_id, commit_hash, commit_message
+    commit_failed = Signal(str, str)  # task_id, error_message
 
     def __init__(
         self,
@@ -75,7 +75,7 @@ class FixController(BaseController):
 
     # --- Git Integration Methods ---
 
-    @pyqtSlot()
+    @Slot()
     def check_git_status(self) -> Optional[str]:
         """
         Checks if the project is a Git repository and gets its root.
@@ -131,7 +131,7 @@ class FixController(BaseController):
         self._is_git_repo = False
         return False, "", "Not a Git repository or sub-directory."
 
-    @pyqtSlot(list)  # List[Union[str, Path]]
+    @Slot(list)  # List[Union[str, Path]]
     def refresh_file_git_status(self, file_paths: List[Union[str, Path]]) -> Optional[str]:
         """
         Gets the Git status for a list of files.
@@ -209,8 +209,8 @@ class FixController(BaseController):
             raise GitError("Git command not found.")
         return statuses
 
-    @pyqtSlot(str)
-    @pyqtSlot()  # Allow calling without branch_name for auto-generated name
+    @Slot(str)
+    @Slot()  # Allow calling without branch_name for auto-generated name
     def create_git_branch(self, branch_name: Optional[str] = None) -> Optional[str]:
         """
         Creates a new Git branch for fixes.
@@ -247,8 +247,8 @@ class FixController(BaseController):
         self._original_branch_before_fix_branch = original_branch
         return new_branch, original_branch
 
-    @pyqtSlot(float, str)  # record_timestamp, custom_message
-    @pyqtSlot(float)  # record_timestamp, no custom_message
+    @Slot(float, str)  # record_timestamp, custom_message
+    @Slot(float)  # record_timestamp, no custom_message
     def commit_applied_fix(
         self, record_timestamp: float, custom_message: Optional[str] = None
     ) -> Optional[str]:
@@ -436,7 +436,7 @@ class FixController(BaseController):
 
         return originals, None
 
-    @pyqtSlot(FixSuggestion)
+    @Slot(FixSuggestion)
     def apply_fix_suggestion(self, suggestion: FixSuggestion) -> Optional[str]:
         """
         Applies a single fix suggestion in the background.
@@ -530,7 +530,7 @@ class FixController(BaseController):
                 original_contents,
             )
 
-    @pyqtSlot(list)  # List[FixSuggestion]
+    @Slot(list)  # List[FixSuggestion]
     def apply_multiple_fixes(self, suggestions: List[FixSuggestion]) -> Optional[str]:
         """
         Applies multiple fix suggestions in a single background task.
@@ -668,7 +668,7 @@ class FixController(BaseController):
 
         return succeeded_count, failed_count, errors, applied_records
 
-    @pyqtSlot(FixSuggestion)
+    @Slot(FixSuggestion)
     def show_diff_preview(self, suggestion: FixSuggestion) -> Optional[str]:
         """
         Generates diffs for a fix suggestion in the background.
@@ -725,7 +725,7 @@ class FixController(BaseController):
             # For now, let the exception propagate to be handled by TaskManager.
             raise  # This will trigger task_failed signal from TaskManager
 
-    @pyqtSlot()
+    @Slot()
     def rollback_last_change(self) -> Optional[str]:
         """
         Rolls back the last applied change.
@@ -797,7 +797,7 @@ class FixController(BaseController):
         """Returns the current change history."""
         return list(self._change_history)
 
-    @pyqtSlot()
+    @Slot()
     def clear_change_history(self) -> None:
         """Clears the change history."""
         self.logger.info("Clearing change history.")
@@ -812,7 +812,7 @@ class FixController(BaseController):
     # For now, the _execute_* methods return tuples that include context,
     # so a generic handler can unpack and decide.
 
-    @pyqtSlot(str, object)
+    @Slot(str, object)
     def _handle_task_completion(self, task_id: str, result_data: Any) -> None:
         """Handles completion of tasks initiated by FixController."""
         self.logger.info(
@@ -1035,7 +1035,7 @@ class FixController(BaseController):
                 f"Task {task_id} (callable: {task_callable_name}) completed in FixController with unhandled result type: {type(result_data)} or structure."
             )
 
-    @pyqtSlot(str, str)
+    @Slot(str, str)
     def _handle_task_failure(self, task_id: str, error_message: str) -> None:
         """Handles failure of tasks initiated by FixController."""
         self.logger.error(f"Task {task_id} failed in FixController: {error_message}")

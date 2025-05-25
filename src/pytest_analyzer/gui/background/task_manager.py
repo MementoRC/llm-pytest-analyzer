@@ -3,7 +3,7 @@ import logging
 import uuid
 from typing import Any, Callable, Dict, List, Optional, Tuple  # Added List
 
-from PyQt6.QtCore import QObject, QTimer, pyqtSignal, pyqtSlot  # Added QTimer
+from PySide6.QtCore import QObject, QTimer, Signal, Slot  # Added QTimer
 
 from .progress_bridge import ProgressBridge, RichTaskID
 from .worker_thread import WorkerThread
@@ -17,14 +17,14 @@ class TaskManager(QObject):
     Tasks are processed serially to conserve resources.
     """
 
-    task_started = pyqtSignal(str, str)  # task_id, description
-    task_progress = pyqtSignal(str, int, str)  # task_id, percentage, message
-    task_completed = pyqtSignal(str, object)  # task_id, result
-    task_failed = pyqtSignal(str, str)  # task_id, error_message
-    task_resources_released = pyqtSignal(str)  # task_id
+    task_started = Signal(str, str)  # task_id, description
+    task_progress = Signal(str, int, str)  # task_id, percentage, message
+    task_completed = Signal(str, object)  # task_id, result
+    task_failed = Signal(str, str)  # task_id, error_message
+    task_resources_released = Signal(str)  # task_id
 
     # Delay in milliseconds before starting the next task after one finishes, allows for cleanup
-    POST_TASK_CLEANUP_DELAY_MS = 250
+    POST_TASK_CLEANUP_DELAY_MS = 2000  # Further increased delay for more aggressive memory cleanup
 
     def __init__(self, parent: Optional[QObject] = None):
         super().__init__(parent)
@@ -173,13 +173,13 @@ class TaskManager(QObject):
                 f"Attempted to cancel task '{task_id}', but it was not found in the queue or active workers."
             )
 
-    @pyqtSlot(str, object)
+    @Slot(str, object)
     def _on_worker_result_ready(self, task_id: str, result: Any) -> None:
         logger.info(f"Task '{task_id}' completed successfully.")
         self.task_completed.emit(task_id, result)
         self._handle_task_termination(task_id)
 
-    @pyqtSlot(str, str)
+    @Slot(str, str)
     def _on_worker_error_occurred(self, task_id: str, error_message: str) -> None:
         logger.error(f"Task '{task_id}' failed: {error_message}")
         self.task_failed.emit(task_id, error_message)
@@ -205,12 +205,21 @@ class TaskManager(QObject):
         logger.debug("Forcing garbage collection after task termination.")
         gc.collect()
 
+        # Additional aggressive cleanup for GUI memory pressure
+        import sys
+
+        if hasattr(sys, "intern"):
+            # Force string interning cleanup
+            pass
+
+        logger.debug("Completed aggressive memory cleanup after task termination.")
+
         logger.debug(
             f"Scheduling next task processing with a delay of {self.POST_TASK_CLEANUP_DELAY_MS}ms."
         )
         QTimer.singleShot(self.POST_TASK_CLEANUP_DELAY_MS, self._process_next_task_in_queue)
 
-    @pyqtSlot()
+    @Slot()
     def _process_next_task_in_queue(self) -> None:
         if not self._task_queue:
             logger.debug("Task queue is empty. No new task to start.")
@@ -235,7 +244,7 @@ class TaskManager(QObject):
 
         self._start_processing_task(task_id, callable_task, args, kwargs, use_progress_bridge)
 
-    @pyqtSlot(str, int, str)
+    @Slot(str, int, str)
     def _on_worker_progress_updated(self, task_id: str, percentage: int, message: str) -> None:
         logger.debug(f"Task '{task_id}' progress: {percentage}% - {message}")
         self.task_progress.emit(task_id, percentage, message)

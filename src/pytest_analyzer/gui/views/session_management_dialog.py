@@ -9,9 +9,9 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QStandardItem, QStandardItemModel
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtGui import QStandardItem, QStandardItemModel
+from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -36,8 +36,8 @@ logger = logging.getLogger(__name__)
 class SessionManagementDialog(QDialog):
     """Dialog for managing analysis sessions."""
 
-    session_selected = pyqtSignal(str)  # session_id
-    session_created = pyqtSignal(SessionData)
+    session_selected = Signal(str)  # session_id
+    session_created = Signal(SessionData)
 
     def __init__(self, session_manager: SessionManager, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -207,7 +207,7 @@ class SessionManagementDialog(QDialog):
 
             self.sessions_model.appendRow(item)
 
-    @pyqtSlot()
+    @Slot()
     def _on_session_selected(self) -> None:
         """Handle session selection."""
         indexes = self.sessions_list.selectedIndexes()
@@ -224,13 +224,13 @@ class SessionManagementDialog(QDialog):
         if session_metadata:
             self._display_session_details(session_metadata)
 
-    @pyqtSlot()
+    @Slot()
     def _on_session_double_clicked(self) -> None:
         """Handle double-click on session."""
         if self.selected_session_id:
             self.accept()
 
-    @pyqtSlot()
+    @Slot()
     def _on_new_session(self) -> None:
         """Handle new session creation."""
         dialog = NewSessionDialog(self)
@@ -243,7 +243,7 @@ class SessionManagementDialog(QDialog):
             self._load_sessions()  # Refresh list
             self.session_created.emit(session)
 
-    @pyqtSlot()
+    @Slot()
     def _on_delete_session(self) -> None:
         """Handle session deletion."""
         if not self.selected_session_id:
@@ -276,7 +276,7 @@ class SessionManagementDialog(QDialog):
             else:
                 QMessageBox.warning(self, "Error", "Failed to delete session.")
 
-    @pyqtSlot()
+    @Slot()
     def _on_import_session(self) -> None:
         """Handle session import."""
         file_path, _ = QFileDialog.getOpenFileName(
@@ -294,7 +294,7 @@ class SessionManagementDialog(QDialog):
             except Exception as e:
                 QMessageBox.critical(self, "Import Error", f"Failed to import session:\n\n{e}")
 
-    @pyqtSlot()
+    @Slot()
     def _on_export_session(self) -> None:
         """Handle session export."""
         if not self.selected_session_id:
@@ -411,12 +411,12 @@ class SessionManagementDialog(QDialog):
         self.export_session_btn.setEnabled(False)
         self.apply_button.setEnabled(False)
 
-    @pyqtSlot()
+    @Slot()
     def _on_details_changed(self) -> None:
         """Handle changes to session details."""
         self.apply_button.setEnabled(self.selected_session_id is not None)
 
-    @pyqtSlot()
+    @Slot()
     def _on_apply_changes(self) -> None:
         """Apply changes to session metadata."""
         if not self.selected_session_id:

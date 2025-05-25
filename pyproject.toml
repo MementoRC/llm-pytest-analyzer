@@ -35,8 +35,8 @@ dependencies = [
     "psutil",
     "pyyaml",
     "rich>=12.0.0",
-    "PyQt6>=6.5.0",
-    "PyQt6-QScintilla>=2.14.0", # Added QScintilla dependency
+    "PySide6>=6.5.0",
+    "QScintilla>=2.14.0", # QScintilla for PySide6
 ]
 
 [project.optional-dependencies]

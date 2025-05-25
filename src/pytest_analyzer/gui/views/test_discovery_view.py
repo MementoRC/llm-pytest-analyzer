@@ -1,9 +1,9 @@
 import logging
 from typing import Dict, List, Optional, Tuple
 
-from PyQt6.QtCore import QModelIndex, Qt, pyqtSignal
-from PyQt6.QtGui import QStandardItem, QStandardItemModel
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QModelIndex, Qt, Signal
+from PySide6.QtGui import QStandardItem, QStandardItemModel
+from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -24,11 +24,11 @@ class TestDiscoveryView(QWidget):
     Widget for displaying discovered tests and allowing selection.
     """
 
-    discover_tests_requested = pyqtSignal()  # Emitted when refresh button is clicked
+    discover_tests_requested = Signal()  # Emitted when refresh button is clicked
     # Emits list of selected node IDs, could be used by a controller if needed directly
     # For now, selection is primarily retrieved via get_selected_node_ids()
-    selection_changed = pyqtSignal()  # Emitted when checkbox selection changes
-    test_file_selected = pyqtSignal(str)  # Emitted with file path when a tree item is clicked
+    selection_changed = Signal()  # Emitted when checkbox selection changes
+    test_file_selected = Signal(str)  # Emitted with file path when a tree item is clicked
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)

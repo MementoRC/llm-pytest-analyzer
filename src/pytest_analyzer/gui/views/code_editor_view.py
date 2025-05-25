@@ -2,10 +2,10 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.Qsci import QsciLexerPython, QsciScintilla
-from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtGui import QColor, QFont
-from PyQt6.QtWidgets import QWidget
+from PySide6.QtCore import Signal
+from PySide6.QtGui import QColor, QFont
+from PySide6.QtWidgets import QWidget
+from QScintilla import QsciLexerPython, QsciScintilla
 
 logger = logging.getLogger(__name__)
 
@@ -16,10 +16,10 @@ class CodeEditorView(QsciScintilla):
     primarily Python code.
     """
 
-    file_loaded = pyqtSignal(Path)
-    file_saved = pyqtSignal(Path)
-    content_changed = pyqtSignal()
-    status_message = pyqtSignal(str)
+    file_loaded = Signal(Path)
+    file_saved = Signal(Path)
+    content_changed = Signal()
+    status_message = Signal(str)
 
     def __init__(self, parent: Optional[QWidget] = None):
         """

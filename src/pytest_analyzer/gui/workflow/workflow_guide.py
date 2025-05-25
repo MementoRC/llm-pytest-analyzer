@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from PyQt6.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 
 from .workflow_state_machine import WorkflowState
 
@@ -9,7 +9,7 @@ from .workflow_state_machine import WorkflowState
 class WorkflowGuide(QObject):
     """Provides contextual guidance messages based on the current workflow state."""
 
-    guidance_updated = pyqtSignal(str, str)  # message, tooltip
+    guidance_updated = Signal(str, str)  # message, tooltip
 
     def __init__(self, parent: Optional[QObject] = None):
         super().__init__(parent)

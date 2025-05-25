@@ -8,9 +8,9 @@ user interface for the Pytest Analyzer GUI.
 import logging
 from typing import TYPE_CHECKING, Any
 
-from PyQt6.QtCore import QSettings, QSize, Qt, pyqtSlot
-from PyQt6.QtGui import QAction, QKeySequence, QShortcut
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QSettings, QSize, Qt, Slot
+from PySide6.QtGui import QAction, QKeySequence, QShortcut
+from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
@@ -683,14 +683,14 @@ class MainWindow(QMainWindow):
 
     # Keeping on_about as it's simple and directly uses self.app.applicationVersion()
     # Alternatively, this too could be moved to a dedicated controller if desired.
-    @pyqtSlot()
+    @Slot()
     def on_settings(self) -> None:
         """Handle the Settings action - temporary backward compatibility for tests."""
         QMessageBox.information(
             self, "Settings", "Settings dialog will be implemented in a future task."
         )
 
-    @pyqtSlot()
+    @Slot()
     def on_about(self) -> None:
         """Handle the About action."""
         QMessageBox.about(

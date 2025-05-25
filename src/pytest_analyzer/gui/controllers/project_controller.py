@@ -9,8 +9,8 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import QObject, QSettings, pyqtSignal, pyqtSlot
-from PyQt6.QtWidgets import QMessageBox
+from PySide6.QtCore import QObject, QSettings, Signal, Slot
+from PySide6.QtWidgets import QMessageBox
 
 from ..models.project import Project, ProjectManager
 from ..views.project_selection_dialog import ProjectSelectionDialog
@@ -22,9 +22,9 @@ logger = logging.getLogger(__name__)
 class ProjectController(BaseController):
     """Handles project management operations."""
 
-    project_changed = pyqtSignal(Project)
-    settings_updated = pyqtSignal(object)  # Settings object
-    status_message_updated = pyqtSignal(str)
+    project_changed = Signal(Project)
+    settings_updated = Signal(object)  # Settings object
+    status_message_updated = Signal(str)
 
     def __init__(self, parent: Optional[QObject] = None):
         super().__init__(parent)
@@ -46,7 +46,7 @@ class ProjectController(BaseController):
         """Get the current project."""
         return self.project_manager.current_project
 
-    @pyqtSlot()
+    @Slot()
     def show_project_selection(self) -> None:
         """Show the project selection dialog."""
         dialog = ProjectSelectionDialog(self.project_manager)
@@ -57,7 +57,7 @@ class ProjectController(BaseController):
         else:
             self.logger.info("Project selection cancelled")
 
-    @pyqtSlot(Path)
+    @Slot(Path)
     def open_project(self, project_path: Path) -> None:
         """Open a project from the given path."""
         try:
@@ -75,7 +75,7 @@ class ProjectController(BaseController):
                 None, "Project Error", f"Failed to open project at {project_path}:\n\n{e}"
             )
 
-    @pyqtSlot(Path, str)
+    @Slot(Path, str)
     def create_project(self, project_path: Path, name: str) -> None:
         """Create a new project."""
         try:
@@ -91,7 +91,7 @@ class ProjectController(BaseController):
             # Show error dialog
             QMessageBox.warning(None, "Project Error", f"Failed to create project:\n\n{e}")
 
-    @pyqtSlot()
+    @Slot()
     def save_current_project(self) -> None:
         """Save the current project configuration."""
         if not self.current_project:
@@ -107,7 +107,7 @@ class ProjectController(BaseController):
             self.logger.error(error_msg)
             self.status_message_updated.emit(error_msg)
 
-    @pyqtSlot(object)
+    @Slot(object)
     def update_project_settings(self, settings) -> None:
         """Update current project settings."""
         if not self.current_project:
@@ -133,12 +133,12 @@ class ProjectController(BaseController):
         """Get list of recent project paths."""
         return self.project_manager.get_recent_projects()
 
-    @pyqtSlot(Path)
+    @Slot(Path)
     def open_recent_project(self, project_path: Path) -> None:
         """Open a recent project."""
         self.open_project(project_path)
 
-    @pyqtSlot()
+    @Slot()
     def discover_projects(self) -> list:
         """Discover projects in a directory."""
         # This will be called from the UI

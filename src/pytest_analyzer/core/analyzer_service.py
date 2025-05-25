@@ -765,6 +765,13 @@ class PytestAnalyzerService:
         Returns:
             List of test failures
         """
+        # Force aggressive memory cleanup before subprocess execution
+        import gc
+
+        gc.collect()
+        gc.collect()
+        logger.debug("Forced aggressive garbage collection before pytest execution")
+
         # Set memory limits
         limit_memory(self.settings.max_memory_mb)
 
@@ -836,6 +843,14 @@ class PytestAnalyzerService:
                     completed=True,
                 )
 
+            # Force memory cleanup after pytest execution
+            import gc
+
+            gc.collect()
+            logger.debug(
+                f"Forced garbage collection after pytest execution. Found {len(failures)} failures."
+            )
+
             return failures
 
         except Exception as e:
@@ -846,6 +861,12 @@ class PytestAnalyzerService:
                     description=f"[red]Pytest failed: {e}",
                     completed=True,
                 )
+
+            # Force memory cleanup on error
+            import gc
+
+            gc.collect()
+            logger.debug("Forced garbage collection after pytest error.")
 
             logger.error(f"Error running tests: {e}")
             return []
@@ -1114,16 +1135,28 @@ class PytestAnalyzerService:
 
                 # Try to temporarily remove memory limits to prevent subprocess crashes
                 with temporarily_remove_memory_limits():
-                    # Run pytest with captured output for better debugging
-                    result = subprocess.run(
+                    # Run pytest with streaming output to prevent memory accumulation
+                    with subprocess.Popen(
                         cmd,
-                        timeout=self.settings.pytest_timeout,
-                        check=False,
-                        capture_output=True,  # Capture both stdout and stderr
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
                         text=True,
-                        env=subprocess_env,  # Use modified environment
+                        env=subprocess_env,
                         cwd=self.settings.project_root,
-                    )
+                    ) as process:
+                        try:
+                            stdout, stderr = process.communicate(
+                                timeout=self.settings.pytest_timeout
+                            )
+                            result = subprocess.CompletedProcess(
+                                cmd, process.returncode, stdout, stderr
+                            )
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                            stdout, stderr = process.communicate()
+                            raise subprocess.TimeoutExpired(
+                                cmd, self.settings.pytest_timeout, stdout, stderr
+                            )
 
                 end_time = time.time()
                 duration = end_time - start_time
@@ -1316,16 +1349,28 @@ class PytestAnalyzerService:
 
                 # Try to temporarily remove memory limits to prevent subprocess crashes
                 with temporarily_remove_memory_limits():
-                    # Run pytest with captured output for better debugging
-                    result = subprocess.run(
+                    # Run pytest with streaming output to prevent memory accumulation
+                    with subprocess.Popen(
                         cmd,
-                        timeout=self.settings.pytest_timeout,
-                        check=False,
-                        capture_output=True,  # Capture both stdout and stderr
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
                         text=True,
-                        env=subprocess_env,  # Use modified environment
+                        env=subprocess_env,
                         cwd=self.settings.project_root,
-                    )
+                    ) as process:
+                        try:
+                            stdout, stderr = process.communicate(
+                                timeout=self.settings.pytest_timeout
+                            )
+                            result = subprocess.CompletedProcess(
+                                cmd, process.returncode, stdout, stderr
+                            )
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                            stdout, stderr = process.communicate()
+                            raise subprocess.TimeoutExpired(
+                                cmd, self.settings.pytest_timeout, stdout, stderr
+                            )
 
                 end_time = time.time()
                 duration = end_time - start_time

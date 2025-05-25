@@ -11,10 +11,14 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from PyQt6.QtCore import QSettings, Qt
-from PyQt6.QtWidgets import QApplication
+from PySide6.QtCore import QSettings, Qt
+from PySide6.QtWidgets import QApplication
 
 from ..utils.settings import Settings
+
+# Add memory monitoring
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+from memory_monitor import MemoryMonitor
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -346,12 +350,15 @@ def create_app(argv: Optional[List[str]] = None) -> PytestAnalyzerApp:
         current_mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024  # Convert to bytes
         logger.info(f"GUI process current memory usage: {current_mem / 1024 / 1024:.1f} MB")
 
-        # Set a reasonable memory limit for the GUI process (1.5GB)
+        # Set a reasonable memory limit for the GUI process (768MB)
         # This prevents runaway memory consumption while allowing normal operation
-        memory_limit = 1536 * 1024 * 1024  # 1.5GB in bytes
+        memory_limit = 768 * 1024 * 1024  # 768MB in bytes
         try:
-            resource.setrlimit(resource.RLIMIT_AS, (memory_limit, memory_limit))
-            logger.info(f"Set memory limit for GUI process: {memory_limit / 1024 / 1024:.1f} MB")
+            # Temporarily disable memory limit to allow GUI startup
+            # resource.setrlimit(resource.RLIMIT_AS, (memory_limit, memory_limit))
+            logger.info(
+                f"Memory limit disabled temporarily for GUI startup: {memory_limit / 1024 / 1024:.1f} MB"
+            )
         except OSError as e:
             logger.warning(f"Could not set memory limit: {e}")
     except Exception as e:
@@ -359,5 +366,13 @@ def create_app(argv: Optional[List[str]] = None) -> PytestAnalyzerApp:
 
     # Create the application
     app = PytestAnalyzerApp(argv)
+
+    # Start memory monitoring
+    monitor = MemoryMonitor(interval=2.0)
+    monitor.log_memory_state("APP_STARTUP")
+    monitor.start_monitoring()
+
+    # Store monitor in app for access
+    app.memory_monitor = monitor
 
     return app

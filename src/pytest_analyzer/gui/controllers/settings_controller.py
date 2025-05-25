@@ -1,18 +1,18 @@
 import logging
 from typing import TYPE_CHECKING, Optional
 
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
+from PySide6.QtCore import QObject, Signal, Slot
 
 # QMessageBox is used by SettingsDialog, not directly here anymore for on_settings
-# from PyQt6.QtWidgets import QMessageBox
-from PyQt6.QtWidgets import QDialog  # For type hinting exec result
+# from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QDialog  # For type hinting exec result
 
 from ...utils.config_types import Settings  # For type hinting
 from ..views.settings_dialog import SettingsDialog  # Import the new dialog
 from .base_controller import BaseController
 
 if TYPE_CHECKING:
-    from PyQt6.QtWidgets import QMainWindow
+    from PySide6.QtWidgets import QMainWindow
 
     from ..app import PytestAnalyzerApp
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class SettingsController(BaseController):
     """Manages application settings and configuration."""
 
-    core_settings_changed = pyqtSignal(Settings)  # Emitted when core settings are updated
+    core_settings_changed = Signal(Settings)  # Emitted when core settings are updated
 
     def __init__(self, app: "PytestAnalyzerApp", parent: QObject = None):
         super().__init__(parent)
@@ -32,7 +32,7 @@ class SettingsController(BaseController):
         # If not, it needs to be passed or accessible. For now, dialog parent can be None.
         self.main_window: Optional[QMainWindow] = getattr(app, "main_window", None)
 
-    @pyqtSlot()
+    @Slot()
     def on_settings(self) -> None:
         """Handle the Settings action by showing the SettingsDialog."""
         self.logger.info("Settings action triggered. Opening SettingsDialog.")
@@ -52,7 +52,7 @@ class SettingsController(BaseController):
         else:
             self.logger.info("SettingsDialog cancelled.")
 
-    @pyqtSlot(Settings)
+    @Slot(Settings)
     def _handle_settings_updated_from_dialog(self, updated_core_settings: Settings):
         """
         Applies validated and updated core settings from the dialog
@@ -93,7 +93,7 @@ class SettingsController(BaseController):
         # Emit a general signal that core settings have changed.
         # Consumers can then react as needed (e.g., reinitialize services).
         if hasattr(self, "core_settings_changed") and isinstance(
-            self.core_settings_changed, pyqtSignal
+            self.core_settings_changed, Signal
         ):
             self.core_settings_changed.emit(self.app.core_settings)
         # No explicit fallback to llm_settings_changed as it's removed.
@@ -102,7 +102,7 @@ class SettingsController(BaseController):
         # Potentially inform user that some changes might require a restart or re-initialization of services
         # QMessageBox.information(self.main_window, "Settings Applied", "Some settings may require re-initialization of services or application restart to take full effect.")
 
-    @pyqtSlot(str, object)
+    @Slot(str, object)
     def _handle_gui_setting_changed_from_dialog(self, key: str, value: object):
         """Saves a GUI-specific setting to QSettings."""
         self.logger.info(f"GUI setting changed: {key} = {value}. Saving to QSettings.")

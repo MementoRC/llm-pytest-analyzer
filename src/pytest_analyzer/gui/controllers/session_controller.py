@@ -9,8 +9,8 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
-from PyQt6.QtWidgets import QMessageBox
+from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtWidgets import QMessageBox
 
 from ..models.session import SessionData, SessionManager
 from ..views.session_management_dialog import SessionManagementDialog
@@ -22,12 +22,12 @@ logger = logging.getLogger(__name__)
 class SessionController(BaseController):
     """Handles session management operations."""
 
-    session_changed = pyqtSignal(SessionData)
-    session_saved = pyqtSignal(str)  # session_id
-    session_loaded = pyqtSignal(SessionData)
-    bookmark_added = pyqtSignal(str, str)  # test_name, bookmark_type
-    bookmark_removed = pyqtSignal(str)  # test_name
-    status_message_updated = pyqtSignal(str)
+    session_changed = Signal(SessionData)
+    session_saved = Signal(str)  # session_id
+    session_loaded = Signal(SessionData)
+    bookmark_added = Signal(str, str)  # test_name, bookmark_type
+    bookmark_removed = Signal(str)  # test_name
+    status_message_updated = Signal(str)
 
     def __init__(self, sessions_dir: Optional[Path] = None, parent: Optional[QObject] = None):
         super().__init__(parent)
@@ -44,7 +44,7 @@ class SessionController(BaseController):
         """Get the current session."""
         return self.session_manager.current_session
 
-    @pyqtSlot()
+    @Slot()
     def show_session_management(self) -> None:
         """Show the session management dialog."""
         dialog = SessionManagementDialog(self.session_manager)
@@ -56,7 +56,7 @@ class SessionController(BaseController):
         else:
             self.logger.info("Session management dialog cancelled")
 
-    @pyqtSlot(str, str, str)
+    @Slot(str, str, str)
     def create_new_session(
         self, name: str = "", description: str = "", project_path: str = ""
     ) -> None:
@@ -77,7 +77,7 @@ class SessionController(BaseController):
             # Show error dialog
             QMessageBox.warning(None, "Session Error", f"Failed to create new session:\n\n{e}")
 
-    @pyqtSlot(str)
+    @Slot(str)
     def load_session(self, session_id: str) -> None:
         """Load a session by ID."""
         try:
@@ -99,7 +99,7 @@ class SessionController(BaseController):
             # Show error dialog
             QMessageBox.warning(None, "Session Error", f"Failed to load session:\n\n{e}")
 
-    @pyqtSlot()
+    @Slot()
     def save_current_session(self) -> None:
         """Save the current session."""
         try:
@@ -119,7 +119,7 @@ class SessionController(BaseController):
             self.logger.error(error_msg)
             self.status_message_updated.emit(error_msg)
 
-    @pyqtSlot(str)
+    @Slot(str)
     def delete_session(self, session_id: str) -> None:
         """Delete a session."""
         try:
@@ -136,7 +136,7 @@ class SessionController(BaseController):
             self.logger.error(error_msg)
             self.status_message_updated.emit(error_msg)
 
-    @pyqtSlot(str)
+    @Slot(str)
     def export_session(self, export_path: str) -> None:
         """Export the current session."""
         if not self.current_session:
@@ -157,7 +157,7 @@ class SessionController(BaseController):
             self.logger.error(error_msg)
             self.status_message_updated.emit(error_msg)
 
-    @pyqtSlot(str)
+    @Slot(str)
     def import_session(self, import_path: str) -> None:
         """Import a session from file."""
         try:
@@ -176,7 +176,7 @@ class SessionController(BaseController):
             self.logger.error(error_msg)
             self.status_message_updated.emit(error_msg)
 
-    @pyqtSlot(str, str, str, str)
+    @Slot(str, str, str, str)
     def add_bookmark(
         self,
         test_name: str,
@@ -208,7 +208,7 @@ class SessionController(BaseController):
             self.logger.error(error_msg)
             self.status_message_updated.emit(error_msg)
 
-    @pyqtSlot(str)
+    @Slot(str)
     def remove_bookmark(self, test_name: str) -> None:
         """Remove a bookmark for a test."""
         try:
@@ -224,7 +224,7 @@ class SessionController(BaseController):
             self.logger.error(error_msg)
             self.status_message_updated.emit(error_msg)
 
-    @pyqtSlot(str, str, int, str)
+    @Slot(str, str, int, str)
     def add_analysis_history_entry(
         self, test_name: str, analysis_type: str, suggestions_count: int, status: str
     ) -> None:
@@ -248,7 +248,7 @@ class SessionController(BaseController):
         except Exception as e:
             self.logger.error(f"Failed to add analysis history entry: {e}")
 
-    @pyqtSlot(list)
+    @Slot(list)
     def update_session_with_test_results(self, test_results: List) -> None:
         """Update the current session with test results."""
         try:
@@ -271,7 +271,7 @@ class SessionController(BaseController):
         except Exception as e:
             self.logger.error(f"Failed to update session with test results: {e}")
 
-    @pyqtSlot(str)
+    @Slot(str)
     def update_workflow_state(self, workflow_state: str) -> None:
         """Update the workflow state in the current session."""
         try:
@@ -287,7 +287,7 @@ class SessionController(BaseController):
         except Exception as e:
             self.logger.error(f"Failed to update workflow state: {e}")
 
-    @pyqtSlot(str, str, str)
+    @Slot(str, str, str)
     def update_session_metadata(
         self, name: str = None, description: str = None, tags: str = None
     ) -> None:

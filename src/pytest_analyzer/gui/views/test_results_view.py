@@ -8,9 +8,9 @@ and visualizing test failures.
 import logging
 from typing import Any, List, Optional
 
-from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QBrush, QColor, QStandardItem, QStandardItemModel
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal, Slot
+from PySide6.QtGui import QBrush, QColor, QStandardItem, QStandardItemModel
+from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -165,8 +165,8 @@ class TestResultsView(QWidget):
     """
 
     # Signals
-    test_selected = pyqtSignal(TestResult)
-    group_selected = pyqtSignal(TestGroup)
+    test_selected = Signal(TestResult)
+    group_selected = Signal(TestGroup)
 
     def __init__(self, parent: Optional[QWidget] = None):
         """
@@ -459,7 +459,7 @@ class TestResultsView(QWidget):
             self.analysis_results_view.update_view_for_test(test)
         logger.debug(f"TestResultsView: Details updated for test: {test.name}.")
 
-    @pyqtSlot()
+    @Slot()
     def _on_results_updated(self) -> None:
         """Handle results model update."""
         logger.debug(
@@ -472,7 +472,7 @@ class TestResultsView(QWidget):
         self._update_details()  # This will clear details as selected_test is None
         logger.debug("TestResultsView: Selection cleared and details updated (cleared).")
 
-    @pyqtSlot()
+    @Slot()
     def _on_groups_updated(self) -> None:
         """Handle groups model update."""
         logger.debug(
@@ -510,7 +510,7 @@ class TestResultsView(QWidget):
             )
         logger.debug("TestResultsView: Groups model populated.")
 
-    @pyqtSlot()
+    @Slot()
     def _on_test_selection_changed(self) -> None:
         """Handle test selection change in the table view."""
         indexes = self.results_table.selectionModel().selectedIndexes()
@@ -534,7 +534,7 @@ class TestResultsView(QWidget):
                 f"TestResultsView: Selected row {row} is out of bounds for results list (len {len(self.results_model.results)})."
             )
 
-    @pyqtSlot(FixSuggestion)
+    @Slot(FixSuggestion)
     def _on_view_code_requested(self, fix_suggestion: FixSuggestion) -> None:
         logger.debug(
             f"TestResultsView: _on_view_code_requested signal received. Suggestion: '{fix_suggestion.suggestion[:30]}...' for test '{fix_suggestion.failure.test_name}'."
@@ -555,7 +555,7 @@ class TestResultsView(QWidget):
         else:
             logger.error("TestResultsView: Could not find 'Code Preview' tab.")
 
-    @pyqtSlot()
+    @Slot()
     def _on_group_selection_changed(self) -> None:
         """Handle group selection change in the tree view."""
         indexes = self.groups_tree.selectionModel().selectedIndexes()

@@ -1,9 +1,7 @@
 import logging
-from typing import List
 
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
+from PySide6.QtCore import QObject, Signal, Slot
 
-from ...core.models.pytest_failure import PytestFailure
 from ..models.test_results_model import TestGroup, TestResult, TestResultsModel
 from .base_controller import BaseController
 
@@ -13,18 +11,23 @@ logger = logging.getLogger(__name__)
 class TestResultsController(BaseController):
     """Manages interactions with the test results view and model."""
 
-    status_message_updated = pyqtSignal(str)
+    status_message_updated = Signal(str)
 
     def __init__(self, test_results_model: TestResultsModel, parent: QObject = None):
         super().__init__(parent)
         self.logger.debug(f"TestResultsController: Initializing with model: {test_results_model}")
         self.test_results_model = test_results_model
+        self.test_execution_controller = None  # Will be set by main_controller
         # No direct interaction with TestResultsModel needed here for now,
         # as selection primarily updates details view which is handled by TestResultsView itself.
         # This controller is for reacting to selections if other parts of app need to know.
         self.logger.debug("TestResultsController: Initialization complete.")
 
-    @pyqtSlot(TestResult)
+    def set_test_execution_controller(self, controller) -> None:
+        """Set reference to test execution controller to avoid Qt signal memory issues."""
+        self.test_execution_controller = controller
+
+    @Slot(TestResult)
     def on_test_selected(self, test: TestResult) -> None:
         """
         Handle test selection from the test results view.
@@ -42,7 +45,7 @@ class TestResultsController(BaseController):
         # Further logic can be added here if other components need to react to test selection.
         self.logger.debug("TestResultsController: on_test_selected finished.")
 
-    @pyqtSlot(TestGroup)
+    @Slot(TestGroup)
     def on_group_selected(self, group: TestGroup) -> None:
         """
         Handle group selection from the test results view.
@@ -61,18 +64,24 @@ class TestResultsController(BaseController):
         # Further logic for group selection.
         self.logger.debug("TestResultsController: on_group_selected finished.")
 
-    @pyqtSlot(list)  # Expects List[PytestFailure]
-    def auto_load_test_results(self, pytest_failures: List[PytestFailure]) -> None:
+    @Slot(list)  # Expects List[PytestFailure]
+    def auto_load_test_results(self, ignored_param=None) -> None:
         """
         Automatically loads test results into the model after a test execution completes.
         This slot is connected to TestExecutionController.test_execution_completed.
-
-        Args:
-            pytest_failures: A list of PytestFailure objects from the test run.
+        Gets failures from controller cache to avoid Qt memory allocation issues.
         """
+        if not self.test_execution_controller:
+            self.logger.error(
+                "TestResultsController: No test execution controller reference available."
+            )
+            return
+
+        # Get failures from controller cache instead of signal parameter
+        pytest_failures = self.test_execution_controller.get_last_failures()
         num_failures = len(pytest_failures)
         self.logger.debug(
-            f"TestResultsController: auto_load_test_results called with {num_failures} PytestFailure(s)."
+            f"TestResultsController: auto_load_test_results called. Retrieved {num_failures} PytestFailure(s) from controller cache."
         )
         self.logger.info(f"Auto-loading {num_failures} test failure(s) from execution.")
 

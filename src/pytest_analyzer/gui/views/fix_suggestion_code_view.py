@@ -3,9 +3,9 @@ import html
 import logging
 from typing import Optional
 
-from PyQt6.QtCore import Qt, pyqtSlot
-from PyQt6.QtGui import QAction, QFont
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import Qt, Slot
+from PySide6.QtGui import QAction, QFont
+from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFormLayout,
@@ -182,7 +182,7 @@ class FixSuggestionCodeView(QWidget):
         # Ensure the checkbox state reflects the single view's internal state
         self.single_view_diff_toggle_button.setChecked(self._showing_fixed_code)
 
-    @pyqtSlot()
+    @Slot()
     def _toggle_view_mode(self) -> None:
         self._diff_view_mode_active = not self._diff_view_mode_active
         if self._diff_view_mode_active:
@@ -268,7 +268,7 @@ class FixSuggestionCodeView(QWidget):
             self._stacked_widget.setCurrentWidget(self._single_view_widget)
             self._update_view_mode_action_state()
 
-    @pyqtSlot(int)
+    @Slot(int)
     def _on_file_selected(self, index: int) -> None:
         if (
             index < 0
@@ -290,7 +290,7 @@ class FixSuggestionCodeView(QWidget):
         self._current_code_change_item = self.file_selector_combo.itemData(index)
         self._load_code_for_current_item()
 
-    @pyqtSlot(bool)
+    @Slot(bool)
     def _on_diff_toggle_changed(self, checked: bool) -> None:
         # This is for the single_view_diff_toggle_button (checkbox)
         self._showing_fixed_code = checked
@@ -448,7 +448,7 @@ class FixSuggestionCodeView(QWidget):
         self._original_scroll_handler_active = True
         self._fixed_scroll_handler_active = True
 
-    @pyqtSlot(int)
+    @Slot(int)
     def _on_original_scroll_changed(self, value: int):
         if not self._original_scroll_handler_active or not self._diff_view_mode_active:
             return
@@ -456,7 +456,7 @@ class FixSuggestionCodeView(QWidget):
         self._fixed_code_editor_diff.verticalScrollBar().setValue(value)
         self._fixed_scroll_handler_active = True
 
-    @pyqtSlot(int)
+    @Slot(int)
     def _on_fixed_scroll_changed(self, value: int):
         if not self._fixed_scroll_handler_active or not self._diff_view_mode_active:
             return

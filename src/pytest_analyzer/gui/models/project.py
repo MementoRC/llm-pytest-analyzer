@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from PyQt6.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 
 from ...utils.config_types import Settings
 
@@ -185,8 +185,8 @@ class Project:
 class ProjectManager(QObject):
     """Manages multiple projects and recent project list."""
 
-    project_changed = pyqtSignal(Project)
-    recent_projects_updated = pyqtSignal(list)
+    project_changed = Signal(Project)
+    recent_projects_updated = Signal(list)
 
     def __init__(self, parent: Optional[QObject] = None):
         super().__init__(parent)

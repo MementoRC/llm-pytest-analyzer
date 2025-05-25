@@ -11,7 +11,7 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import List, Optional
 
-from PyQt6.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 
 from ...core.models.pytest_failure import FixSuggestion, PytestFailure
 
@@ -111,11 +111,11 @@ class TestResultsModel(QObject):
     """
 
     # Signals
-    results_updated = pyqtSignal()
-    groups_updated = pyqtSignal()
+    results_updated = Signal()
+    groups_updated = Signal()
     # Add new signals
-    suggestions_updated = pyqtSignal(str)  # test_name
-    analysis_status_updated = pyqtSignal(str)  # test_name
+    suggestions_updated = Signal(str)  # test_name
+    analysis_status_updated = Signal(str)  # test_name
 
     def __init__(self):
         """Initialize the test results model."""
@@ -367,6 +367,14 @@ class TestResultsModel(QObject):
             source_file=executed_source_path,  # Path that was executed
             source_type=run_operation_type,  # e.g. "py_run", "directory_run"
         )
+
+        # Limit history size to prevent memory accumulation
+        max_history_size = 5
+        if len(self.test_run_history) >= max_history_size:
+            # Remove oldest entries to keep memory usage bounded
+            self.test_run_history = self.test_run_history[-(max_history_size - 1) :]
+            logger.debug(f"TestResultsModel: Trimmed history to {max_history_size} entries.")
+
         self.test_run_history.append(current_run)
         logger.debug(
             f"TestResultsModel: Added new run to history. History count: {len(self.test_run_history)}."
@@ -384,8 +392,16 @@ class TestResultsModel(QObject):
             f"Loaded {len(converted_test_results)} results from test run of '{executed_source_path}'. "
             f"Added to history ({len(self.test_run_history)} runs total). Model source remains '{self.source_file}'."
         )
-        logger.debug("TestResultsModel: Emitting results_updated signal.")
+
+        # Force memory cleanup before signal emission to prevent Qt memory issues
+        import gc
+
+        gc.collect()
+        logger.debug("TestResultsModel: Memory cleanup completed before signal emission.")
+
+        logger.debug("TestResultsModel: About to emit results_updated signal.")
         self.results_updated.emit()
+        logger.debug("TestResultsModel: results_updated signal emitted successfully.")
 
     def get_latest_results(self) -> Optional[List[TestResult]]:
         """

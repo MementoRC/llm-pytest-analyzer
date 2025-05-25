@@ -1,8 +1,8 @@
 import logging
 from typing import TYPE_CHECKING, cast
 
-from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
@@ -23,7 +23,7 @@ from PyQt6.QtWidgets import (
 from ...utils.config_types import Settings
 
 if TYPE_CHECKING:
-    from PyQt6.QtCore import QSettings as QSettingsType  # For type hinting QSettings
+    from PySide6.QtCore import QSettings as QSettingsType  # For type hinting QSettings
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +38,9 @@ class SettingsDialog(QDialog):
     """Dialog for configuring application settings."""
 
     # Emits the updated core settings when Apply or OK is clicked and validated
-    settings_updated = pyqtSignal(Settings)
+    settings_updated = Signal(Settings)
     # Emits GUI-specific key-value pairs that need to be saved to QSettings
-    gui_setting_changed = pyqtSignal(str, object)
+    gui_setting_changed = Signal(str, object)
 
     def __init__(
         self,

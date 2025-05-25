@@ -3,8 +3,8 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, List
 
-from PyQt6.QtCore import QObject, pyqtSlot
-from PyQt6.QtWidgets import QFileDialog, QMessageBox
+from PySide6.QtCore import QObject, Slot
+from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from ...core.analyzer_service import PytestAnalyzerService
 from ..background.task_manager import TaskManager
@@ -232,6 +232,9 @@ class MainController(BaseController):
         self._task_descriptions: dict[str, str] = {}
 
         # Connect TestExecutionController signal to TestResultsController slot
+        # Pass reference to test_execution_controller to avoid Qt memory issues with large data in signals
+        self.test_results_controller.set_test_execution_controller(self.test_execution_controller)
+
         self.logger.debug(
             "MainController: Connecting TestExecutionController to TestResultsController..."
         )
@@ -280,7 +283,7 @@ class MainController(BaseController):
         self.workflow_state_machine.state_changed.connect(self._on_workflow_state_changed)
         self.logger.debug("MainController: Signal connections complete.")
 
-    @pyqtSlot(list, Path, str)
+    @Slot(list, Path, str)
     def _on_report_parsed_update_models(
         self, results: List[TestResult], source_file: Path, source_type: str
     ) -> None:
@@ -304,7 +307,7 @@ class MainController(BaseController):
         )
         self.logger.debug("MainController: _on_report_parsed_update_models finished.")
 
-    @pyqtSlot(Path)
+    @Slot(Path)
     def _on_source_selected_for_discovery(self, source_path: Path) -> None:
         """
         Handles selection of a Python file or directory as a test source.
@@ -326,7 +329,7 @@ class MainController(BaseController):
             self.logger.warning("MainController: TestDiscoveryView not available to clear tree.")
         self.logger.debug("MainController: _on_source_selected_for_discovery finished.")
 
-    @pyqtSlot(Path)
+    @Slot(Path)
     def _on_python_file_opened_for_editor(self, file_path: Path) -> None:
         """
         Handles Python file opening for the code editor.
@@ -380,7 +383,7 @@ class MainController(BaseController):
             )
         self.logger.debug("MainController: _on_python_file_opened_for_editor finished.")
 
-    @pyqtSlot(str)
+    @Slot(str)
     def _on_test_file_selected_for_editor(self, file_path_str: str) -> None:
         """Handles a test file selection from TestDiscoveryView for loading into the editor."""
         self.logger.debug(
@@ -447,7 +450,7 @@ class MainController(BaseController):
             )
         self.logger.debug("MainController: _on_test_file_selected_for_editor finished.")
 
-    @pyqtSlot()
+    @Slot()
     def _on_test_selection_for_run_changed(self) -> None:
         """Handles changes in test selection from TestDiscoveryView for running."""
         self.logger.debug("MainController: _on_test_selection_for_run_changed called.")
@@ -475,7 +478,7 @@ class MainController(BaseController):
         )
         return desc
 
-    @pyqtSlot(str, str)
+    @Slot(str, str)
     def _on_global_task_started(self, task_id: str, description: str) -> None:
         self.logger.debug(
             f"MainController: _on_global_task_started - task_id: {task_id}, description: {description}"
@@ -495,7 +498,7 @@ class MainController(BaseController):
             self.logger.debug(f"MainController: Global task started, status updated: {status_msg}")
         self.logger.debug("MainController: _on_global_task_started finished.")
 
-    @pyqtSlot(str, int, str)
+    @Slot(str, int, str)
     def _on_global_task_progress(self, task_id: str, percentage: int, message: str) -> None:
         if (
             task_id != self.test_execution_controller._current_task_id
@@ -512,7 +515,7 @@ class MainController(BaseController):
             self.logger.debug(f"MainController: Global task progress, status updated: {status_msg}")
         self.logger.debug("MainController: _on_global_task_progress finished.")
 
-    @pyqtSlot(str, object)
+    @Slot(str, object)
     def _on_global_task_completed(self, task_id: str, result: Any) -> None:
         self.logger.debug(
             f"MainController: _on_global_task_completed - task_id: {task_id}, result type: {type(result)}"
@@ -538,7 +541,7 @@ class MainController(BaseController):
             )
         self.logger.debug("MainController: _on_global_task_completed finished.")
 
-    @pyqtSlot(str, str)
+    @Slot(str, str)
     def _on_global_task_failed(self, task_id: str, error_message: str) -> None:
         self.logger.debug(
             f"MainController: _on_global_task_failed - task_id: {task_id}, error: {error_message.splitlines()[0]}"
@@ -561,7 +564,7 @@ class MainController(BaseController):
             )
         self.logger.debug("MainController: _on_global_task_failed finished.")
 
-    @pyqtSlot()
+    @Slot()
     def on_open(self) -> None:
         """Handle the Open action from MainWindow."""
         self.logger.debug("MainController: on_open triggered.")
@@ -610,7 +613,7 @@ class MainController(BaseController):
                 )
         self.logger.debug("MainController: on_open finished.")
 
-    @pyqtSlot()
+    @Slot()
     def on_run_tests_action_triggered(self) -> None:
         """
         Handles the "Run Tests" action from the main menu.
@@ -704,7 +707,7 @@ class MainController(BaseController):
         )  # Changed to info as it's a significant status
         self.logger.debug("MainController: _update_llm_status_label finished.")
 
-    @pyqtSlot("PyQt_PyObject")  # Argument type hint for CoreSettings
+    @Slot("PyQt_PyObject")  # Argument type hint for CoreSettings
     def _on_core_settings_changed(self, updated_settings: "CoreSettings") -> None:
         """Handles changes to core application settings."""
         self.logger.debug(
@@ -740,7 +743,7 @@ class MainController(BaseController):
         )
         self.logger.debug("MainController: _on_core_settings_changed finished.")
 
-    @pyqtSlot(str, str)
+    @Slot(str, str)
     def _update_status_bar_guidance(self, message: str, tooltip: str) -> None:
         """Updates the main status label with guidance from WorkflowGuide."""
         self.logger.debug(
@@ -751,7 +754,7 @@ class MainController(BaseController):
         self.logger.debug("MainController: Status bar guidance updated.")
         self.logger.debug("MainController: _update_status_bar_guidance finished.")
 
-    @pyqtSlot(str, str)
+    @Slot(str, str)
     def _on_workflow_state_changed(self, old_state_str: str, new_state_str: str) -> None:
         """Handles UI updates when the workflow state changes."""
         self.logger.debug(
@@ -795,7 +798,7 @@ class MainController(BaseController):
         # Potentially update other UI elements, e.g., highlighting current step in a visual guide
         self.logger.debug("MainController: _on_workflow_state_changed finished.")
 
-    @pyqtSlot(int, int, int, int)
+    @Slot(int, int, int, int)
     def _update_status_bar_test_counts(
         self, passed: int, failed: int, skipped: int, errors: int
     ) -> None:

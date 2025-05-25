@@ -9,9 +9,9 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QStandardItem, QStandardItemModel
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtGui import QStandardItem, QStandardItemModel
+from PySide6.QtWidgets import (
     QButtonGroup,
     QComboBox,
     QFileDialog,
@@ -43,8 +43,8 @@ class FileSelectionView(QWidget):
     """
 
     # Signals
-    file_selected = pyqtSignal(Path)
-    report_type_changed = pyqtSignal(str)
+    file_selected = Signal(Path)
+    report_type_changed = Signal(str)
 
     def __init__(self, parent: Optional[QWidget] = None):
         """
@@ -261,7 +261,7 @@ class FileSelectionView(QWidget):
         # logger.debug(f"FileSelectionView: Checking if '{path}' is a test file. Result: {is_test}.") # Can be noisy
         return is_test
 
-    @pyqtSlot()
+    @Slot()
     def _on_browse_directory(self) -> None:
         """Handle the browse directory button click."""
         logger.debug("FileSelectionView: Browse directory button clicked.")
@@ -278,7 +278,7 @@ class FileSelectionView(QWidget):
         else:
             logger.debug("FileSelectionView: Directory selection cancelled.")
 
-    @pyqtSlot()
+    @Slot()
     def _on_select_report(self) -> None:
         """Handle the select report file button click."""
         logger.debug(
@@ -300,7 +300,7 @@ class FileSelectionView(QWidget):
         else:
             logger.debug("FileSelectionView: Report file selection cancelled.")
 
-    @pyqtSlot(str)
+    @Slot(str)
     def _on_report_type_changed(self, report_type: str) -> None:
         """
         Handle report type change.
@@ -314,7 +314,7 @@ class FileSelectionView(QWidget):
         self.selected_report_type = report_type
         self.report_type_changed.emit(report_type)
 
-    @pyqtSlot(int)
+    @Slot(int)
     def _on_tab_changed(self, index: int) -> None:
         """
         Handle tab change.
@@ -325,7 +325,7 @@ class FileSelectionView(QWidget):
         tab_text = self.tabs.tabText(index)
         logger.debug(f"FileSelectionView: Tab changed to index {index} ('{tab_text}').")
 
-    @pyqtSlot()
+    @Slot()
     def _on_file_clicked(self) -> None:
         """Handle file tree item click."""
         indexes = self.file_tree.selectedIndexes()

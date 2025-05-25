@@ -2,7 +2,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from PyQt6.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 
 
 class WorkflowState(str, Enum):
@@ -27,8 +27,8 @@ class WorkflowState(str, Enum):
 class WorkflowStateMachine(QObject):
     """Manages the state of the application workflow."""
 
-    state_changed = pyqtSignal(str, str)  # old_state_value, new_state_value
-    context_updated = pyqtSignal(dict)  # current_context
+    state_changed = Signal(str, str)  # old_state_value, new_state_value
+    context_updated = Signal(dict)  # current_context
 
     def __init__(self, parent: Optional[QObject] = None):
         super().__init__(parent)

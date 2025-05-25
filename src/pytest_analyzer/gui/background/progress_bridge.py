@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict, Optional
 
-from PyQt6.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 
 # Rich's TaskID is typically an int, but can be any hashable.
 # For simplicity, we'll use int for rich_task_id.
@@ -20,7 +20,7 @@ class ProgressBridge(QObject):
     """
 
     # Signal: gui_task_id, percentage, message
-    qt_progress_signal = pyqtSignal(str, int, str)
+    qt_progress_signal = Signal(str, int, str)
 
     def __init__(
         self,

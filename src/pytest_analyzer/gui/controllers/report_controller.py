@@ -4,8 +4,8 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
-from PyQt6.QtWidgets import QFileDialog, QMessageBox, QWidget
+from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtWidgets import QFileDialog, QMessageBox, QWidget
 
 from ..models.report import ReportConfig, ReportFormat, ReportGenerator, ReportType
 from ..views.report_generation_dialog import ReportGenerationDialog
@@ -16,9 +16,9 @@ logger = logging.getLogger(__name__)
 class ReportController(QObject):
     """Controller for managing report generation and export functionality."""
 
-    report_generated = pyqtSignal(str)  # file_path
-    report_generation_started = pyqtSignal()
-    report_generation_finished = pyqtSignal(bool, str)  # success, message
+    report_generated = Signal(str)  # file_path
+    report_generation_started = Signal()
+    report_generation_finished = Signal(bool, str)  # success, message
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -184,7 +184,7 @@ class ReportController(QObject):
         self._recent_reports.clear()
         logger.debug("Recent reports list cleared")
 
-    @pyqtSlot(str)
+    @Slot(str)
     def _on_report_generated(self, file_path: str):
         """Handle successful report generation."""
         # Add to recent reports (max 10)

@@ -4,8 +4,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import List
 
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
-from PyQt6.QtWidgets import QMessageBox
+from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtWidgets import QMessageBox
 
 from ..models.test_results_model import TestFailureDetails, TestResult, TestResultsModel, TestStatus
 from .base_controller import BaseController
@@ -16,12 +16,12 @@ logger = logging.getLogger(__name__)
 class FileController(BaseController):
     """Handles file selection, loading, and report parsing."""
 
-    python_file_opened = pyqtSignal(Path)
-    directory_opened = pyqtSignal(Path)
-    report_parsed = pyqtSignal(
+    python_file_opened = Signal(Path)
+    directory_opened = Signal(Path)
+    report_parsed = Signal(
         list, Path, str
     )  # results: List[TestResult], source_file: Path, source_type: str (json/xml)
-    status_message_updated = pyqtSignal(str)
+    status_message_updated = Signal(str)
 
     def __init__(self, test_results_model: TestResultsModel, parent: QObject = None):
         super().__init__(parent)
@@ -29,7 +29,7 @@ class FileController(BaseController):
         self.test_results_model = test_results_model
         self.logger.debug("FileController: Initialization complete.")
 
-    @pyqtSlot(Path)
+    @Slot(Path)
     def on_file_selected(self, path: Path) -> None:
         """
         Handle file selection from the file selection view.
@@ -328,7 +328,7 @@ class FileController(BaseController):
         self.logger.debug(f"FileController: Mapped status '{status_str}' to {mapped_status.name}")
         return mapped_status
 
-    @pyqtSlot(str)
+    @Slot(str)
     def on_report_type_changed(self, report_type: str) -> None:
         """
         Handle report type change from the file selection view.
