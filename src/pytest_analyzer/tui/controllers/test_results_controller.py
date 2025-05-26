@@ -80,34 +80,44 @@ class TestResultsController(BaseController):
             )
             return
 
-        # Get failures from the TUI test execution controller's cache/state
-        # pytest_failures: List[PytestFailure] = self.test_execution_controller.get_last_failures()
-        pytest_failures: List[PytestFailure] = []  # Placeholder
-        # This part needs the TUI TestExecutionController to be implemented
-        # For now, let's assume it's empty.
-        self.app.notify("Attempting to auto-load test results (simulated).")
+        # This method's original purpose of pulling results from TestExecutionController
+        # is now superseded by TestExecutionController directly calling
+        # self.load_test_run_results().
+        # If this method is still called from somewhere, it might need to be
+        # re-evaluated or removed. For now, just logging its invocation.
+        self.logger.info(
+            "auto_load_test_results called, but results are now pushed by TestExecutionController."
+        )
+        self.app.notify(
+            "Test results are loaded automatically after execution.", severity="information"
+        )
+        # Previous logic for pulling and displaying results is removed as it's now handled elsewhere.
 
-        num_failures = len(pytest_failures)
-        self.logger.info(f"Auto-loading {num_failures} test failure(s) from execution.")
+    def load_test_run_results(self, failures: List[PytestFailure]) -> None:
+        """
+        Receives test execution results (failures) from TestExecutionController
+        and updates the TUI.
+        """
+        num_failures = len(failures)
+        self.logger.info(f"Received {num_failures} test results/failures from execution.")
+        self.app.notify(f"Processing {num_failures} results from test run.")
 
-        # The source_file and source_type would ideally come from a TUI model or service state
-        # executed_path = self.app.some_model.source_file
-        # original_source_type = self.app.some_model.source_type
-        executed_path_name = "current_target"  # Placeholder
+        # Here, you would typically update a TestResultsView or similar TUI component.
+        # This would likely involve posting a message or calling a method on a view object
+        # if it were directly accessible. For now, we'll just log and notify.
+        # A more robust solution would involve a clear way to update the relevant view,
+        # possibly via a message that the view subscribes to.
 
-        # Here, instead of a TestResultsModel, you'd update the TUI views directly
-        # or through a TUI-specific state management that views react to.
-        # For example, find the TestResultsView and call its update method:
-        # results_view = self.app.query_one(TestResultsView) # If accessible this way
-        # results_view.update_results(pytest_failures)
+        self.logger.info(
+            "Further TUI updates for test run results would happen in the relevant view."
+        )
 
-        if num_failures == 0:
-            message = f"Test run completed for '{executed_path_name}'. No failures reported."
+        if num_failures > 0:
+            self.app.notify(
+                f"{num_failures} failures/errors reported from run.", severity="warning"
+            )
         else:
-            message = f"Test run completed for '{executed_path_name}'. {num_failures} failure(s) reported."
-
-        self.app.notify(message)
-        self.logger.info(message)
+            self.app.notify("Test run complete, no failures reported.", severity="information")
 
     def load_report_data(
         self, results: List[PytestFailure], source_path: Path, source_type: str

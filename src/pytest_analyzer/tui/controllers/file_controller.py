@@ -1,7 +1,5 @@
-import json
-import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 # Assuming TestResult, TestStatus, TestFailureDetails are accessible
 # (e.g., from gui.models or a core model)
@@ -90,136 +88,76 @@ class FileController(BaseController):
     async def _load_test_file(self, path: Path) -> None:
         """Prepare for running tests from a specific Python file."""
         self.logger.info(f"Preparing for test file: {path}")
-        # In TUI, this might mean setting state in PytestAnalyzerService or a TUI model
-        # self.app.analyzer_service.set_target_path(path, "py")
-        self.app.notify(f"Test file selected: {path.name}. Ready to run tests.")
-        # Example: Post a message or update a TUI model/state
-        # self.app.post_message(StatusUpdateMessage(f"Selected test file: {path.name}"))
-        # self.app.post_message(PythonFileOpenedMessage(path))
+        self.app.current_test_target = path
+        self.app.loaded_results = None  # Clear previous results
+        # Optionally, trigger discovery here or wait for a separate user action.
+        # For now, just setting the target path.
+        # Example: await self._discover_tests_in_path(path)
+        self.app.notify(
+            f"Test file selected: {path.name}. Ready for test operations (e.g., Run, Discover)."
+        )
 
     async def _load_directory(self, path: Path) -> None:
         """Prepare for running tests from a directory."""
         self.logger.info(f"Preparing for test directory: {path}")
-        # self.app.analyzer_service.set_target_path(path, "directory")
-        self.app.notify(f"Directory selected: {path.name}. Ready to run tests.")
+        self.app.current_test_target = path
+        self.app.loaded_results = None  # Clear previous results
+        # Optionally, trigger discovery here.
+        # Example: await self._discover_tests_in_path(path)
+        self.app.notify(
+            f"Directory selected: {path.name}. Ready for test operations (e.g., Run, Discover)."
+        )
 
     async def _load_json_report(self, path: Path) -> None:
         """Load test results from a JSON report file (TUI version)."""
         self.logger.info(f"Loading JSON report: {path}")
+        self.app.notify(f"Processing JSON report: {path.name}...")
         try:
-            # Run synchronous file I/O and parsing in a worker thread
-            results = await self.app.run_sync_in_worker(self._parse_json_report_sync, path)
+            # Use PytestAnalyzerService to parse and analyze the report
+            suggestions = await self.app.run_sync_in_worker(
+                self.app.analyzer_service.analyze_pytest_output, path
+            )
+            self.app.loaded_results = suggestions  # Store List[FixSuggestion]
+            self.app.current_test_target = path  # Set the report itself as the target
 
             # Notify app/other controllers about the parsed report
-            # This could be a Textual message or a direct call to another controller
-            # Example: self.app.main_controller.test_results_controller.load_report_data(results, path, "json")
-            # Or: from ..messages import ReportParsed
-            #     self.app.post_message(ReportParsed(results, path, "json"))
+            # The TUI will need to adapt to handle FixSuggestion objects
+            num_items = len(suggestions)
+            # A suggestion implies a failure, so count suggestions as "issues found"
+            status_msg = f"Analyzed {path.name}: Found {num_items} suggestions/issues."
 
-            status_msg = f"Loaded {len(results)} test results from {path.name}"
             self.app.notify(status_msg)
             self.logger.info(status_msg)
+            # Example: self.app.post_message(ReportAnalyzedMessage(suggestions, path, "json"))
 
         except Exception as e:
-            self.logger.error(f"Error loading JSON report {path}: {e}", exc_info=True)
-            self.app.notify(f"Error loading JSON report: {str(e)}", severity="error")
-
-    def _parse_json_report_sync(self, path: Path) -> List[PytestFailure]:
-        """Synchronous part of JSON parsing, suitable for run_sync_in_worker."""
-        with open(path) as f:
-            data = json.load(f)
-
-        parsed_results: List[PytestFailure] = []
-        if "tests" in data:
-            for test_data in data["tests"]:
-                status_str = test_data.get("outcome", "unknown")
-                status = self._map_test_status(status_str)
-
-                failure_details = None
-                if status in (TestStatus.FAILED, TestStatus.ERROR):
-                    failure_details = TestFailureDetails(
-                        message=test_data.get(
-                            "message", ""
-                        ),  # Pytest JSON report might not have 'message'
-                        traceback=test_data.get("longrepr", ""),
-                        error_type="",  # JSON report usually doesn't provide this directly
-                    )
-
-                # Assuming PytestFailure is the target structure
-                result_item = PytestFailure(
-                    name=test_data.get("nodeid", "Unknown Test"),
-                    status=status,
-                    duration=test_data.get("duration", 0.0),
-                    file_path=Path(test_data.get("path", "")) if "path" in test_data else None,
-                    failure_details=failure_details,
-                )
-                parsed_results.append(result_item)
-        return parsed_results
+            self.logger.error(f"Error analyzing JSON report {path}: {e}", exc_info=True)
+            self.app.notify(f"Error analyzing JSON report: {str(e)}", severity="error")
+            self.app.loaded_results = None
 
     async def _load_xml_report(self, path: Path) -> None:
         """Load test results from an XML report file (TUI version)."""
         self.logger.info(f"Loading XML report: {path}")
+        self.app.notify(f"Processing XML report: {path.name}...")
         try:
-            results = await self.app.run_sync_in_worker(self._parse_xml_report_sync, path)
+            # Use PytestAnalyzerService to parse and analyze the report
+            suggestions = await self.app.run_sync_in_worker(
+                self.app.analyzer_service.analyze_pytest_output, path
+            )
+            self.app.loaded_results = suggestions  # Store List[FixSuggestion]
+            self.app.current_test_target = path  # Set the report itself as the target
 
-            # Notify app/other controllers
-            # Example: self.app.main_controller.test_results_controller.load_report_data(results, path, "xml")
-            # Or: self.app.post_message(ReportParsed(results, path, "xml"))
+            num_items = len(suggestions)
+            status_msg = f"Analyzed {path.name}: Found {num_items} suggestions/issues."
 
-            status_msg = f"Loaded {len(results)} test results from {path.name}"
             self.app.notify(status_msg)
             self.logger.info(status_msg)
+            # Example: self.app.post_message(ReportAnalyzedMessage(suggestions, path, "xml"))
 
         except Exception as e:
-            self.logger.error(f"Error loading XML report {path}: {e}", exc_info=True)
-            self.app.notify(f"Error loading XML report: {str(e)}", severity="error")
-
-    def _parse_xml_report_sync(self, path: Path) -> List[PytestFailure]:
-        """Synchronous part of XML parsing."""
-        tree = ET.parse(path)
-        root = tree.getroot()
-        parsed_results: List[PytestFailure] = []
-
-        for testcase in root.findall(".//testcase"):  # JUnit format
-            name = f"{testcase.get('classname', '')}.{testcase.get('name', '')}"
-            duration = float(testcase.get("time", "0"))
-            status = TestStatus.PASSED
-            failure_details = None
-            error_type_str = ""
-
-            failure = testcase.find("./failure")
-            error = testcase.find("./error")
-            skipped = testcase.find("./skipped")
-
-            if failure is not None:
-                status = TestStatus.FAILED
-                error_type_str = failure.get("type", "AssertionError")
-                failure_details = TestFailureDetails(
-                    message=failure.get("message", ""),
-                    traceback=failure.text or "",
-                    error_type=error_type_str,
-                )
-            elif error is not None:
-                status = TestStatus.ERROR
-                error_type_str = error.get("type", "Exception")
-                failure_details = TestFailureDetails(
-                    message=error.get("message", ""),
-                    traceback=error.text or "",
-                    error_type=error_type_str,
-                )
-            elif skipped is not None:
-                status = TestStatus.SKIPPED
-
-            result_item = PytestFailure(
-                name=name,
-                status=status,
-                duration=duration,
-                # XML usually doesn't provide file_path per testcase easily
-                file_path=None,
-                failure_details=failure_details,
-            )
-            parsed_results.append(result_item)
-        return parsed_results
+            self.logger.error(f"Error analyzing XML report {path}: {e}", exc_info=True)
+            self.app.notify(f"Error analyzing XML report: {str(e)}", severity="error")
+            self.app.loaded_results = None
 
     def _map_test_status(self, status_str: str) -> TestStatus:
         """Map a status string to a TestStatus enum value."""

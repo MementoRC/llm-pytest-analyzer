@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from rich.logging import RichHandler
 from textual.app import App
@@ -7,7 +7,13 @@ from textual.binding import Binding
 
 from ..core.analyzer_service import PytestAnalyzerService
 from ..utils.settings import Settings, load_settings
+from .controllers.file_controller import FileController
+from .controllers.test_execution_controller import TestExecutionController
+from .controllers.test_results_controller import TestResultsController
 from .views.main_view import MainView
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # Configure logging for the TUI
 # This should be configured early, possibly before other imports
@@ -37,8 +43,17 @@ class TUIApp(App):
         self.analyzer_service = analyzer_service or PytestAnalyzerService(settings=self.settings)
         self.logger = tui_logger  # Use the pre-configured logger
 
-        # Placeholder for controllers and other TUI specific components
-        # self.main_controller: Optional[MainController] = None
+        # State management
+        self.current_test_target: Optional[Path] = None
+        self.loaded_results: Optional[List[Any]] = (
+            None  # Could be List[PytestFailure] or List[FixSuggestion]
+        )
+
+        # Initialize controllers
+        self.file_controller = FileController(self)
+        self.test_execution_controller = TestExecutionController(self)
+        self.test_results_controller = TestResultsController(self)
+        # self.main_controller: Optional[MainController] = None # If you have a MainController
 
         self._configure_logging()
 

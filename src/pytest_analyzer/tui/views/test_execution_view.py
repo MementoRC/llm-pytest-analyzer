@@ -45,19 +45,35 @@ class TestExecutionView(Widget):
             self.app.logger.info("Run Tests button clicked (TUI).")
             log_widget = self.query_one(Log)
             log_widget.clear()
-            log_widget.write_line("Starting test execution...")
+            log_widget.write_line("Preparing to start test execution...")
             progress_bar = self.query_one(ProgressBar)
             progress_bar.progress = 0
             progress_bar.visible = True
-            # This would typically call a controller method to start tests
-            # Example: await self.app.test_execution_controller.run_tests()
-            # For now, simulate some progress
-            for i in range(101):
-                await self.app.workers.sleep(0.05)  # Simulate work
-                progress_bar.advance(1)
-                if i % 10 == 0:
-                    log_widget.write_line(f"Test progress: {i}%")
-            log_widget.write_line("[green]Test execution finished (simulated).[/green]")
+
+            current_test_target = getattr(self.app, "current_test_target", None)
+            if not current_test_target:
+                log_widget.write_line("[bold red]Error: Test target not set in the app.[/bold red]")
+                self.app.notify("Error: Test target not set.", severity="error")
+                # Optionally disable button or hide progress bar again
+                progress_bar.visible = False
+                return
+
+            log_widget.write_line(f"Target for execution: {current_test_target}")
+
+            if hasattr(self.app, "test_execution_controller") and hasattr(
+                self.app.test_execution_controller, "execute_tests"
+            ):
+                # The TestExecutionController.execute_tests handles UI updates
+                # like log clearing, progress, and button disabling.
+                # So, we don't need to duplicate that here.
+                # It will also re-enable the button in its finally block.
+                await self.app.test_execution_controller.execute_tests(str(current_test_target))
+            else:
+                log_widget.write_line(
+                    "[bold red]Error: TestExecutionController not available or 'execute_tests' method missing.[/bold red]"
+                )
+                self.app.notify("Test execution controller not configured.", severity="error")
+                progress_bar.visible = False  # Hide progress bar as execution cannot start
 
     def update_progress(self, current: float, total: float, description: str = "") -> None:
         progress_bar = self.query_one(ProgressBar)
