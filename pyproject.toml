@@ -98,6 +98,7 @@ addopts = "--quiet --cov=src/pytest_analyzer --cov-report=term-missing"
 markers = [
     "e2e: mark test as an end-to-end test",
     "gui: mark test as a GUI test that requires a display",
+    "tui: mark test as a TUI test that runs in headless mode",
 ]
 
 [tool.mypy]
