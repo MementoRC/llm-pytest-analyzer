@@ -29,6 +29,7 @@ class TestExecutionController(BaseController):
     output_received = Signal(str)
     test_execution_completed = Signal(list)  # Emits List[PytestFailure]
     # Signal to emit test counts: passed, failed, skipped, errors
+    memory_log_requested = Signal(str)  # context_message for memory log
     test_counts_updated = Signal(int, int, int, int)
 
     def __init__(
@@ -131,16 +132,8 @@ class TestExecutionController(BaseController):
             self.logger.info(
                 f"Test execution task '{task_id}' ({description}) started. Showing progress view."
             )
-
-            # Memory monitoring for test execution
-            try:
-                from PyQt6.QtWidgets import QApplication
-
-                app = QApplication.instance()
-                if hasattr(app, "memory_monitor"):
-                    app.memory_monitor.log_memory_state(f"TEST_START_{task_id[:8]}")
-            except Exception as e:
-                self.logger.debug(f"Memory monitoring error: {e}")
+            # Emit signal to request memory logging
+            self.memory_log_requested.emit(f"TEST_START_{task_id[:8]}")
             self._current_task_id = task_id
             self.logger.debug(f"TestExecutionController: Set _current_task_id to {task_id}")
 
@@ -244,15 +237,8 @@ class TestExecutionController(BaseController):
             f"TestExecutionController: _handle_task_completed - task_id: {task_id}, result type: {type(result)}"
         )
         if task_id == self._current_task_id:
-            # Memory monitoring for test completion
-            try:
-                from PyQt6.QtWidgets import QApplication
-
-                app = QApplication.instance()
-                if hasattr(app, "memory_monitor"):
-                    app.memory_monitor.log_memory_state(f"TEST_COMPLETE_{task_id[:8]}")
-            except Exception as e:
-                self.logger.debug(f"Memory monitoring error: {e}")
+            # Emit signal to request memory logging
+            self.memory_log_requested.emit(f"TEST_COMPLETE_{task_id[:8]}")
 
             self.logger.info(f"Test execution task '{task_id}' completed.")
             self.progress_view.stop_timer()

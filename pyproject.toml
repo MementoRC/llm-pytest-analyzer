@@ -34,9 +34,10 @@ dependencies = [
     "openai",
     "psutil",
     "pyyaml",
-    "rich>=12.0.0",
-    "PySide6>=6.5.0",
+    "rich>=12.0.0", # Keep rich for CLI and non-GUI progress
+    "PySide6>=6.5.0", # Official Qt bindings
     "QScintilla>=2.14.0", # QScintilla for PySide6
+    "textual>=0.50.0", # For the TUI
 ]
 
 [project.optional-dependencies]

@@ -7,6 +7,7 @@ from PySide6.QtCore import QObject, Slot
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from ...core.analyzer_service import PytestAnalyzerService
+from ...utils.settings import Settings as CoreSettings
 from ..background.task_manager import TaskManager
 from ..models.test_results_model import TestResult  # Added import
 from ..workflow import (
@@ -27,7 +28,6 @@ from .test_execution_controller import TestExecutionController
 from .test_results_controller import TestResultsController
 
 if TYPE_CHECKING:
-    from ...utils.settings import Settings as CoreSettings  # type: ignore
     from ..app import PytestAnalyzerApp
     from ..main_window import MainWindow
     from ..models.test_results_model import TestResultsModel
@@ -244,6 +244,8 @@ class MainController(BaseController):
         self.test_execution_controller.test_counts_updated.connect(
             self._update_status_bar_test_counts
         )
+        # Connect TestExecutionController memory log request
+        self.test_execution_controller.memory_log_requested.connect(self._handle_memory_log_request)
 
         # Connect test results model signals to report controller
         self.logger.debug("MainController: Connecting TestResultsModel to ReportController...")
@@ -707,7 +709,7 @@ class MainController(BaseController):
         )  # Changed to info as it's a significant status
         self.logger.debug("MainController: _update_llm_status_label finished.")
 
-    @Slot("PyQt_PyObject")  # Argument type hint for CoreSettings
+    @Slot(CoreSettings)
     def _on_core_settings_changed(self, updated_settings: "CoreSettings") -> None:
         """Handles changes to core application settings."""
         self.logger.debug(
@@ -1010,6 +1012,18 @@ class MainController(BaseController):
             f"MainController: _get_analysis_results returning {len(analysis_results)} items with suggestions."
         )
         return analysis_results
+
+    @Slot(str)
+    def _handle_memory_log_request(self, context_message: str) -> None:
+        """Handles requests from controllers to log memory state."""
+        self.logger.debug(f"MainController: Received memory_log_requested: {context_message}")
+        if hasattr(self.app, "memory_monitor") and self.app.memory_monitor:
+            self.app.memory_monitor.log_memory_state(context_message)
+            self.logger.debug(f"MainController: Logged memory state for: {context_message}")
+        else:
+            self.logger.warning(
+                "MainController: Memory monitor not available on app object. Cannot log memory state."
+            )
 
     def cleanup_on_close(self) -> None:
         """Clean up resources when the application is closing."""
