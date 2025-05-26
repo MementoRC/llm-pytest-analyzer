@@ -44,9 +44,7 @@ def test_suggest_fixes(fix_suggester, test_failure):
 
     # Verify the results
     assert isinstance(suggestions, list)
-    assert (
-        len(suggestions) == 2
-    )  # Only suggestions with confidence >= 0.5 should be returned
+    assert len(suggestions) == 2  # Only suggestions with confidence >= 0.5 should be returned
     assert all(isinstance(suggestion, FixSuggestion) for suggestion in suggestions)
     assert all(suggestion.confidence >= 0.5 for suggestion in suggestions)
 
@@ -69,9 +67,7 @@ def test_suggest_fixes_min_confidence(test_failure):
     suggestions = suggester.suggest_fixes(test_failure)
 
     # Verify the results
-    assert (
-        len(suggestions) == 1
-    )  # Only suggestions with confidence >= 0.7 should be returned
+    assert len(suggestions) == 1  # Only suggestions with confidence >= 0.7 should be returned
     assert suggestions[0].suggestion == "Fix 1"
 
 

@@ -177,9 +177,7 @@ class TestLLMServiceDI:
             # Should create service with default values despite import error
 
             # Mock the LLMService import to avoid the actual error import path
-            with patch(
-                "pytest_analyzer.core.di.service_collection.LLMService"
-            ) as mock_service:
+            with patch("pytest_analyzer.core.di.service_collection.LLMService") as mock_service:
                 mock_service.return_value = MagicMock()
 
                 # Call the function but don't need to store it as we're just testing the calls
@@ -203,9 +201,7 @@ class TestLLMServiceDI:
             container.register_instance(Settings, settings)
 
             # Mock the LLMService import to isolate testing
-            with patch(
-                "pytest_analyzer.core.di.service_collection.LLMService"
-            ) as mock_service:
+            with patch("pytest_analyzer.core.di.service_collection.LLMService") as mock_service:
                 mock_service.return_value = MagicMock()
 
                 # Call the function but don't need to store it, testing the error handling

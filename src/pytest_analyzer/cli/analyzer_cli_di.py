@@ -32,9 +32,7 @@ logging.basicConfig(
 logger = logging.getLogger("pytest_analyzer")
 
 # Configure rich console with proper terminal settings
-console = Console(
-    force_terminal=True if os.environ.get("FORCE_COLOR", "0") == "1" else None
-)
+console = Console(force_terminal=True if os.environ.get("FORCE_COLOR", "0") == "1" else None)
 
 
 def setup_parser() -> argparse.ArgumentParser:
@@ -120,9 +118,7 @@ def setup_parser() -> argparse.ArgumentParser:
         default=None,
         help="Preferred pytest output format (default: json)",
     )
-    parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Enable verbose output"
-    )
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose output")
     parser.add_argument(
         "--quiet", "-q", action="store_true", help="Suppress all non-essential output"
     )
@@ -241,20 +237,14 @@ def display_suggestions(
     else:
         # Output suggestions as formatted text
         llm_suggestions = [
-            s
-            for s in suggestions
-            if s.code_changes and s.code_changes.get("source") == "llm"
+            s for s in suggestions if s.code_changes and s.code_changes.get("source") == "llm"
         ]
         rule_suggestions = [
-            s
-            for s in suggestions
-            if not s.code_changes or s.code_changes.get("source") != "llm"
+            s for s in suggestions if not s.code_changes or s.code_changes.get("source") != "llm"
         ]
 
         if not quiet:
-            console.print(
-                f"[bold green]Found {len(suggestions)} fix suggestions:[/bold green]"
-            )
+            console.print(f"[bold green]Found {len(suggestions)} fix suggestions:[/bold green]")
 
             if rule_suggestions:
                 console.print("\n[bold]Rule-based Suggestions:[/bold]")
@@ -281,9 +271,7 @@ def _display_suggestion(suggestion: FixSuggestion, index: int) -> None:
     confidence_color = "green" if suggestion.confidence >= 0.8 else "yellow"
 
     # Create heading with test info
-    console.print(
-        f"\n[bold cyan]Suggestion {index} for {failure.test_name}[/bold cyan]"
-    )
+    console.print(f"\n[bold cyan]Suggestion {index} for {failure.test_name}[/bold cyan]")
     console.print(f"[dim]{failure.test_file}:{failure.line_number}[/dim]")
     console.print(f"Error: [red]{failure.error_type}[/red]: {failure.error_message}")
     console.print(

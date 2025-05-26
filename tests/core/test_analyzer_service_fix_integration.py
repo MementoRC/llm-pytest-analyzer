@@ -89,18 +89,14 @@ class TestAnalyzerServiceFixIntegration:
             assert "fingerprint" not in code_changes_arg, (
                 "Metadata key 'fingerprint' should be filtered out"
             )
-            assert "source" not in code_changes_arg, (
-                "Metadata key 'source' should be filtered out"
-            )
+            assert "source" not in code_changes_arg, "Metadata key 'source' should be filtered out"
             assert tests_arg == ["test_module::test_function"], (
                 "Test name should be passed for validation"
             )
 
             # Check result
             assert result.success, "Should return success status from FixApplier"
-            assert source_file in result.applied_files, (
-                "Applied files should include source file"
-            )
+            assert source_file in result.applied_files, "Applied files should include source file"
 
     def test_apply_suggestion_failure(self, analyzer_service, fix_suggestion, tmp_path):
         """Test that apply_suggestion handles validation failures correctly."""

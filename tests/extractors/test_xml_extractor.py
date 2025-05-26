@@ -91,12 +91,8 @@ def test_extract_failures_empty_xml(tmp_path, xml_extractor):
     assert failures == []
 
 
-@patch(
-    "pytest_analyzer.core.extraction.xml_extractor.XmlResultExtractor._parse_xml_report"
-)
-def test_extract_failures_timeout(
-    mock_parse_xml, tmp_path, xml_extractor, sample_xml_content
-):
+@patch("pytest_analyzer.core.extraction.xml_extractor.XmlResultExtractor._parse_xml_report")
+def test_extract_failures_timeout(mock_parse_xml, tmp_path, xml_extractor, sample_xml_content):
     """Test handling of timeout during extraction (simulating parsing timeout)."""
     # Configure the mock _parse_xml_report to raise TimeoutError
     mock_parse_xml.side_effect = TimeoutError("Simulated Timeout during XML parsing")
@@ -117,9 +113,7 @@ def test_extract_failures_timeout(
 
 
 @patch("xml.etree.ElementTree.parse")
-def test_extract_failures_parse_error(
-    mock_et_parse, tmp_path, xml_extractor, sample_xml_content
-):
+def test_extract_failures_parse_error(mock_et_parse, tmp_path, xml_extractor, sample_xml_content):
     """Test handling of XML parse errors."""
     # Make ET.parse raise a ParseError
     mock_et_parse.side_effect = ET.ParseError("Parse error")

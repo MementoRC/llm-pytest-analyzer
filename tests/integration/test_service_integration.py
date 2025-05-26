@@ -187,7 +187,12 @@ def test_service_integration_run_pytest(mock_subprocess, analyzer_service, tmp_p
     assert mock_subprocess.called
 
     # Verify that pytest was called with the correct arguments
+    # The service now uses pixi run -e dev pytest instead of direct pytest
     pytest_args = mock_subprocess.call_args[0][0]
-    assert pytest_args[0] == "pytest"
-    assert pytest_args[1] == "test_path"
+    assert pytest_args[0] == "pixi"
+    assert pytest_args[1] == "run"
+    assert pytest_args[2] == "-e"
+    assert pytest_args[3] == "dev"
+    assert pytest_args[4] == "pytest"
+    assert "test_path" in pytest_args
     assert "--json-report" in pytest_args

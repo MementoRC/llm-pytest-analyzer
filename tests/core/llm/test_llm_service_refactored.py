@@ -15,9 +15,7 @@ from pytest_analyzer.core.prompts.prompt_builder import PromptBuilder
 from pytest_analyzer.utils.resource_manager import (
     ResourceMonitor,
 )
-from pytest_analyzer.utils.resource_manager import (
-    TimeoutError as ResourceManagerTimeoutError,
-)
+from pytest_analyzer.utils.resource_manager import TimeoutError as ResourceManagerTimeoutError
 
 
 # Sample test data
@@ -132,17 +130,13 @@ class TestRefactoredLLMService:
 
         # Set up the mocks for this test
         mock_prompt_builder.build_analysis_prompt.return_value = "Analysis prompt"
-        mock_llm_client.messages.create.return_value.content[
-            0
-        ].text = "Analysis response"
+        mock_llm_client.messages.create.return_value.content[0].text = "Analysis response"
 
         # Call the method
         result = service.analyze_failure(sample_failure)
 
         # Verify the method behavior
-        mock_prompt_builder.build_analysis_prompt.assert_called_once_with(
-            sample_failure
-        )
+        mock_prompt_builder.build_analysis_prompt.assert_called_once_with(sample_failure)
         mock_response_parser.parse_analysis_response.assert_called_once_with(
             sample_failure, "Analysis response"
         )
@@ -166,9 +160,7 @@ class TestRefactoredLLMService:
 
         # Set up the mocks for this test
         mock_prompt_builder.build_suggestion_prompt.return_value = "Suggestion prompt"
-        mock_llm_client.messages.create.return_value.content[
-            0
-        ].text = "Suggestion response"
+        mock_llm_client.messages.create.return_value.content[0].text = "Suggestion response"
 
         # Call the method with an existing analysis
         result = service.suggest_fixes(sample_failure, sample_analysis)
@@ -203,9 +195,7 @@ class TestRefactoredLLMService:
         mock_prompt_builder.build_suggestion_prompt.return_value = "Suggestion prompt"
 
         # Mock the send_prompt method to return different responses for analysis and suggestion
-        service.send_prompt = MagicMock(
-            side_effect=["Analysis response", "Suggestion response"]
-        )
+        service.send_prompt = MagicMock(side_effect=["Analysis response", "Suggestion response"])
 
         # Set up the response parser to return an analysis and suggestions
         mock_response_parser.parse_analysis_response.return_value = sample_analysis
@@ -215,9 +205,7 @@ class TestRefactoredLLMService:
 
         # Verify the method behavior
         assert service.send_prompt.call_count == 2
-        mock_prompt_builder.build_analysis_prompt.assert_called_once_with(
-            sample_failure
-        )
+        mock_prompt_builder.build_analysis_prompt.assert_called_once_with(sample_failure)
         mock_prompt_builder.build_suggestion_prompt.assert_called_once_with(
             sample_failure, root_cause=sample_analysis.root_cause
         )
@@ -229,9 +217,7 @@ class TestRefactoredLLMService:
         )
         assert result == mock_response_parser.parse_suggestion_response.return_value
 
-    def test_error_handling_in_send_prompt(
-        self, mock_prompt_builder, mock_response_parser
-    ):
+    def test_error_handling_in_send_prompt(self, mock_prompt_builder, mock_response_parser):
         """Test error handling in the send_prompt method."""
         # Create a mock client that raises an exception
         mock_client = MagicMock()
@@ -268,9 +254,7 @@ class TestRefactoredLLMService:
         service.send_prompt = MagicMock(return_value="Test LLM response")
 
         # Make the response parser raise an exception
-        mock_response_parser.parse_analysis_response.side_effect = Exception(
-            "Parsing Error"
-        )
+        mock_response_parser.parse_analysis_response.side_effect = Exception("Parsing Error")
 
         # Call analyze_failure and expect an exception
         with pytest.raises(ParsingError) as exc_info:

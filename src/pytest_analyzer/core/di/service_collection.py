@@ -95,9 +95,7 @@ class ServiceCollection:
         Returns:
             Self for method chaining
         """
-        self.container.register(
-            interface_type, implementation, RegistrationMode.SINGLETON
-        )
+        self.container.register(interface_type, implementation, RegistrationMode.SINGLETON)
         return self
 
     def add_transient(
@@ -113,14 +111,10 @@ class ServiceCollection:
         Returns:
             Self for method chaining
         """
-        self.container.register(
-            interface_type, implementation, RegistrationMode.TRANSIENT
-        )
+        self.container.register(interface_type, implementation, RegistrationMode.TRANSIENT)
         return self
 
-    def add_factory(
-        self, interface_type: Type[T], factory: Callable[[], T]
-    ) -> "ServiceCollection":
+    def add_factory(self, interface_type: Type[T], factory: Callable[[], T]) -> "ServiceCollection":
         """
         Register a factory for creating service instances.
 
@@ -247,12 +241,8 @@ class ServiceCollection:
                     )
                     # Register the service
                     self.container.register_instance(LLMServiceProtocol, llm_service)
-                    provider_name = (
-                        provider.name if hasattr(provider, "name") else str(provider)
-                    )
-                    logger.info(
-                        f"Registered LLM service with auto-detected {provider_name} client"
-                    )
+                    provider_name = provider.name if hasattr(provider, "name") else str(provider)
+                    logger.info(f"Registered LLM service with auto-detected {provider_name} client")
                 else:
                     logger.warning(
                         f"No LLM client could be detected for provider '{preferred_provider}'. Registering LLMService with no client."
@@ -292,9 +282,7 @@ class ServiceCollection:
         return getattr(self.container, "_registrations", {})
 
 
-def configure_services(
-    container: Container, settings: Optional[Settings] = None
-) -> Container:
+def configure_services(container: Container, settings: Optional[Settings] = None) -> Container:
     """
     Configure all services and dependencies needed for the pytest analyzer.
 
@@ -321,14 +309,10 @@ def configure_services(
     )
 
     # Register analyzer context (dependency for AnalyzerStateMachine)
-    container.register_factory(
-        AnalyzerContext, lambda: _create_analyzer_context(container)
-    )
+    container.register_factory(AnalyzerContext, lambda: _create_analyzer_context(container))
 
     # Register LLM service
-    container.register_factory(
-        LLMServiceProtocol, lambda: _create_llm_service(container)
-    )
+    container.register_factory(LLMServiceProtocol, lambda: _create_llm_service(container))
 
     # Register analysis components
     container.register_singleton(FailureAnalyzer, FailureAnalyzer)
@@ -387,8 +371,7 @@ def _create_analyzer_context(container: Container = None) -> AnalyzerContext:
 
     # Get a direct reference to the Settings resolve method to avoid circular references
     settings_resolver = (
-        container._registrations[Settings].instance
-        or container._registrations[Settings].factory
+        container._registrations[Settings].instance or container._registrations[Settings].factory
     )
     settings = settings_resolver() if callable(settings_resolver) else settings_resolver
 
@@ -398,9 +381,7 @@ def _create_analyzer_context(container: Container = None) -> AnalyzerContext:
         or container._registrations[PathResolver].factory
     )
     path_resolver = (
-        path_resolver_resolver()
-        if callable(path_resolver_resolver)
-        else path_resolver_resolver
+        path_resolver_resolver() if callable(path_resolver_resolver) else path_resolver_resolver
     )
 
     # Create LLM service if enabled
@@ -486,9 +467,7 @@ def _create_llm_service(container: Container = None) -> Optional[LLMServiceProto
             container._registrations[Settings].instance
             or container._registrations[Settings].factory
         )
-        settings = (
-            settings_resolver() if callable(settings_resolver) else settings_resolver
-        )
+        settings = settings_resolver() if callable(settings_resolver) else settings_resolver
     else:
         # Fall back to default settings
         settings = Settings()
@@ -525,18 +504,14 @@ def _create_llm_service(container: Container = None) -> Optional[LLMServiceProto
         )
     except ImportError:
         # If the factory module isn't available, continue with None client
-        logger.debug(
-            "LLM service factory not available, creating service with no client"
-        )
+        logger.debug("LLM service factory not available, creating service with no client")
         return LLMService(
             llm_client=None,
             timeout_seconds=settings.llm_timeout,
             disable_auto_detection=True,
         )
     except Exception as e:
-        logger.warning(
-            f"Error creating LLM service: {e}. Creating service with no client."
-        )
+        logger.warning(f"Error creating LLM service: {e}. Creating service with no client.")
         # Fallback to creating with no client, respecting settings timeout
         return LLMService(
             llm_client=None,
@@ -567,9 +542,7 @@ def _create_llm_suggester(container: Container = None) -> Optional[LLMSuggester]
             container._registrations[Settings].instance
             or container._registrations[Settings].factory
         )
-        settings = (
-            settings_resolver() if callable(settings_resolver) else settings_resolver
-        )
+        settings = settings_resolver() if callable(settings_resolver) else settings_resolver
     else:
         # Fall back to default settings
         settings = Settings()

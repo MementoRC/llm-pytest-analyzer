@@ -55,9 +55,7 @@ class ConfigurationManager:
 
         self.settings_cls: Type[Settings] = settings_cls
         self.env_prefix: str = env_prefix
-        self._config_file_path: Optional[Path] = self._resolve_config_file_path(
-            config_file_path
-        )
+        self._config_file_path: Optional[Path] = self._resolve_config_file_path(config_file_path)
         self._config: Dict[str, Any] = {}
         self._loaded: bool = False
         # Cache the created Settings instance
@@ -78,13 +76,10 @@ class ConfigurationManager:
             if p.is_file():
                 logger.debug(f"Using specified configuration file: {p}")
                 return p
-            else:
-                logger.warning(
-                    f"Specified configuration file not found: {specific_path}"
-                )
-                # Continue searching default locations even if specific path fails
-                # Or raise ConfigurationError here if specific path must exist?
-                # Let's allow fallback to defaults for now.
+            logger.warning(f"Specified configuration file not found: {specific_path}")
+            # Continue searching default locations even if specific path fails
+            # Or raise ConfigurationError here if specific path must exist?
+            # Let's allow fallback to defaults for now.
 
         # Search in current working directory
         cwd = Path.cwd()
@@ -108,9 +103,7 @@ class ConfigurationManager:
                 if resolved_path.is_file():
                     logger.debug(f"Found configuration file: {resolved_path}")
                     return resolved_path
-            except (
-                OSError
-            ) as e:  # Handle potential permission errors etc. during resolve/is_file
+            except OSError as e:  # Handle potential permission errors etc. during resolve/is_file
                 logger.debug(f"Could not access potential config file {path}: {e}")
 
         logger.debug("No configuration file found in standard locations.")
@@ -169,9 +162,7 @@ class ConfigurationManager:
             )
             # This is more critical, perhaps re-raise or return empty dict?
             # Returning empty allows fallback but might hide issues. Let's raise.
-            raise ConfigurationError(
-                f"Could not initialize default settings: {e}"
-            ) from e
+            raise ConfigurationError(f"Could not initialize default settings: {e}") from e
         return defaults
 
     def _load_from_file(self) -> Dict[str, Any]:
@@ -180,41 +171,30 @@ class ConfigurationManager:
             return {}
 
         try:
-            with open(self._config_file_path, "r") as f:
+            with open(self._config_file_path) as f:
                 file_config = yaml.safe_load(f)
                 if file_config and isinstance(file_config, dict):
-                    logger.info(
-                        f"Loaded configuration from file: {self._config_file_path}"
-                    )
+                    logger.info(f"Loaded configuration from file: {self._config_file_path}")
                     # Filter only keys relevant to Settings
                     valid_keys = {f.name for f in fields(self.settings_cls)}
-                    filtered_config = {
-                        k: v for k, v in file_config.items() if k in valid_keys
-                    }
+                    filtered_config = {k: v for k, v in file_config.items() if k in valid_keys}
                     return filtered_config
-                elif file_config is not None:
+                if file_config is not None:
                     logger.warning(
                         f"Configuration file {self._config_file_path} does not contain a dictionary."
                     )
                     return {}
-                else:
-                    # File is empty
-                    return {}
+                # File is empty
+                return {}
         except FileNotFoundError:
             # This case should ideally be handled by _resolve_config_file_path, but check again.
             logger.debug(f"Configuration file not found: {self._config_file_path}")
             return {}
         except yaml.YAMLError as e:
-            logger.error(
-                f"Error parsing YAML configuration file {self._config_file_path}: {e}"
-            )
-            raise ConfigurationError(
-                f"Invalid YAML format in {self._config_file_path}"
-            ) from e
+            logger.error(f"Error parsing YAML configuration file {self._config_file_path}: {e}")
+            raise ConfigurationError(f"Invalid YAML format in {self._config_file_path}") from e
         except Exception as e:
-            logger.error(
-                f"Error reading configuration file {self._config_file_path}: {e}"
-            )
+            logger.error(f"Error reading configuration file {self._config_file_path}: {e}")
             raise ConfigurationError(
                 f"Could not read configuration file {self._config_file_path}"
             ) from e
@@ -256,19 +236,19 @@ class ConfigurationManager:
         if target_type is bool:
             # Handle boolean conversion robustly
             return value.lower() in ("true", "1", "yes", "y", "on")
-        elif target_type is int:
+        if target_type is int:
             return int(value)
-        elif target_type is float:
+        if target_type is float:
             return float(value)
-        elif target_type is Path:
+        if target_type is Path:
             return Path(value)
-        elif target_type is str:
+        if target_type is str:
             return value
-        elif origin_type is Union and type(None) in args:
+        if origin_type is Union and type(None) in args:
             # Handle Optional[T] - try converting to the non-None type
             non_none_type = next(t for t in args if t is not type(None))
             return self._convert_type(value, non_none_type)
-        elif origin_type is list or target_type is List:
+        if origin_type is list or target_type is List:
             # Basic list support: comma-separated strings
             # Assumes list of strings if no specific type arg, otherwise tries to convert elements
             element_type = args[0] if args else str
@@ -277,7 +257,7 @@ class ConfigurationManager:
                 for item in value.split(",")
                 if item.strip()
             ]
-        elif origin_type is dict or target_type is Dict:
+        if origin_type is dict or target_type is Dict:
             # Basic dict support: expects 'key1=value1,key2=value2'
             # Assumes Dict[str, str] if no specific type args
             key_type = args[0] if args else str
@@ -286,8 +266,8 @@ class ConfigurationManager:
             for item in value.split(","):
                 if "=" in item:
                     k, v = item.split("=", 1)
-                    result_dict[self._convert_type(k.strip(), key_type)] = (
-                        self._convert_type(v.strip(), value_type)
+                    result_dict[self._convert_type(k.strip(), key_type)] = self._convert_type(
+                        v.strip(), value_type
                     )
             return result_dict
 
@@ -338,9 +318,7 @@ class ConfigurationManager:
                 logger.debug("Created settings instance from loaded configuration.")
             except TypeError as e:
                 # Catches errors if required fields are missing or types are wrong
-                logger.error(
-                    f"Failed to create Settings object from final configuration: {e}"
-                )
+                logger.error(f"Failed to create Settings object from final configuration: {e}")
                 logger.warning(
                     "Attempting to return default settings instance due to validation error."
                 )
@@ -356,9 +334,7 @@ class ConfigurationManager:
                     ) from e
             except Exception as e:  # Catch other potential errors during instantiation
                 logger.error(f"Unexpected error creating Settings object: {e}")
-                raise ConfigurationError(
-                    f"Failed to create settings instance: {e}"
-                ) from e
+                raise ConfigurationError(f"Failed to create settings instance: {e}") from e
 
         # Return the cached Settings instance
         return self._settings_instance  # type: ignore[return-value]

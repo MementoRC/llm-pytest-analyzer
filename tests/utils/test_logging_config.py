@@ -57,9 +57,7 @@ class TestLoggingConfig:
             assert len(root_logger.handlers) == 2  # Console and file handler
 
             # Check file handler
-            file_handlers = [
-                h for h in root_logger.handlers if isinstance(h, logging.FileHandler)
-            ]
+            file_handlers = [h for h in root_logger.handlers if isinstance(h, logging.FileHandler)]
             assert len(file_handlers) == 1
             assert file_handlers[0].baseFilename == log_file
 
@@ -71,7 +69,7 @@ class TestLoggingConfig:
             test_message = "Test log message"
             logging.info(test_message)
 
-            with open(log_file, "r") as f:
+            with open(log_file) as f:
                 log_content = f.read()
                 assert test_message in log_content
 

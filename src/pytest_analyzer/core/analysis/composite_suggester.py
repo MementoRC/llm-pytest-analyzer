@@ -137,9 +137,7 @@ class CompositeSuggester(Suggester):
         # Process each group (filter, deduplicate, limit)
         for test_name, group in grouped.items():
             # Filter by confidence
-            filtered = [
-                s for s in group if s.get("confidence", 0) >= self.min_confidence
-            ]
+            filtered = [s for s in group if s.get("confidence", 0) >= self.min_confidence]
 
             # Deduplicate if enabled
             if self.deduplicate:
@@ -206,9 +204,7 @@ class CompositeSuggester(Suggester):
 
         return filtered
 
-    def _deduplicate_suggestions(
-        self, suggestions: List[FixSuggestion]
-    ) -> List[FixSuggestion]:
+    def _deduplicate_suggestions(self, suggestions: List[FixSuggestion]) -> List[FixSuggestion]:
         """
         Remove duplicate suggestions based on their content.
 

@@ -66,9 +66,7 @@ class BaseExtractor(abc.ABC):
             if isinstance(test_results, Path):
                 return self._extract_from_path(test_results)
 
-            raise ExtractionError(
-                f"Unsupported test_results type: {type(test_results)}"
-            )
+            raise ExtractionError(f"Unsupported test_results type: {type(test_results)}")
         except Exception as e:
             logger.error(f"Error extracting data: {e}")
             raise ExtractionError(f"Failed to extract data: {e}") from e

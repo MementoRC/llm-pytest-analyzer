@@ -57,9 +57,7 @@ class DuplicateTransitionError(TransitionError):
     """Error when a duplicate transition is added."""
 
     def __init__(self, source: str, trigger: str, *args):
-        self.message = (
-            f"Transition from state '{source}' with trigger '{trigger}' already exists"
-        )
+        self.message = f"Transition from state '{source}' with trigger '{trigger}' already exists"
         super().__init__(self.message, *args)
 
 
@@ -74,9 +72,7 @@ class NoInitialStateError(StateError):
 class TransitionActionError(TransitionError):
     """Error during execution of a transition action."""
 
-    def __init__(
-        self, source: str, target: str, trigger: str, cause: Exception = None, *args
-    ):
+    def __init__(self, source: str, target: str, trigger: str, cause: Exception = None, *args):
         self.message = f"Error executing action for transition from '{source}' to '{target}' with trigger '{trigger}'"
         if cause:
             self.message += f": {str(cause)}"

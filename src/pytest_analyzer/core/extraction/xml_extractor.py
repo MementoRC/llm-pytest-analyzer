@@ -100,20 +100,44 @@ class XmlResultExtractor:
         Returns:
             List of PytestFailure objects
         """
+        if not xml_path.exists() or xml_path.stat().st_size == 0:
+            logger.error(
+                f"XML report file is empty or does not exist: {xml_path} (Size: {xml_path.stat().st_size if xml_path.exists() else 'N/A'} bytes)"
+            )
+            return []
+
         try:
             tree = ET.parse(xml_path)
             root = tree.getroot()
         except ET.ParseError as e:
-            logger.error(f"Invalid XML in report file: {e}")
+            logger.error(
+                f"Invalid XML in report file: {xml_path} (Size: {xml_path.stat().st_size} bytes). Error: {e}"
+            )
+            # Optionally, log first few lines of the file for debugging
+            try:
+                with xml_path.open("r") as f_err:
+                    logger.debug(f"First 200 chars of problematic XML: {f_err.read(200)}")
+            except Exception as read_err:
+                logger.debug(f"Could not read problematic XML file for debugging: {read_err}")
             return []
 
         failures = []
+        testcase_elements = root.findall(".//testcase")
+        logger.debug(f"Found {len(testcase_elements)} testcase elements in XML.")
+
+        num_with_failure_elements = 0
+        num_with_error_elements = 0
 
         # Find all testcase elements
-        for testcase in root.findall(".//testcase"):
+        for testcase in testcase_elements:
             # Check if the testcase has failure or error elements
             failure_elements = testcase.findall("failure")
             error_elements = testcase.findall("error")
+
+            if failure_elements:
+                num_with_failure_elements += 1
+            if error_elements:
+                num_with_error_elements += 1
 
             if failure_elements or error_elements:
                 # Get failure information
@@ -159,15 +183,35 @@ class XmlResultExtractor:
 
                 # Try to extract file path from classname
                 if classname and "." in classname:
-                    file_part = classname.replace(".", "/") + ".py"
+                    # For pytest, the classname is typically: module.path.ClassName
+                    # We need to extract just the module path and ignore the class name
+                    parts = classname.split(".")
+
+                    # Check if the last part looks like a class name (starts with capital letter)
+                    if len(parts) > 1 and parts[-1][0].isupper():
+                        # Remove the class name, keep only the module path
+                        module_parts = parts[:-1]
+                    else:
+                        # If no clear class name, use all parts
+                        module_parts = parts
+
+                    file_part = "/".join(module_parts) + ".py"
                     file_path = str(self.path_resolver.resolve_path(file_part))
 
                 # Extract line number from traceback if available
                 if traceback:
                     line_number = self._extract_line_number_from_traceback(traceback)
 
+                # Determine outcome
+                current_outcome = "unknown"
+                if failure_elements:
+                    current_outcome = "failed"
+                elif error_elements:
+                    current_outcome = "error"
+
                 # Create PytestFailure object
                 failure = PytestFailure(
+                    outcome=current_outcome,
                     test_name=full_test_name,
                     test_file=file_path,
                     line_number=line_number,
@@ -176,9 +220,12 @@ class XmlResultExtractor:
                     traceback=traceback,
                     raw_output_section=ET.tostring(testcase, encoding="unicode"),
                 )
-
+                logger.debug(f"Created PytestFailure object: {failure}")
                 failures.append(failure)
 
+        logger.debug(f"Total testcases with <failure> elements: {num_with_failure_elements}")
+        logger.debug(f"Total testcases with <error> elements: {num_with_error_elements}")
+        logger.info(f"XML Extractor: Parsed {len(failures)} failures from XML report.")
         return failures
 
     def _extract_line_number_from_traceback(self, traceback: str) -> Optional[int]:
@@ -267,15 +314,35 @@ class XmlResultExtractor:
 
                 # Try to extract file path from classname
                 if classname and "." in classname:
-                    file_part = classname.replace(".", "/") + ".py"
+                    # For pytest, the classname is typically: module.path.ClassName
+                    # We need to extract just the module path and ignore the class name
+                    parts = classname.split(".")
+
+                    # Check if the last part looks like a class name (starts with capital letter)
+                    if len(parts) > 1 and parts[-1][0].isupper():
+                        # Remove the class name, keep only the module path
+                        module_parts = parts[:-1]
+                    else:
+                        # If no clear class name, use all parts
+                        module_parts = parts
+
+                    file_part = "/".join(module_parts) + ".py"
                     file_path = str(self.path_resolver.resolve_path(file_part))
 
                 # Extract line number from traceback if available
                 if traceback:
                     line_number = self._extract_line_number_from_traceback(traceback)
 
+                # Determine outcome
+                current_outcome = "unknown"
+                if failure_elements:
+                    current_outcome = "failed"
+                elif error_elements:
+                    current_outcome = "error"
+
                 # Create PytestFailure object
                 failure = PytestFailure(
+                    outcome=current_outcome,
                     test_name=full_test_name,
                     test_file=file_path,
                     line_number=line_number,

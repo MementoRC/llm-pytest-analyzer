@@ -1,20 +1,32 @@
 # Task ID: 1
-# Title: Create Project Architecture Document
-# Status: done
+# Title: Create Dependency Injection Framework
+# Status: pending
 # Dependencies: None
 # Priority: high
-# Description: Create a comprehensive architecture document outlining the new structure, component relationships, and interfaces based on the refactoring requirements.
+# Description: Implement a dependency injection framework to decouple components and improve testability
 # Details:
-The architecture document should include:
-1. Component diagram showing the relationships between Extractors, Analyzers, Suggesters, Appliers, and LLM Services
-2. Interface definitions for each component using Python's Protocol type
-3. Data flow diagrams
-4. Dependency injection approach
-5. Error handling strategy
-6. State machine design
-7. Both synchronous and asynchronous API patterns
+Create a DI container class that will manage component registration and resolution. Implement methods for registering components, resolving dependencies, and managing lifecycle. Use Python's typing system to ensure type safety.
 
-The document should serve as a reference for the entire refactoring process and ensure all team members have a clear understanding of the target architecture.
+Example implementation:
+```python
+from typing import Any, Dict, Type, TypeVar, cast
+
+T = TypeVar('T')
+
+class DIContainer:
+    def __init__(self):
+        self._services: Dict[Type, Any] = {}
+
+    def register(self, interface_type: Type[T], implementation: T) -> None:
+        self._services[interface_type] = implementation
+
+    def resolve(self, interface_type: Type[T]) -> T:
+        if interface_type not in self._services:
+            raise KeyError(f"No implementation registered for {interface_type.__name__}")
+        return cast(T, self._services[interface_type])
+```
+
+Ensure the container supports singleton and transient lifetimes for services.
 
 # Test Strategy:
-Review the document with stakeholders to ensure it addresses all requirements in the PRD. Validate that the proposed architecture supports all current functionality while enabling the improvements specified in the project goals.
+Create unit tests for the DI container, testing registration, resolution, and error cases. Verify that circular dependencies are detected and proper error messages are shown. Test both singleton and transient service lifetimes.

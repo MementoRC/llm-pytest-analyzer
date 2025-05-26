@@ -1,110 +1,93 @@
 # Task ID: 13
-# Title: Implement Facade for Backward Compatibility
-# Status: done
-# Dependencies: 3, 8, 9, 10, 11, 12
-# Priority: high
-# Description: Create a facade that maintains backward compatibility with the existing API while using the new architecture internally.
+# Title: Implement Logging and Telemetry
+# Status: pending
+# Dependencies: None
+# Priority: medium
+# Description: Enhance logging with consistent levels and messages, and add telemetry for important operations
 # Details:
-Implement a facade that provides the same interface as the original code but uses the new components internally:
+Implement a consistent logging and telemetry system. Create a logging configuration, telemetry events, and performance monitoring.
 
+Example implementation:
 ```python
-from typing import Dict, Any, List, Optional, Union
-import os
+import logging
+import time
 import json
+from typing import Dict, Any, Optional, Callable
+from functools import wraps
 
-class PytestAnalyzerFacade:
-    def __init__(self, di_container: DIContainer = None):
-        if di_container is None:
-            # Create and configure a default container
-            di_container = self._create_default_container()
+class LoggingManager:
+    def __init__(self, log_level: int = logging.INFO, log_file: Optional[str] = None):
+        self.log_level = log_level
+        self.log_file = log_file
+        self._configure_logging()
 
-        self.di_container = di_container
+    def _configure_logging(self) -> None:
+        root_logger = logging.getLogger()
+        root_logger.setLevel(self.log_level)
 
-    def _create_default_container(self) -> DIContainer:
-        container = DIContainer()
+        # Clear existing handlers
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
 
-        # Create default configuration
-        llm_config = LLMConfig(
-            api_key=os.environ.get('OPENAI_API_KEY', ''),
-            model_name='gpt-3.5-turbo',
-            temperature=0.7,
-            max_tokens=1000
-        )
+        # Console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(self.log_level)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        console_handler.setFormatter(formatter)
+        root_logger.addHandler(console_handler)
 
-        # Register components
-        container.register(LLMService, LLMService(llm_config))
-        container.register(PromptBuilder, PromptBuilder())
-        container.register(Extractor, PytestExtractor())
+        # File handler if specified
+        if self.log_file:
+            file_handler = logging.FileHandler(self.log_file)
+            file_handler.setLevel(self.log_level)
+            file_handler.setFormatter(formatter)
+            root_logger.addHandler(file_handler)
 
-        # Register factories for components that need dependencies
-        container.register_factory(Analyzer, lambda: TestFailureAnalyzer(
-            container.resolve(LLMService),
-            container.resolve(PromptBuilder),
-            ResponseParser(AnalysisModel)
-        ))
+    def get_logger(self, name: str) -> logging.Logger:
+        return logging.getLogger(name)
 
-        container.register_factory(Suggester, lambda: FixSuggester(
-            container.resolve(LLMService),
-            container.resolve(PromptBuilder),
-            ResponseParser(SuggestionModel)
-        ))
+class TelemetryManager:
+    def __init__(self, logger: Optional[logging.Logger] = None,
+                 telemetry_file: Optional[str] = None):
+        self.logger = logger or logging.getLogger(__name__)
+        self.telemetry_file = telemetry_file
 
-        container.register(Applier, FixApplier())
-
-        return container
-
-    def analyze_test_results(self, test_output: str) -> Dict[str, Any]:
-        """Analyze pytest test results and return analysis."""
-        # Create and run the state machine
-        state_machine = AnalyzerStateMachine(self.di_container)
-        result = state_machine.run(test_results=test_output, apply_fixes=False)
-
-        if 'error' in result:
-            # Handle error case
-            return {
-                'success': False,
-                'error': result['error'],
-                'analyses': [],
-                'suggestions': []
-            }
-
-        return {
-            'success': True,
-            'analyses': result.get('analysis_results', {}).get('analyses', []),
-            'suggestions': result.get('suggestions', [])
+    def record_event(self, event_type: str, data: Dict[str, Any]) -> None:
+        event = {
+            "timestamp": time.time(),
+            "type": event_type,
+            "data": data
         }
 
-    def suggest_fixes(self, test_output: str) -> List[Dict[str, Any]]:
-        """Analyze test results and suggest fixes."""
-        result = self.analyze_test_results(test_output)
-        return result.get('suggestions', [])
+        self.logger.debug(f"Telemetry event: {event_type}")
 
-    def apply_fixes(self, test_output: str, target_files: List[str] = None) -> Dict[str, Any]:
-        """Analyze test results, suggest and apply fixes."""
-        # Create and run the state machine
-        state_machine = AnalyzerStateMachine(self.di_container)
-        result = state_machine.run(
-            test_results=test_output,
-            apply_fixes=True,
-            target_files=target_files
-        )
+        if self.telemetry_file:
+            try:
+                with open(self.telemetry_file, 'a') as f:
+                    f.write(json.dumps(event) + '\n')
+            except Exception as e:
+                self.logger.warning(f"Failed to write telemetry event: {str(e)}")
 
-        if 'error' in result:
-            # Handle error case
-            return {
-                'success': False,
-                'error': result['error'],
-                'fixes_applied': False
-            }
+    def measure_performance(self, operation_name: str):
+        def decorator(func):
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                start_time = time.time()
+                result = func(*args, **kwargs)
+                end_time = time.time()
+                duration = end_time - start_time
 
-        return {
-            'success': True,
-            'fixes_applied': result.get('fixes_applied', False),
-            'suggestions': result.get('suggestions', [])
-        }
+                self.record_event("performance", {
+                    "operation": operation_name,
+                    "duration": duration
+                })
+
+                return result
+            return wrapper
+        return decorator
 ```
 
-This facade should provide the same interface as the original code while using the new architecture internally, ensuring backward compatibility.
+Ensure the implementation provides consistent logging and telemetry throughout the codebase.
 
 # Test Strategy:
-Create unit tests that verify the facade provides the same interface as the original code. Test with different inputs and verify the outputs match the expected format. Test both successful and error scenarios.
+Create unit tests to verify logging configuration and telemetry recording. Test the performance measurement decorator with various functions. Verify that telemetry events are properly recorded to the specified file. Test error handling when the telemetry file is not writable.
