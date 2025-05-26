@@ -22,11 +22,10 @@ Use `TodoRead` tool in Claude Code to see current migration task status.
 
 **Key Tasks:**
 1. ✅ Analyze GUI architecture and dependencies 
-2. ⏳ Research Rich/Textual TUI frameworks and design interface
-3. 📋 Extract core logic from GUI dependencies (minimal work needed)
-4. 📋 Implement Rich/Textual TUI views
-5. 📋 Create TUI event handling system
-6. 📋 Validate TUI functionality
+2. ✅ TUI foundation and testing infrastructure
+3. ⏳ Controller integration with core services
+4. 📋 Complete TUI views implementation
+5. 📋 End-to-end workflow testing
 
 ### Key Files for Migration
 - `gui_migration_proposals.md` - Full strategy document
@@ -36,10 +35,18 @@ Use `TodoRead` tool in Claude Code to see current migration task status.
 - `src/pytest_analyzer/gui/views/` - Components to reimplement with Rich/Textual
 
 ### Next Steps
-1. Continue Rich/Textual framework research and TUI interface design
-2. Create TUI prototype with Rich widgets
-3. Implement event system to replace Qt signals/slots
-4. Validate workflow functionality in TUI
+1. Integrate TUI controllers with core PytestAnalyzerService
+2. Implement real functionality in TestExecutionController
+3. Replace placeholder message handling with real events
+4. Complete TUI views implementation (TestDiscoveryView, AnalysisResultsView)
+5. End-to-end workflow testing
+
+### Current Implementation Status
+- ✅ TUI app foundation (src/pytest_analyzer/tui/app.py)
+- ✅ Safe TUI testing infrastructure (tests/tui/)
+- ✅ Controller skeleton and base classes
+- ✅ View layout structure and placeholders
+- ⏳ Controller integration with core services
 
 ### Migration Benefits
 - No Qt framework dependencies
