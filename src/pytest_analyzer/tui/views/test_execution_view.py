@@ -38,7 +38,7 @@ class TestExecutionView(Widget):
     def on_mount(self) -> None:
         # Initialize progress bar (e.g., hide or set to 0)
         progress_bar = self.query_one(ProgressBar)
-        progress_bar.visible = False # Hide until tests run
+        progress_bar.visible = False  # Hide until tests run
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "run_tests_button":
@@ -53,12 +53,11 @@ class TestExecutionView(Widget):
             # Example: await self.app.test_execution_controller.run_tests()
             # For now, simulate some progress
             for i in range(101):
-                await self.app.workers.sleep(0.05) # Simulate work
+                await self.app.workers.sleep(0.05)  # Simulate work
                 progress_bar.advance(1)
                 if i % 10 == 0:
                     log_widget.write_line(f"Test progress: {i}%")
             log_widget.write_line("[green]Test execution finished (simulated).[/green]")
-
 
     def update_progress(self, current: float, total: float, description: str = "") -> None:
         progress_bar = self.query_one(ProgressBar)

@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING
 
 from .base_controller import BaseController
 from .file_controller import FileController
+
 # from .test_execution_controller import TestExecutionController # If you create this
 from .test_results_controller import TestResultsController
 
@@ -25,7 +26,7 @@ class MainController(BaseController):
         self.test_results_controller = TestResultsController(app=app)
         # self.test_execution_controller = TestExecutionController(app=app) # Example
 
-        self._connect_signals() # Or setup message handlers
+        self._connect_signals()  # Or setup message handlers
         self.logger.info("MainControllerTUI initialized.")
 
     def _connect_signals(self) -> None:

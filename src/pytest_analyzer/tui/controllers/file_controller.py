@@ -1,24 +1,24 @@
 import json
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 # Assuming TestResult, TestStatus, TestFailureDetails are accessible
 # (e.g., from gui.models or a core model)
 try:
-    from pytest_analyzer.core.models import PytestFailure # Or your core TestResult type
-    from pytest_analyzer.gui.models.test_results_model import ( # If using these dataclasses
+    from pytest_analyzer.core.models import PytestFailure  # Or your core TestResult type
+    from pytest_analyzer.gui.models.test_results_model import (  # If using these dataclasses
         TestFailureDetails,
-        TestResult, # This might be PySide dependent if it inherits QObject
         TestStatus,
     )
+
     # If TestResult is QObject-based, you'll need a plain data structure.
     # For this example, let's assume TestResult is a dataclass or similar.
     # If not, define a TUI-specific one or use PytestFailure directly.
     # Let's use PytestFailure as the primary data carrier for parsed results.
 except ImportError:
     # Fallback definitions if imports fail (e.g. running TUI standalone without full GUI setup)
-    from dataclasses import dataclass, field
+    from dataclasses import dataclass
     from enum import Enum
 
     class TestStatus(Enum):
@@ -35,7 +35,7 @@ except ImportError:
         error_type: str = ""
 
     @dataclass
-    class PytestFailure: # Using this as a generic result structure
+    class PytestFailure:  # Using this as a generic result structure
         name: str
         status: TestStatus = TestStatus.UNKNOWN
         duration: float = 0.0
@@ -49,6 +49,7 @@ from .base_controller import BaseController
 
 if TYPE_CHECKING:
     from ..app import TUIApp
+
     # If you have specific message types for TUI
     # from ..messages import ReportParsedMessage, StatusUpdateMessage
 
@@ -127,19 +128,21 @@ class FileController(BaseController):
         """Synchronous part of JSON parsing, suitable for run_sync_in_worker."""
         with open(path) as f:
             data = json.load(f)
-        
+
         parsed_results: List[PytestFailure] = []
         if "tests" in data:
             for test_data in data["tests"]:
                 status_str = test_data.get("outcome", "unknown")
                 status = self._map_test_status(status_str)
-                
+
                 failure_details = None
                 if status in (TestStatus.FAILED, TestStatus.ERROR):
                     failure_details = TestFailureDetails(
-                        message=test_data.get("message", ""), # Pytest JSON report might not have 'message'
+                        message=test_data.get(
+                            "message", ""
+                        ),  # Pytest JSON report might not have 'message'
                         traceback=test_data.get("longrepr", ""),
-                        error_type="", # JSON report usually doesn't provide this directly
+                        error_type="",  # JSON report usually doesn't provide this directly
                     )
 
                 # Assuming PytestFailure is the target structure
@@ -148,18 +151,17 @@ class FileController(BaseController):
                     status=status,
                     duration=test_data.get("duration", 0.0),
                     file_path=Path(test_data.get("path", "")) if "path" in test_data else None,
-                    failure_details=failure_details
+                    failure_details=failure_details,
                 )
                 parsed_results.append(result_item)
         return parsed_results
-
 
     async def _load_xml_report(self, path: Path) -> None:
         """Load test results from an XML report file (TUI version)."""
         self.logger.info(f"Loading XML report: {path}")
         try:
             results = await self.app.run_sync_in_worker(self._parse_xml_report_sync, path)
-            
+
             # Notify app/other controllers
             # Example: self.app.main_controller.test_results_controller.load_report_data(results, path, "xml")
             # Or: self.app.post_message(ReportParsed(results, path, "xml"))
@@ -178,7 +180,7 @@ class FileController(BaseController):
         root = tree.getroot()
         parsed_results: List[PytestFailure] = []
 
-        for testcase in root.findall(".//testcase"): # JUnit format
+        for testcase in root.findall(".//testcase"):  # JUnit format
             name = f"{testcase.get('classname', '')}.{testcase.get('name', '')}"
             duration = float(testcase.get("time", "0"))
             status = TestStatus.PASSED
@@ -207,14 +209,14 @@ class FileController(BaseController):
                 )
             elif skipped is not None:
                 status = TestStatus.SKIPPED
-            
+
             result_item = PytestFailure(
                 name=name,
                 status=status,
                 duration=duration,
                 # XML usually doesn't provide file_path per testcase easily
-                file_path=None, 
-                failure_details=failure_details
+                file_path=None,
+                failure_details=failure_details,
             )
             parsed_results.append(result_item)
         return parsed_results
@@ -224,7 +226,7 @@ class FileController(BaseController):
         status_map = {
             "passed": TestStatus.PASSED,
             "failed": TestStatus.FAILED,
-            "error": TestStatus.ERROR, # For pytest-json-report, "error" might be an outcome
+            "error": TestStatus.ERROR,  # For pytest-json-report, "error" might be an outcome
             "skipped": TestStatus.SKIPPED,
             # Add other mappings if necessary (e.g., from JUnit outcomes)
         }

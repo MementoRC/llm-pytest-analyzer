@@ -1,9 +1,8 @@
 import logging
-from pathlib import Path
 from typing import Any, Optional
 
 from rich.logging import RichHandler
-from textual.app import App, ComposeResult
+from textual.app import App
 from textual.binding import Binding
 
 from ..core.analyzer_service import PytestAnalyzerService
@@ -48,22 +47,27 @@ class TUIApp(App):
         # If logging is already configured by CLI or another part, this might need adjustment.
         # For TUI, we want RichHandler if possible.
         # This setup assumes TUI is the primary entry point or wants to override.
-        if not any(isinstance(h, RichHandler) for h in logging.getLogger("pytest_analyzer").handlers):
+        if not any(
+            isinstance(h, RichHandler) for h in logging.getLogger("pytest_analyzer").handlers
+        ):
             # Configure root logger for pytest_analyzer package
             package_logger = logging.getLogger("pytest_analyzer")
-            package_logger.setLevel(self.settings.log_level.upper() if hasattr(self.settings, 'log_level') else "INFO") # TODO: Add log_level to Settings
+            package_logger.setLevel(
+                self.settings.log_level.upper() if hasattr(self.settings, "log_level") else "INFO"
+            )  # TODO: Add log_level to Settings
 
             # Remove existing handlers if any, to replace with RichHandler
             for handler in package_logger.handlers[:]:
                 package_logger.removeHandler(handler)
 
             rich_handler = RichHandler(rich_tracebacks=True, show_path=False)
-            rich_handler.setFormatter(logging.Formatter("%(name)s: %(message)s")) # Simpler format for TUI
+            rich_handler.setFormatter(
+                logging.Formatter("%(name)s: %(message)s")
+            )  # Simpler format for TUI
             package_logger.addHandler(rich_handler)
             self.logger.info("Rich logging configured for TUI.")
         else:
             self.logger.info("Logging seems to be already configured.")
-
 
     def on_mount(self) -> None:
         """Called when the app is first mounted."""
@@ -86,6 +90,7 @@ class TUIApp(App):
         # This is a basic way to run sync code. For more complex scenarios,
         # Textual's worker system offers more control.
         import asyncio
+
         loop = asyncio.get_event_loop()
         return loop.run_in_executor(None, lambda: func(*args, **kwargs))
 

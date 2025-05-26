@@ -1,6 +1,7 @@
 """
 Main entry point for the Pytest Analyzer TUI.
 """
+
 import logging
 import sys
 
@@ -15,9 +16,7 @@ def main() -> int:
         logging.basicConfig(level=logging.DEBUG)
         logger = logging.getLogger(__name__)
         logger.error(f"Failed to import TUI components: {e}")
-        logger.error(
-            "Ensure that the 'src' directory is in your PYTHONPATH if running directly."
-        )
+        logger.error("Ensure that the 'src' directory is in your PYTHONPATH if running directly.")
         print(
             "Error: Could not start TUI. Ensure pytest_analyzer is installed or PYTHONPATH is set.",
             file=sys.stderr,

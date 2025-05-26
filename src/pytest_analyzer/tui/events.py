@@ -24,6 +24,7 @@ class StatusMessageUpdate(TUIEvent):
         self.message = message
         super().__init__()
 
+
 # Example of more specific events that might be added later:
 # class FileSelectedEvent(TUIEvent):
 #     def __init__(self, path: Path) -> None:

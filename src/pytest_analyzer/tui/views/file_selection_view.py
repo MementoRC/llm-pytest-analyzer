@@ -33,9 +33,7 @@ class FileSelectionView(Widget):
             yield Button("Load Path", id="load_path_button", variant="primary")
             # Add more buttons if needed, e.g., for report types
 
-    async def on_directory_tree_file_selected(
-        self, event: DirectoryTree.FileSelected
-    ) -> None:
+    async def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
         """Handle file selection in the directory tree."""
         path_input = self.query_one("#path_input", Input)
         path_input.value = str(event.path)

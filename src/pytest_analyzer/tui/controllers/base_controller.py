@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 if TYPE_CHECKING:
     from ..app import TUIApp
@@ -52,12 +52,16 @@ class BaseController:
                 if on_complete:
                     self.app.call_from_thread(on_complete, result)
             except Exception as e:
-                self.logger.error(f"Error in background task {description or callable_task.__name__}: {e}", exc_info=True)
+                self.logger.error(
+                    f"Error in background task {description or callable_task.__name__}: {e}",
+                    exc_info=True,
+                )
                 if on_error:
                     self.app.call_from_thread(on_error, e)
 
-        self.app.run_worker(task_wrapper(), exclusive=True, group=description or callable_task.__name__)
-
+        self.app.run_worker(
+            task_wrapper(), exclusive=True, group=description or callable_task.__name__
+        )
 
     # Placeholder for methods to interact with core services or update models
     # For example:
