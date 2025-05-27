@@ -1,86 +1,51 @@
 # Task ID: 10
-# Title: Implement Analyzer Component
-# Status: done
-# Dependencies: 2, 3, 4, 5, 6
-# Priority: medium
-# Description: Create the Analyzer component for analyzing test failures according to the Protocol interface.
+# Title: Update Documentation and Create Examples
+# Status: pending
+# Dependencies: 1, 2, 3, 4, 5, 6, 7, 8, 9
+# Priority: low
+# Description: Update project documentation to include information about environment manager detection and create examples for each supported manager
 # Details:
-Implement a concrete Analyzer that analyzes test failures using the LLM service:
+Update the project documentation to include information about the environment manager detection feature:
 
-```python
-from typing import Dict, Any, List, Optional
+1. Update README.md with a new section on environment manager support
+2. Create a detailed documentation page explaining how the detection works
+3. Document configuration options for environment manager overrides
+4. Document CLI flags for environment manager selection
+5. Create examples for each supported environment manager
 
-class TestFailureAnalyzer:
-    def __init__(self, llm_service: LLMService, prompt_builder: PromptBuilder, response_parser: ResponseParser):
-        self.llm_service = llm_service
-        self.prompt_builder = prompt_builder
-        self.response_parser = response_parser
+Example README section:
 
-    def analyze(self, extraction_results: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze test failures and determine root causes."""
-        failures = extraction_results.get('failures', [])
-        if not failures:
-            return {'analyses': [], 'summary': 'No failures to analyze'}
+```markdown
+## Environment Manager Support
 
-        analyses = []
-        for failure in failures:
-            analysis = self._analyze_failure(failure)
-            analyses.append({
-                'failure': failure,
-                'analysis': analysis
-            })
+pytest-analyzer now automatically detects and integrates with your project's Python environment manager:
 
-        # Generate overall summary
-        summary = self._generate_summary(analyses)
+- **Pixi**: Automatically detected via `pixi.toml`
+- **Poetry**: Automatically detected via `pyproject.toml` with `[tool.poetry]`
+- **Hatch**: Automatically detected via `pyproject.toml` with `[tool.hatch]`
+- **UV**: Automatically detected via `uv.lock` or UV configuration in `pyproject.toml`
+- **Pipenv**: Automatically detected via `Pipfile` or `Pipfile.lock`
+- **Pip+Venv**: Automatically detected via `requirements.txt` with virtual environment
 
-        return {
-            'analyses': analyses,
-            'summary': summary,
-            'extraction_results': extraction_results
-        }
+### Manual Override
 
-    def _analyze_failure(self, failure: Dict[str, Any]) -> Dict[str, Any]:
-        # Build prompt for the LLM
-        prompt = self.prompt_builder.build_prompt(
-            'analyze_failure',
-            file_path=failure.get('file_path', ''),
-            test_name=failure.get('test_name', ''),
-            error=failure.get('error', ''),
-            traceback=failure.get('traceback', ''),
-            code_context=failure.get('code_context', {}).get('source_code', '')
-        )
+You can manually specify which environment manager to use:
 
-        # Get analysis from LLM
-        response = self.llm_service.generate(prompt)
+```bash
+# Via CLI flag
+pytest-analyzer --env-manager poetry
 
-        try:
-            # Parse the response
-            analysis = self.response_parser.parse_json(response)
-            return analysis.dict()
-        except Exception as e:
-            # Fallback to raw response if parsing fails
-            return {
-                'root_cause': 'Failed to parse analysis',
-                'explanation': str(e),
-                'raw_response': response
-            }
+# Via configuration file (.pytest-analyzer.json)
+{
+  "environment_manager": "poetry"
+}
 
-    def _generate_summary(self, analyses: List[Dict[str, Any]]) -> str:
-        # Count common root causes
-        root_causes = {}
-        for item in analyses:
-            cause = item.get('analysis', {}).get('root_cause', 'Unknown')
-            root_causes[cause] = root_causes.get(cause, 0) + 1
-
-        # Generate summary text
-        summary_lines = [f"Analyzed {len(analyses)} test failures:"]
-        for cause, count in sorted(root_causes.items(), key=lambda x: x[1], reverse=True):
-            summary_lines.append(f"- {cause}: {count} occurrences")
-
-        return '\n'.join(summary_lines)
+# Via environment variable
+PYTEST_ANALYZER_ENV_MANAGER=poetry pytest-analyzer
+```
 ```
 
-This implementation should handle analyzing test failures by sending them to the LLM service and parsing the responses.
+Create example projects for each environment manager in the `examples/` directory to demonstrate usage.
 
 # Test Strategy:
-Create unit tests with mocked LLM service to verify analysis of different types of test failures. Test both successful analyses and error handling. Verify the summary generation with different sets of analyses.
+Review documentation for accuracy and completeness. Test examples to ensure they work correctly with each environment manager. Conduct user testing to verify that the documentation is clear and helpful.

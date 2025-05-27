@@ -1,56 +1,89 @@
 # Task ID: 6
-# Title: Implement ResponseParser Component
-# Status: done
-# Dependencies: 2, 4
+# Title: Implement Configuration System for Environment Manager Overrides
+# Status: pending
+# Dependencies: 5
 # Priority: medium
-# Description: Create a dedicated component for parsing and validating responses from the LLM service.
+# Description: Extend the existing configuration system to support manual overrides of environment manager detection
 # Details:
-Implement a ResponseParser that handles different response formats and validation:
+Extend the configuration system to allow users to manually specify which environment manager to use:
 
 ```python
-from typing import Dict, Any, List, Optional, TypeVar, Generic, Type, cast
+from pathlib import Path
+from typing import Optional, Dict, Any
 import json
-from pydantic import BaseModel, ValidationError
+import os
 
-T = TypeVar('T', bound=BaseModel)
+class Configuration:
+    def __init__(self):
+        self.config: Dict[str, Any] = {}
+        self.loaded = False
 
-class ResponseParser(Generic[T]):
-    def __init__(self, model_class: Type[T]):
-        self.model_class = model_class
+    def load(self, project_path: Path) -> None:
+        """Load configuration from project and user config files"""
+        # Load global config
+        user_config_path = Path.home() / ".pytest-analyzer" / "config.json"
+        if user_config_path.exists():
+            with open(user_config_path, 'r') as f:
+                self.config.update(json.load(f))
 
-    def parse_json(self, response_text: str) -> T:
-        try:
-            # Extract JSON from response if needed
-            json_str = self._extract_json(response_text)
-            # Parse JSON
-            data = json.loads(json_str)
-            # Validate with Pydantic model
-            return self.model_class.parse_obj(data)
-        except json.JSONDecodeError as e:
-            raise ResponseParseError(f"Invalid JSON in response: {str(e)}") from e
-        except ValidationError as e:
-            raise ResponseParseError(f"Response validation failed: {str(e)}") from e
+        # Load project config (overrides global)
+        project_config_path = project_path / ".pytest-analyzer.json"
+        if project_config_path.exists():
+            with open(project_config_path, 'r') as f:
+                self.config.update(json.load(f))
 
-    def _extract_json(self, text: str) -> str:
-        # Handle cases where JSON is embedded in markdown or other text
-        # This is a simple implementation - might need to be more robust
-        if text.strip().startswith('{') and text.strip().endswith('}'):
-            return text
+        # Load environment variables (override files)
+        env_manager = os.environ.get("PYTEST_ANALYZER_ENV_MANAGER")
+        if env_manager:
+            self.config["environment_manager"] = env_manager
 
-        # Try to find JSON between triple backticks
-        import re
-        json_match = re.search(r'```(?:json)?\s*(.+?)\s*```', text, re.DOTALL)
-        if json_match:
-            return json_match.group(1)
+        self.loaded = True
 
-        # If no JSON found, raise error
-        raise ResponseParseError("Could not extract JSON from response")
-
-class ResponseParseError(Exception):
-    pass
+    def get_environment_manager_override(self) -> Optional[str]:
+        """Get the manually specified environment manager, if any"""
+        return self.config.get("environment_manager")
 ```
 
-Create Pydantic models for different response types (analysis results, fix suggestions, etc.).
+Update the CLI module to use this configuration:
+
+```python
+class CLI:
+    def __init__(self):
+        self.detector = EnvironmentManagerDetector()
+        self.config = Configuration()
+        self.current_manager: Optional[EnvironmentManager] = None
+
+    def initialize(self, project_path: Path) -> None:
+        """Initialize the CLI with the appropriate environment manager"""
+        # Load configuration
+        self.config.load(project_path)
+
+        # Check for override
+        override = self.config.get_environment_manager_override()
+        if override:
+            # Use the specified manager
+            self.current_manager = self._get_manager_by_name(override, project_path)
+        else:
+            # Auto-detect
+            self.current_manager = self.detector.detect(project_path)
+
+    def _get_manager_by_name(self, name: str, project_path: Path) -> Optional[EnvironmentManager]:
+        """Get an environment manager by name"""
+        # Map names to manager classes
+        managers = {
+            "pixi": PixiManager,
+            "poetry": PoetryManager,
+            "hatch": HatchManager,
+            "uv": UVManager,
+            "pipenv": PipenvManager,
+            "pip+venv": PipVenvManager
+        }
+
+        manager_cls = managers.get(name.lower())
+        if manager_cls:
+            return manager_cls(project_path)
+        return None
+```
 
 # Test Strategy:
-Write unit tests for parsing different response formats, including valid JSON, JSON embedded in markdown, and invalid responses. Test validation with Pydantic models for both valid and invalid data structures.
+Create unit tests for the configuration system with mock configuration files. Test loading from different sources (global, project, environment variables). Test priority of configuration sources. Test integration with the CLI module to ensure overrides work correctly.

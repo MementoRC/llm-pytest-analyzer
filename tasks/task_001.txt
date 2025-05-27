@@ -1,20 +1,43 @@
 # Task ID: 1
-# Title: Create Project Architecture Document
+# Title: Create Environment Manager Protocol Interface
 # Status: done
 # Dependencies: None
 # Priority: high
-# Description: Create a comprehensive architecture document outlining the new structure, component relationships, and interfaces based on the refactoring requirements.
+# Description: Define a protocol-based interface that specifies common operations for all environment managers
 # Details:
-The architecture document should include:
-1. Component diagram showing the relationships between Extractors, Analyzers, Suggesters, Appliers, and LLM Services
-2. Interface definitions for each component using Python's Protocol type
-3. Data flow diagrams
-4. Dependency injection approach
-5. Error handling strategy
-6. State machine design
-7. Both synchronous and asynchronous API patterns
+Create a Python protocol class that defines the interface for all environment managers. This should include methods for:
+- Detecting if the environment manager is used in the project
+- Building commands with proper environment context
+- Executing commands within the environment
+- Activating/deactivating environments
 
-The document should serve as a reference for the entire refactoring process and ensure all team members have a clear understanding of the target architecture.
+Example implementation:
+```python
+from typing import Protocol, List, Optional
+from pathlib import Path
+
+class EnvironmentManager(Protocol):
+    @classmethod
+    def detect(cls, project_path: Path) -> bool:
+        """Detect if this environment manager is used in the project"""
+        ...
+
+    def build_command(self, command: List[str]) -> List[str]:
+        """Build a command with proper environment context"""
+        ...
+
+    def execute_command(self, command: List[str]) -> int:
+        """Execute a command within the environment"""
+        ...
+
+    def activate(self) -> None:
+        """Activate the environment"""
+        ...
+
+    def deactivate(self) -> None:
+        """Deactivate the environment"""
+        ...
+```
 
 # Test Strategy:
-Review the document with stakeholders to ensure it addresses all requirements in the PRD. Validate that the proposed architecture supports all current functionality while enabling the improvements specified in the project goals.
+Create unit tests for the protocol interface to ensure it defines all required methods. Use mypy to verify type checking works correctly with the protocol. Test with mock implementations to ensure the protocol can be properly implemented.

@@ -1,49 +1,42 @@
 # Task ID: 5
-# Title: Implement PromptBuilder Component
-# Status: done
-# Dependencies: 2, 4
-# Priority: medium
-# Description: Create a dedicated component for constructing prompts to send to the LLM service.
+# Title: Integrate Environment Manager Detection into CLI Module
+# Status: pending
+# Dependencies: 2, 3, 4
+# Priority: high
+# Description: Update the existing CLI module to use the environment manager detection service for command execution
 # Details:
-Implement a PromptBuilder that handles template management and prompt construction:
+Modify the existing CLI module to use the environment manager detection service:
 
 ```python
-from string import Template
-from typing import Dict, Any, Optional
-import os
-import json
+from pathlib import Path
+from typing import Optional
 
-class PromptBuilder:
-    def __init__(self, template_dir: Optional[str] = None):
-        self.template_dir = template_dir or os.path.join(os.path.dirname(__file__), "templates")
-        self.templates: Dict[str, Template] = {}
-        self._load_templates()
+from .detection import EnvironmentManagerDetector
+from .protocol import EnvironmentManager
 
-    def _load_templates(self) -> None:
-        # Load templates from files
-        if os.path.exists(self.template_dir):
-            for filename in os.listdir(self.template_dir):
-                if filename.endswith(".txt"):
-                    template_name = os.path.splitext(filename)[0]
-                    with open(os.path.join(self.template_dir, filename), "r") as f:
-                        self.templates[template_name] = Template(f.read())
+class CLI:
+    def __init__(self):
+        self.detector = EnvironmentManagerDetector()
+        self.current_manager: Optional[EnvironmentManager] = None
 
-    def build_prompt(self, template_name: str, **kwargs) -> str:
-        if template_name not in self.templates:
-            raise ValueError(f"Template '{template_name}' not found")
+    def initialize(self, project_path: Path) -> None:
+        """Initialize the CLI with the appropriate environment manager"""
+        self.current_manager = self.detector.detect(project_path)
 
-        # Handle special cases like code formatting
-        for key, value in kwargs.items():
-            if isinstance(value, dict):
-                kwargs[key] = json.dumps(value, indent=2)
+    def execute_command(self, command: list[str], project_path: Path) -> int:
+        """Execute a command using the appropriate environment manager"""
+        if not self.current_manager:
+            self.initialize(project_path)
 
-        return self.templates[template_name].substitute(**kwargs)
-
-    def register_template(self, name: str, template_string: str) -> None:
-        self.templates[name] = Template(template_string)
+        if self.current_manager:
+            return self.current_manager.execute_command(command)
+        else:
+            # Fall back to direct execution if no environment manager is detected
+            import subprocess
+            return subprocess.call(command, cwd=project_path)
 ```
 
-Create a set of default templates for common operations like test failure analysis, fix suggestion, etc. Store these in a templates directory.
+Ensure that the CLI maintains backward compatibility with existing behavior while adding the new environment manager detection functionality.
 
 # Test Strategy:
-Write unit tests that verify template loading, prompt building with various parameter types, and error handling for missing templates. Test with both file-based templates and programmatically registered templates.
+Create unit tests for the CLI module with mocked environment managers. Test initialization and command execution with different environment managers. Test fallback behavior when no environment manager is detected. Create integration tests that verify end-to-end functionality with real commands.

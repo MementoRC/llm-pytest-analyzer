@@ -1,33 +1,55 @@
 # Task ID: 2
-# Title: Implement Core Protocol Interfaces
+# Title: Implement Environment Manager Detection Service
 # Status: done
 # Dependencies: 1
 # Priority: high
-# Description: Define Protocol interfaces for all major components to establish clear contracts between system parts.
+# Description: Create a service that detects which environment manager is being used in a project based on project files
 # Details:
-Create Protocol classes for each major component type:
+Implement a detection service that examines project files to determine which environment manager is in use:
 
 ```python
-from typing import Protocol, List, Dict, Any, Optional
+from pathlib import Path
+from typing import Optional, Type, List
+import toml
 
-class Extractor(Protocol):
-    def extract(self, test_results: Any) -> Dict[str, Any]: ...
+from .protocol import EnvironmentManager
+from .managers import PixiManager, PoetryManager, HatchManager, UVManager, PipenvManager, PipVenvManager
 
-class Analyzer(Protocol):
-    def analyze(self, extraction_results: Dict[str, Any]) -> Dict[str, Any]: ...
+class EnvironmentManagerDetector:
+    def __init__(self):
+        self._managers: List[Type[EnvironmentManager]] = [
+            PixiManager,
+            PoetryManager,
+            HatchManager,
+            UVManager,
+            PipenvManager,
+            PipVenvManager
+        ]
+        self._cache = {}
 
-class Suggester(Protocol):
-    def suggest(self, analysis_results: Dict[str, Any]) -> List[Dict[str, Any]]: ...
+    def detect(self, project_path: Path) -> Optional[EnvironmentManager]:
+        """Detect and return the appropriate environment manager for the project"""
+        # Check cache first
+        if project_path in self._cache:
+            return self._cache[project_path]
 
-class Applier(Protocol):
-    def apply(self, suggestions: List[Dict[str, Any]], target_files: List[str]) -> bool: ...
+        # Try each manager
+        for manager_cls in self._managers:
+            if manager_cls.detect(project_path):
+                manager = manager_cls(project_path)
+                self._cache[project_path] = manager
+                return manager
 
-class LLMService(Protocol):
-    def generate(self, prompt: str, **kwargs) -> str: ...
-    async def generate_async(self, prompt: str, **kwargs) -> str: ...
+        return None
 ```
 
-Ensure each Protocol has proper type hints and docstrings explaining the expected behavior and contract.
+Ensure the detection logic follows the specified rules in the PRD:
+- Pixi: Check for pixi.toml file
+- Poetry: Check for pyproject.toml with [tool.poetry] section
+- Hatch: Check for pyproject.toml with [tool.hatch] section
+- UV: Check for uv.lock file or pyproject.toml with UV configuration
+- Pipenv: Check for Pipfile or Pipfile.lock
+- Pip+Venv: Check for requirements.txt with virtual environment
 
 # Test Strategy:
-Create test cases that verify implementations conform to the Protocol interfaces. Use mypy or similar static type checking to validate interface compliance.
+Create unit tests with mock file systems to test detection of each environment manager. Include tests for edge cases like multiple environment managers present, no environment managers, and invalid configurations. Test caching behavior to ensure it works correctly.
