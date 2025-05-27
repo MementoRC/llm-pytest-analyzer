@@ -17,10 +17,10 @@ from pytest_analyzer.core.environment.detector import (
     HatchManagerPlaceholder,
     PipenvManagerPlaceholder,
     PipVenvManagerPlaceholder,
-    PixiManagerPlaceholder,
     PoetryManagerPlaceholder,
     UVManagerPlaceholder,
 )
+from pytest_analyzer.core.environment.pixi import PixiManager
 from pytest_analyzer.core.environment.protocol import EnvironmentManager
 
 
@@ -106,7 +106,7 @@ class TestEnvironmentManagerDetector:
         "files_to_create, pyproject_content, expected_manager_type",
         [
             ([], None, None),  # No manager files
-            (["pixi.toml"], None, PixiManagerPlaceholder),
+            (["pixi.toml"], None, PixiManager),
             (
                 ["pyproject.toml"],
                 '[tool.poetry]\nname = "test-project"',
@@ -122,7 +122,7 @@ class TestEnvironmentManagerDetector:
             (["Pipfile.lock"], None, PipenvManagerPlaceholder),
             (["requirements.txt"], None, PipVenvManagerPlaceholder),
             # Priority: Pixi detected first if both pixi.toml and Pipfile exist
-            (["pixi.toml", "Pipfile"], None, PixiManagerPlaceholder),
+            (["pixi.toml", "Pipfile"], None, PixiManager),
             # Priority: Poetry before Hatch (based on DEFAULT_MANAGERS order)
             (
                 ["pyproject.toml"],
@@ -158,18 +158,18 @@ class TestEnvironmentManagerDetector:
 
         # Patch the 'detect' method of the first manager to monitor calls
         with patch.object(
-            PixiManagerPlaceholder, "detect", wraps=PixiManagerPlaceholder.detect
+            PixiManager, "detect", wraps=PixiManager.detect
         ) as mock_pixi_detect:
             mock_pixi_detect.return_value = True  # Ensure detection
 
             # First call to detect_environment
             manager_type1 = detector.detect_environment()
-            assert manager_type1 == PixiManagerPlaceholder
+            assert manager_type1 == PixiManager
             mock_pixi_detect.assert_called_once_with(detector.project_path)
 
             # Second call to detect_environment
             manager_type2 = detector.detect_environment()
-            assert manager_type2 == PixiManagerPlaceholder
+            assert manager_type2 == PixiManager
             # Assert that the underlying 'detect' method was NOT called again
             mock_pixi_detect.assert_called_once()
 
@@ -227,26 +227,26 @@ class TestEnvironmentManagerDetector:
         manager_instance = detector.get_active_manager()
 
         assert manager_instance is not None
-        assert isinstance(manager_instance, PixiManagerPlaceholder)
+        assert isinstance(manager_instance, PixiManager)
         assert detector._active_manager_instance is manager_instance
-        assert detector._detected_manager_type == PixiManagerPlaceholder
+        assert detector._detected_manager_type == PixiManager
 
     def test_get_active_manager_caches_instance(self, tmp_path: Path):
         """Test that get_active_manager caches the instantiated manager."""
         create_project_files(tmp_path, ["pixi.toml"])
         detector = EnvironmentManagerDetector(project_path=tmp_path)
 
-        # Patch the __init__ of PixiManagerPlaceholder to count instantiations
-        # The path for patching is where PixiManagerPlaceholder is defined.
+        # Patch the __init__ of PixiManager to count instantiations
+        # The path for patching is where PixiManager is defined.
         with patch(
-            "pytest_analyzer.core.environment.detector.PixiManagerPlaceholder.__init__",
+            "pytest_analyzer.core.environment.pixi.PixiManager.__init__",
             autospec=True,  # Use autospec for better __init__ mocking
             return_value=None,  # __init__ should return None
         ) as mock_pixi_init:
             # First call to get_active_manager
             instance1 = detector.get_active_manager()
             assert isinstance(
-                instance1, PixiManagerPlaceholder
+                instance1, PixiManager
             )  # Type check still works due to how patch works
             mock_pixi_init.assert_called_once()  # Instantiated once
 
@@ -261,7 +261,7 @@ class TestEnvironmentManagerDetector:
             tmp_path, ["fail_marker.txt"]
         )  # Triggers FailingManagerPlaceholder
 
-        custom_managers = [FailingManagerPlaceholder, PixiManagerPlaceholder]
+        custom_managers = [FailingManagerPlaceholder, PixiManager]
         detector = EnvironmentManagerDetector(
             project_path=tmp_path, manager_classes=custom_managers
         )
@@ -294,7 +294,7 @@ class TestEnvironmentManagerDetector:
 
         # Verify detection runs again after cache clear
         with patch.object(
-            PixiManagerPlaceholder, "detect", wraps=PixiManagerPlaceholder.detect
+            PixiManager, "detect", wraps=PixiManager.detect
         ) as mock_pixi_detect:
             mock_pixi_detect.return_value = True
             detector.get_active_manager()  # Should call detect again

@@ -8,6 +8,8 @@ manager in a given project path based on characteristic project files.
 from pathlib import Path
 from typing import List, Optional, Type
 
+from .pixi import PixiManager
+
 # TODO: When actual manager implementations are available, import them instead of placeholders.
 from .protocol import EnvironmentManager
 
@@ -52,16 +54,6 @@ class PlaceholderBaseManager(EnvironmentManager):
     def deactivate(self) -> None:
         """Deactivates the environment. Placeholder implementation."""
         pass
-
-
-class PixiManagerPlaceholder(PlaceholderBaseManager):
-    """Placeholder for Pixi environment manager."""
-
-    NAME = "Pixi"
-
-    @classmethod
-    def detect(cls, project_path: Path) -> bool:
-        return (project_path / "pixi.toml").is_file()
 
 
 class PoetryManagerPlaceholder(PlaceholderBaseManager):
@@ -139,7 +131,7 @@ class PipVenvManagerPlaceholder(PlaceholderBaseManager):
 
 # Default order of managers to check. First one detected wins.
 DEFAULT_MANAGERS: List[Type[EnvironmentManager]] = [
-    PixiManagerPlaceholder,
+    PixiManager,
     PoetryManagerPlaceholder,
     HatchManagerPlaceholder,
     UVManagerPlaceholder,
