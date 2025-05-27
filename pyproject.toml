@@ -32,8 +32,10 @@ classifiers = [
 dependencies = [
     "anthropic",
     "openai",
+    "psutil",
     "pyyaml",
-    "rich>=12.0.0",
+    "rich>=12.0.0", # For CLI and TUI progress
+    "textual>=0.50.0", # For the TUI interface
 ]
 
 [project.optional-dependencies]
@@ -61,6 +63,7 @@ test = [
 
 [project.scripts]
 pytest-analyzer = "pytest_analyzer.cli.analyzer_cli:main"
+pytest-analyzer-tui = "pytest_analyzer.tui:main"
 
 [project.urls]
 Homepage = "https://github.com/yourusername/pytest_analyzer"
