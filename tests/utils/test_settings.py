@@ -1,10 +1,12 @@
 """Tests for the settings module."""
 
+import os
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
+from pytest_analyzer.utils.configuration import ConfigurationError, ConfigurationManager
 from pytest_analyzer.utils.settings import Settings, load_settings
 
 
@@ -117,3 +119,153 @@ def test_load_settings_existing_file():
 
     # Verify that settings were returned
     assert isinstance(settings, Settings)
+
+
+# Add these new test functions
+
+VALID_ENV_MANAGERS = ["pixi", "poetry", "hatch", "uv", "pipenv", "pip+venv"]
+VALID_ENV_MANAGERS_MIXED_CASE = ["PIXI", "Poetry", "Hatch", "Uv", "PipEnv", "PIP+VENV"]
+
+
+@pytest.mark.parametrize("manager_name", VALID_ENV_MANAGERS)
+def test_settings_post_init_environment_manager_valid_values(manager_name):
+    """Test Settings initialization with valid environment_manager values."""
+    settings = Settings(environment_manager=manager_name)
+    assert settings.environment_manager == manager_name
+
+
+@pytest.mark.parametrize("manager_name_mixed_case", VALID_ENV_MANAGERS_MIXED_CASE)
+def test_settings_post_init_environment_manager_case_insensitive(
+    manager_name_mixed_case,
+):
+    """Test Settings initialization with case-insensitive valid environment_manager values."""
+    settings = Settings(environment_manager=manager_name_mixed_case)
+    assert settings.environment_manager == manager_name_mixed_case.lower()
+
+
+def test_settings_post_init_environment_manager_invalid_value():
+    """Test Settings initialization with an invalid environment_manager value."""
+    invalid_manager = "invalid_manager_value"
+    with pytest.raises(
+        ValueError,
+        match=rf"Invalid environment_manager: '{invalid_manager}'. Must be one of .* \(case-insensitive\), or None.",
+    ):
+        Settings(environment_manager=invalid_manager)
+
+
+def test_settings_post_init_environment_manager_none_value():
+    """Test Settings initialization with environment_manager=None."""
+    settings = Settings(environment_manager=None)
+    assert settings.environment_manager is None
+
+
+def test_settings_default_environment_manager():
+    """Test that the default value for environment_manager is None."""
+    settings = Settings()
+    assert settings.environment_manager is None
+
+
+@pytest.mark.parametrize("manager_name_mixed_case", VALID_ENV_MANAGERS_MIXED_CASE)
+def test_config_manager_load_environment_manager_from_env(manager_name_mixed_case):
+    """Test loading environment_manager from an environment variable."""
+    env_var_value = manager_name_mixed_case
+    expected_value = manager_name_mixed_case.lower()
+    with patch.dict(os.environ, {"PYTEST_ANALYZER_ENVIRONMENT_MANAGER": env_var_value}):
+        config_manager = ConfigurationManager()
+        settings = config_manager.get_settings()
+        assert settings.environment_manager == expected_value
+
+
+def test_config_manager_load_invalid_environment_manager_from_env():
+    """Test loading an invalid environment_manager from an environment variable."""
+    invalid_manager = "bad_env_manager"
+    with patch.dict(
+        os.environ, {"PYTEST_ANALYZER_ENVIRONMENT_MANAGER": invalid_manager}
+    ):
+        config_manager = ConfigurationManager()
+        # The ValueError is wrapped in ConfigurationError during get_settings()
+        with pytest.raises(
+            ConfigurationError,
+            match=rf"Failed to create settings instance.*Invalid environment_manager: '{invalid_manager}'",
+        ):
+            config_manager.get_settings()
+
+
+@pytest.mark.parametrize("manager_name_mixed_case", VALID_ENV_MANAGERS_MIXED_CASE)
+def test_config_manager_load_environment_manager_from_yaml(
+    tmp_path, manager_name_mixed_case
+):
+    """Test loading environment_manager from a YAML configuration file."""
+    yaml_value = manager_name_mixed_case
+    expected_value = manager_name_mixed_case.lower()
+    config_content = f"environment_manager: {yaml_value}\n"
+    config_file = tmp_path / "test_config.yaml"
+    config_file.write_text(config_content)
+
+    config_manager = ConfigurationManager(config_file_path=config_file)
+    settings = config_manager.get_settings()
+    assert settings.environment_manager == expected_value
+
+
+def test_config_manager_load_invalid_environment_manager_from_yaml(tmp_path):
+    """Test loading an invalid environment_manager from a YAML file."""
+    invalid_manager = "bad_yaml_manager"
+    config_content = f"environment_manager: {invalid_manager}\n"
+    config_file = tmp_path / "test_invalid_config.yaml"
+    config_file.write_text(config_content)
+
+    config_manager = ConfigurationManager(config_file_path=config_file)
+    with pytest.raises(
+        ConfigurationError,
+        match=rf"Failed to create settings instance.*Invalid environment_manager: '{invalid_manager}'",
+    ):
+        config_manager.get_settings()
+
+
+def test_config_manager_precedence_env_over_yaml_environment_manager(tmp_path):
+    """Test that environment variable overrides YAML for environment_manager."""
+    yaml_manager = "pipenv"
+    env_manager = "uv"  # This should be the final value
+
+    config_content = f"environment_manager: {yaml_manager}\n"
+    config_file = tmp_path / "test_config_precedence.yaml"
+    config_file.write_text(config_content)
+
+    with patch.dict(os.environ, {"PYTEST_ANALYZER_ENVIRONMENT_MANAGER": env_manager}):
+        config_manager = ConfigurationManager(config_file_path=config_file)
+        settings = config_manager.get_settings()
+        assert settings.environment_manager == env_manager.lower()
+
+
+def test_config_manager_precedence_env_over_yaml_mixed_case_environment_manager(
+    tmp_path,
+):
+    """Test that environment variable (mixed case) overrides YAML for environment_manager."""
+    yaml_manager = "pipenv"
+    env_manager_mixed_case = "UV"  # This should be the final value, normalized
+    expected_env_manager = "uv"
+
+    config_content = f"environment_manager: {yaml_manager}\n"
+    config_file = tmp_path / "test_config_precedence_mixed.yaml"
+    config_file.write_text(config_content)
+
+    with patch.dict(
+        os.environ, {"PYTEST_ANALYZER_ENVIRONMENT_MANAGER": env_manager_mixed_case}
+    ):
+        config_manager = ConfigurationManager(config_file_path=config_file)
+        settings = config_manager.get_settings()
+        assert settings.environment_manager == expected_env_manager
+
+
+def test_config_manager_default_environment_manager_if_not_set():
+    """Test that environment_manager is None by default if not set in env or file."""
+    # Ensure the env var is not set for this test
+    with patch.dict(os.environ, {}, clear=True):
+        config_manager = ConfigurationManager(
+            config_file_path=None
+        )  # Explicitly no file
+        # To be absolutely sure no default file is picked up, we can mock _resolve_config_file_path
+        # or ensure the test runs in an environment where no default config file exists.
+        # For simplicity, assuming no default config file with this setting is present.
+        settings = config_manager.get_settings()
+        assert settings.environment_manager is None
