@@ -1,0 +1,65 @@
+2025-05-23 21:43:15,271 - pytest_analyzer.gui.app - INFO - [Thread-140556648019776] - GUI process current memory usage: 61.2 MB
+2025-05-23 21:43:15,271 - pytest_analyzer.gui.app - INFO - [Thread-140556648019776] - Set memory limit for GUI process: 1536.0 MB
+2025-05-23 21:43:15,378 - pytest_analyzer.gui.app - INFO - [Thread-140556648019776] - PytestAnalyzerApp initialized
+2025-05-23 21:43:15,442 - MainController - INFO - [Thread-140556648019776] - MainController initialized
+2025-05-23 21:43:15,447 - pytest_analyzer.utils.git_manager - INFO - [Thread-140556648019776] - Project at /home/memento/ClaudeCode/pytest-analyzer/llm-pytest-analyzer is already a Git repository
+2025-05-23 21:43:15,447 - pytest_analyzer.core.analyzer_service - INFO - [Thread-140556648019776] - Git integration enabled
+2025-05-23 21:43:15,684 - pytest_analyzer.core.analyzer_service - INFO - [Thread-140556648019776] - Async processing: disabled
+2025-05-23 21:43:15,684 - pytest_analyzer.core.analyzer_service - INFO - [Thread-140556648019776] - Batch size: 5, Max concurrency: 10
+2025-05-23 21:43:15,684 - pytest_analyzer.gui.main_window - DEBUG - [Thread-140556648019776] - Created analyzer service
+2025-05-23 21:43:15,684 - pytest_analyzer.gui.main_window - DEBUG - [Thread-140556648019776] - Created test results model
+2025-05-23 21:43:15,684 - FileController - INFO - [Thread-140556648019776] - FileController initialized
+2025-05-23 21:43:15,684 - TestResultsController - INFO - [Thread-140556648019776] - TestResultsController initialized
+2025-05-23 21:43:15,684 - AnalysisController - INFO - [Thread-140556648019776] - AnalysisController initialized
+2025-05-23 21:43:15,684 - SettingsController - INFO - [Thread-140556648019776] - SettingsController initialized
+2025-05-23 21:43:15,684 - ProjectController - INFO - [Thread-140556648019776] - ProjectController initialized
+2025-05-23 21:43:15,685 - ProjectController - INFO - [Thread-140556648019776] - Loaded 0 recent projects
+2025-05-23 21:43:15,685 - ProjectController - INFO - [Thread-140556648019776] - No previous project to restore
+2025-05-23 21:43:15,685 - SessionController - INFO - [Thread-140556648019776] - SessionController initialized
+2025-05-23 21:43:15,685 - TestDiscoveryController - INFO - [Thread-140556648019776] - TestDiscoveryController initialized
+2025-05-23 21:43:15,700 - pytest_analyzer.gui.main_window - DEBUG - [Thread-140556648019776] - Created test output view
+2025-05-23 21:43:15,700 - TestExecutionController - INFO - [Thread-140556648019776] - TestExecutionController initialized
+2025-05-23 21:43:15,701 - pytest_analyzer.gui.workflow.workflow_coordinator - INFO - [Thread-140556648019776] - WorkflowCoordinator initialized and signals connected.
+2025-05-23 21:43:15,881 - pytest_analyzer.gui.main_window - DEBUG - [Thread-140556648019776] - Created file selection view
+2025-05-23 21:43:15,896 - pytest_analyzer.gui.main_window - DEBUG - [Thread-140556648019776] - Created test results view
+2025-05-23 21:43:15,897 - pytest_analyzer.gui.main_window - DEBUG - [Thread-140556648019776] - Created test discovery view
+2025-05-23 21:43:15,898 - MainController - DEBUG - [Thread-140556648019776] - LLM status label updated: LLM: Disabled
+2025-05-23 21:43:15,898 - MainController - INFO - [Thread-140556648019776] - MainController initialized and signals connected.
+2025-05-23 21:43:15,899 - pytest_analyzer.gui.main_window - DEBUG - [Thread-140556648019776] - Keyboard shortcuts configured
+2025-05-23 21:43:15,899 - pytest_analyzer.gui.main_window - INFO - [Thread-140556648019776] - MainWindow initialized
+2025-05-23 21:43:21,350 - MainController - INFO - [Thread-140556648019776] - Open action triggered.
+2025-05-23 21:43:25,464 - MainController - INFO - [Thread-140556648019776] - File dialog selected: /home/memento/ClaudeCode/pytest-analyzer/llm-pytest-analyzer/tests/test_cli.py
+2025-05-23 21:43:25,464 - FileController - INFO - [Thread-140556648019776] - File selected: /home/memento/ClaudeCode/pytest-analyzer/llm-pytest-analyzer/tests/test_cli.py, type: .py
+2025-05-23 21:43:25,464 - FileController - INFO - [Thread-140556648019776] - Preparing for test file: /home/memento/ClaudeCode/pytest-analyzer/llm-pytest-analyzer/tests/test_cli.py
+2025-05-23 21:43:25,465 - pytest_analyzer.gui.controllers.report_controller - DEBUG - [Thread-140556648019776] - Test results updated for reporting: 0 results
+2025-05-23 21:43:25,465 - MainController - INFO - [Thread-140556648019776] - Workflow state changed from idle to file_selected
+2025-05-23 21:43:25,465 - pytest_analyzer.gui.models.test_results_model - INFO - [Thread-140556648019776] - Test run history cleared due to loading new results from file/report.
+2025-05-23 21:43:25,465 - pytest_analyzer.gui.controllers.report_controller - DEBUG - [Thread-140556648019776] - Test results updated for reporting: 0 results
+2025-05-23 21:43:25,465 - pytest_analyzer.gui.controllers.report_controller - DEBUG - [Thread-140556648019776] - Test results updated for reporting: 0 results
+2025-05-23 21:43:27,200 - MainController - INFO - [Thread-140556648019776] - 'Run Tests' action triggered by user.
+2025-05-23 21:43:27,200 - MainController - INFO - [Thread-140556648019776] - Preparing to run tests for: /home/memento/ClaudeCode/pytest-analyzer/llm-pytest-analyzer/tests/test_cli.py (type: py)
+2025-05-23 21:43:27,201 - TestExecutionController - INFO - [Thread-140556648019776] - Initiating test run for path: /home/memento/ClaudeCode/pytest-analyzer/llm-pytest-analyzer/tests/test_cli.py with args: []
+2025-05-23 21:43:27,202 - pytest_analyzer.gui.background.progress_bridge - DEBUG - [Thread-140556648019776] - ProgressBridge for GUI task '2c0232703e03489aafc8453707e9ed56' initialized, expecting main rich task ID 0.
+2025-05-23 21:43:27,202 - pytest_analyzer.gui.background.task_manager - INFO - [Thread-140556648019776] - Task '2c0232703e03489aafc8453707e9ed56' (run_pytest_only) submitted and started.
+2025-05-23 21:43:27,202 - pytest_analyzer.gui.background.worker_thread - INFO - [Thread-140555923658432] - WorkerThread (task_id: 2c0232703e03489aafc8453707e9ed56): Starting task run_pytest_only
+2025-05-23 21:43:27,202 - TestExecutionController - INFO - [Thread-140556648019776] - Test execution task '2c0232703e03489aafc8453707e9ed56' (run_pytest_only) started. Showing progress view.
+2025-05-23 21:43:27,202 - pytest_analyzer.utils.resource_manager - DEBUG - [Thread-140555923658432] - Worker thread timeout setup for thread 140555923658432, timeout=300s
+2025-05-23 21:43:27,205 - MainController - INFO - [Thread-140556648019776] - Workflow state changed from file_selected to tests_running
+2025-05-23 21:43:27,206 - pytest_analyzer.utils.resource_manager - DEBUG - [Thread-140555923658432] - Creating Timer for thread 140555923658432
+2025-05-23 21:43:27,206 - MainController - INFO - [Thread-140556648019776] - Test execution task submitted with ID: 2c0232703e03489aafc8453707e9ed56
+2025-05-23 21:43:27,206 - pytest_analyzer.utils.resource_manager - DEBUG - [Thread-140555923658432] - Timer started for thread 140555923658432
+2025-05-23 21:43:27,206 - pytest_analyzer.utils.resource_manager - DEBUG - [Thread-140555923658432] - Memory limit set to 1024 MB
+2025-05-23 21:43:27,206 - pytest_analyzer.gui.background.progress_bridge - DEBUG - [Thread-140555923658432] - ProgressBridge (GUI task '2c0232703e03489aafc8453707e9ed56'): Added rich task 0 ('[cyan]Running pytest...') with parent 0
+2025-05-23 21:43:27,206 - pytest_analyzer.gui.background.progress_bridge - DEBUG - [Thread-140555923658432] - ProgressBridge (GUI task '2c0232703e03489aafc8453707e9ed56'): Emitting progress: 0%, Message: '[cyan]Running pytest...'
+2025-05-23 21:43:27,212 - pytest_analyzer.gui.background.task_manager - DEBUG - [Thread-140556648019776] - Task '2c0232703e03489aafc8453707e9ed56' progress: 0% - [cyan]Running pytest...
+2025-05-23 21:43:27,212 - TestExecutionController - DEBUG - [Thread-140556648019776] - Test execution task '2c0232703e03489aafc8453707e9ed56' progress: 0% - [cyan]Running pytest...
+2025-05-23 21:43:29,074 - pytest_analyzer.core.extraction.extractor_factory - DEBUG - [Thread-140555923658432] - Using JsonResultExtractor for /tmp/tmp0hapg3vz.json
+2025-05-23 21:43:29,074 - pytest_analyzer.utils.resource_manager - DEBUG - [Thread-140555923658432] - Worker thread timeout setup for thread 140555923658432, timeout=30s
+2025-05-23 21:43:29,074 - pytest_analyzer.utils.resource_manager - DEBUG - [Thread-140555923658432] - Creating Timer for thread 140555923658432
+2025-05-23 21:44:03,230 - pytest_analyzer.gui.main_window - DEBUG - [Thread-140556648019776] - Lazily created tab: Discover Tests
+2025-05-23 21:44:04,922 - TestDiscoveryController - INFO - [Thread-140556648019776] - Requesting test discovery.
+2025-05-23 21:44:04,923 - MainController - INFO - [Thread-140556648019776] - Workflow state changed from tests_running to tests_discovering
+2025-05-23 21:44:04,923 - TestDiscoveryController - INFO - [Thread-140556648019776] - Discovering tests in: /home/memento/ClaudeCode/pytest-analyzer/llm-pytest-analyzer
+2025-05-23 21:44:04,923 - pytest_analyzer.gui.background.progress_bridge - DEBUG - [Thread-140556648019776] - ProgressBridge for GUI task '346917a0fe70432bbe0fecdc1b258239' initialized, expecting main rich task ID 1000.
+2025-05-23 21:44:04,923 - pytest_analyzer.gui.background.task_manager - INFO - [Thread-140556648019776] - Task '346917a0fe70432bbe0fecdc1b258239' (run_pytest_only) submitted and started.
+2025-05-23 21:44:04,923 - TestExecutionController - INFO - [Thread-140556648019776] - Test execution task '346917a0fe70432bbe0fecdc1b258239' (run_pytest_only) started. Showing progress view.
