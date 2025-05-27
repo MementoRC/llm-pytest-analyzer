@@ -1,6 +1,6 @@
 # Task ID: 3
 # Title: Implement Pixi Environment Manager
-# Status: in-progress
+# Status: done
 # Dependencies: 1
 # Priority: high
 # Description: Create a concrete implementation of the Environment Manager protocol for Pixi

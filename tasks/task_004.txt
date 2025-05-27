@@ -1,6 +1,6 @@
 # Task ID: 4
 # Title: Implement Poetry, Hatch, UV, Pipenv, and Pip+Venv Managers
-# Status: pending
+# Status: in-progress
 # Dependencies: 1
 # Priority: high
 # Description: Create concrete implementations of the Environment Manager protocol for all other supported environment managers
