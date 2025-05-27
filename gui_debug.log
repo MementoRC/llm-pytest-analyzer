@@ -1,0 +1,1 @@
+/home/memento/ClaudeCode/pytest-analyzer/llm-pytest-analyzer/.pixi/envs/dev/bin/python: Error while finding module specification for 'pytest_analyzer.gui' (ModuleNotFoundError: No module named 'pytest_analyzer')

@@ -1,0 +1,60 @@
+
+# 2025-05-26 21:11:53.526426
++Implement complete TUI TestResultsController integration with core services:
++
++1. **Fix TestResultsView**:
++   - The view has field name mismatches with PytestFailure model
++   - PytestFailure fields: test_name, test_file, outcome, error_message, traceback
++   - Fix the update_results() method to use correct field names
++   - Handle cases where fields might be None
++
++2. **Complete TestResultsController implementation**:
++   - Remove placeholder code and implement real functionality
++   - Implement proper load_report_data() to update TestResultsView via app.query_one()
++   - Implement load_test_run_results() to properly display test execution results
++   - Add proper error handling for view queries
++   - Use proper logging and notifications
++
++3. **Integration requirements**:
++   - TestExecutionController calls load_test_run_results(failures)
++   - FileController calls load_report_data(results, path, type)
++   - Must work with TUIApp's widget query system
++   - Follow the pattern from other TUI controllers
++
++4. **Key integration points**:
++   - Use app.query_one() to find TestResultsView widget
++   - Handle both test execution results and file-loaded report data
++   - Provide meaningful user feedback via app.notify()
++   - Proper error handling if views not found
++
++Make this a production-ready implementation matching the quality of the GUI controllers but adapted for TUI patterns.
+
+# 2025-05-26 21:11:53.526532
++Implement complete TUI TestResultsController integration with core services:
++
++1. **Fix TestResultsView**:
++   - The view has field name mismatches with PytestFailure model
++   - PytestFailure fields: test_name, test_file, outcome, error_message, traceback
++   - Fix the update_results() method to use correct field names
++   - Handle cases where fields might be None
++
++2. **Complete TestResultsController implementation**:
++   - Remove placeholder code and implement real functionality
++   - Implement proper load_report_data() to update TestResultsView via app.query_one()
++   - Implement load_test_run_results() to properly display test execution results
++   - Add proper error handling for view queries
++   - Use proper logging and notifications
++
++3. **Integration requirements**:
++   - TestExecutionController calls load_test_run_results(failures)
++   - FileController calls load_report_data(results, path, type)
++   - Must work with TUIApp's widget query system
++   - Follow the pattern from other TUI controllers
++
++4. **Key integration points**:
++   - Use app.query_one() to find TestResultsView widget
++   - Handle both test execution results and file-loaded report data
++   - Provide meaningful user feedback via app.notify()
++   - Proper error handling if views not found
++
++Make this a production-ready implementation matching the quality of the GUI controllers but adapted for TUI patterns.
