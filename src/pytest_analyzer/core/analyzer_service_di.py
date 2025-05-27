@@ -30,6 +30,7 @@ from .analyzer_state_machine import (
     AnalyzerState,
     AnalyzerStateMachine,
 )
+from .environment.protocol import EnvironmentManager
 from .extraction.extractor_factory import get_extractor
 from .llm.llm_service_protocol import LLMServiceProtocol
 from .models.pytest_failure import FixSuggestion, PytestFailure
@@ -52,6 +53,7 @@ class DIPytestAnalyzerService:
         path_resolver: PathResolver,
         state_machine: AnalyzerStateMachine,
         llm_service: Optional[LLMServiceProtocol] = None,
+        env_manager: Optional[EnvironmentManager] = None,  # Added
     ):
         """
         Initialize the test analyzer service with injected dependencies.
@@ -61,11 +63,13 @@ class DIPytestAnalyzerService:
             path_resolver: PathResolver object for resolving paths
             state_machine: The analyzer state machine
             llm_service: Optional LLM service for advanced suggestions
+            env_manager: Optional EnvironmentManager for command execution # Added
         """
         self.settings = settings
         self.path_resolver = path_resolver
         self.state_machine = state_machine
         self.llm_service = llm_service
+        self.env_manager = env_manager  # Added
 
         # Get context for convenience
         self.context = state_machine.context
@@ -423,8 +427,20 @@ class DIPytestAnalyzerService:
         Returns:
             List of test failures
         """
-        # Choose extraction strategy based on settings
+        failures: List[PytestFailure] = []
+        activation_performed = False
         try:
+            if (
+                self.env_manager
+                and hasattr(self.env_manager, "activate")
+                and callable(getattr(self.env_manager, "activate"))
+            ):
+                logger.debug(
+                    f"Activating environment using {getattr(self.env_manager, 'NAME', 'UnknownManager')}"
+                )
+                self.env_manager.activate()
+                activation_performed = True
+
             if self.settings.preferred_format == "plugin":
                 # Use direct pytest plugin integration
                 all_args = [test_path]
@@ -462,6 +478,17 @@ class DIPytestAnalyzerService:
             logger.error(f"Error extracting failures: {e}")
             self.state_machine.set_error(e, f"Error extracting failures: {e}")
             return []
+        finally:
+            if (
+                activation_performed
+                and self.env_manager
+                and hasattr(self.env_manager, "deactivate")
+                and callable(getattr(self.env_manager, "deactivate"))
+            ):
+                logger.debug(
+                    f"Deactivating environment using {getattr(self.env_manager, 'NAME', 'UnknownManager')}"
+                )
+                self.env_manager.deactivate()
 
     def _continue_analysis(self) -> None:
         """
@@ -619,6 +646,41 @@ class DIPytestAnalyzerService:
         # Complete the workflow
         self.state_machine.trigger(AnalyzerEvent.COMPLETE)
 
+    def _build_final_command(
+        self, base_pytest_parts: List[str], additional_pytest_args: List[str]
+    ) -> List[str]:
+        """Builds the final command list, incorporating pytest args and environment manager."""
+        full_pytest_command = list(base_pytest_parts)
+        full_pytest_command.extend(additional_pytest_args)
+
+        if self.env_manager:
+            manager_name = getattr(self.env_manager, "NAME", "UnknownManager")
+            logger.debug(
+                f"Using environment manager {manager_name} to build command: {full_pytest_command}"
+            )
+            final_command = self.env_manager.build_command(full_pytest_command)
+            logger.debug(f"Command built by {manager_name}: {final_command}")
+            return final_command
+        else:
+            logger.debug(
+                f"No environment manager detected, using direct command: {full_pytest_command}"
+            )
+            return full_pytest_command
+
+    def _get_execution_cwd(self) -> Optional[Path]:
+        """Determines the CWD for subprocess execution if an env manager is active."""
+        if self.env_manager:
+            # Assume project_root from PathResolver is the correct CWD for env managers
+            cwd = self.path_resolver.project_root
+            logger.debug(
+                f"Using CWD for subprocess: {cwd} due to active environment manager."
+            )
+            return cwd
+        logger.debug(
+            "No active environment manager, CWD for subprocess will be default (None)."
+        )
+        return None
+
     def _run_and_extract_json(
         self, test_path: str, pytest_args: Optional[List[str]] = None
     ) -> List[PytestFailure]:
@@ -632,69 +694,94 @@ class DIPytestAnalyzerService:
         Returns:
             List of test failures
         """
-        with tempfile.NamedTemporaryFile(suffix=".json") as tmp:
-            args = pytest_args or []
-            cmd = [
-                "pytest",
-                test_path,
-                "--json-report",
-                f"--json-report-file={tmp.name}",
-            ]
+        # Ensure the temp file is actually created for pytest to write to
+        # The with statement handles creation and deletion.
 
-            # Important: we need to extend args after defining base command to allow
-            # custom args to override the defaults if needed
-            cmd.extend(args)
+        try:
+            with tempfile.NamedTemporaryFile(mode="w+", suffix=".json") as tmp_file_obj:
+                tmp_file_path_str = tmp_file_obj.name  # Get path for command
 
-            try:
+                args = pytest_args or []
+                base_pytest_cmd_parts = [
+                    "pytest",
+                    test_path,
+                    "--json-report",
+                    f"--json-report-file={tmp_file_path_str}",
+                ]
+
+                final_cmd = self._build_final_command(base_pytest_cmd_parts, args)
+                run_cwd = self._get_execution_cwd()
+
                 # Determine if we're in quiet mode
-                quiet_mode = "-q" in args or "-qq" in args or "--quiet" in args
+                quiet_mode = (
+                    "-q" in final_cmd or "-qq" in final_cmd or "--quiet" in final_cmd
+                )
                 # Determine if we want to show progress (requires -s to avoid pytest capturing output)
                 progress_mode = not quiet_mode and (
-                    "-s" in args or "--capture=no" in args
+                    "-s" in final_cmd or "--capture=no" in final_cmd
+                )
+
+                logger.debug(
+                    f"Executing command: {' '.join(final_cmd)} in CWD: {run_cwd}"
                 )
 
                 if quiet_mode:
-                    # When in quiet mode, redirect output to devnull
                     with open(os.devnull, "w") as devnull:
-                        # Run pytest with a timeout, redirecting output to devnull
                         subprocess.run(
-                            cmd,
+                            final_cmd,
                             timeout=self.settings.pytest_timeout,
                             check=False,
                             stdout=devnull,
                             stderr=devnull,
+                            cwd=run_cwd,
                         )
                 elif progress_mode:
-                    # With progress mode enabled, make sure the output isn't being captured
-                    console = Console()
-                    console.print("[cyan]Running pytest with JSON report...[/cyan]")
-
-                    # Run pytest with normal output, needed for rich progress display
+                    console = Console()  # Assuming Console is available or defined
+                    console.print(f"[cyan]Running: {' '.join(final_cmd)}[/cyan]")
                     result = subprocess.run(
-                        cmd, timeout=self.settings.pytest_timeout, check=False
+                        final_cmd,
+                        timeout=self.settings.pytest_timeout,
+                        check=False,
+                        cwd=run_cwd,
+                        # Keep stdout/stderr for progress_mode unless pytest itself is quieted
                     )
-
-                    if result.returncode != 0 and not quiet_mode:
+                    if (
+                        result.returncode != 0
+                    ):  # No need for `and not quiet_mode` as this branch is `not quiet_mode`
                         console.print(
                             f"[yellow]Pytest exited with code {result.returncode}[/yellow]"
                         )
-                else:
-                    # Run pytest with a timeout, normal output but no special progress display
+                else:  # Not quiet, not explicit progress_mode (e.g. -s not passed)
                     subprocess.run(
-                        cmd, timeout=self.settings.pytest_timeout, check=False
+                        final_cmd,
+                        timeout=self.settings.pytest_timeout,
+                        check=False,
+                        cwd=run_cwd,
                     )
 
                 # Extract failures from JSON output
                 extractor = get_extractor(
-                    Path(tmp.name), self.settings, self.path_resolver
+                    Path(tmp_file_path_str), self.settings, self.path_resolver
                 )
-                return extractor.extract_failures(Path(tmp.name))
+                return extractor.extract_failures(Path(tmp_file_path_str))
 
-            except subprocess.TimeoutExpired:
-                logger.error(
-                    f"Pytest execution timed out after {self.settings.pytest_timeout} seconds"
-                )
-                return []
+        except subprocess.TimeoutExpired:
+            logger.error(
+                f"Pytest execution timed out after {self.settings.pytest_timeout} seconds"
+            )
+            return []
+        except (
+            FileNotFoundError
+        ):  # e.g. if final_cmd[0] (like 'pixi' or 'pytest') is not found
+            logger.error(
+                f"Command not found: {final_cmd[0]}. Ensure it's in PATH or installed."
+            )
+            # You might want to set state_machine error here as well
+            self.state_machine.set_error(
+                FileNotFoundError(f"Command not found: {final_cmd[0]}"),
+                f"Command not found: {final_cmd[0]}",
+            )
+            return []
 
     def _run_and_extract_xml(
         self, test_path: str, pytest_args: Optional[List[str]] = None
@@ -709,61 +796,80 @@ class DIPytestAnalyzerService:
         Returns:
             List of test failures
         """
-        with tempfile.NamedTemporaryFile(suffix=".xml") as tmp:
-            args = pytest_args or []
-            cmd = ["pytest", test_path, "--junit-xml", tmp.name]
+        try:
+            with tempfile.NamedTemporaryFile(mode="w+", suffix=".xml") as tmp_file_obj:
+                tmp_file_path_str = tmp_file_obj.name
 
-            # Important: we need to extend args after defining base command to allow
-            # custom args to override the defaults if needed
-            cmd.extend(args)
+                args = pytest_args or []
+                base_pytest_cmd_parts = [
+                    "pytest",
+                    test_path,
+                    "--junit-xml",
+                    tmp_file_path_str,
+                ]
 
-            try:
+                final_cmd = self._build_final_command(base_pytest_cmd_parts, args)
+                run_cwd = self._get_execution_cwd()
+
                 # Determine if we're in quiet mode
-                quiet_mode = "-q" in args or "-qq" in args or "--quiet" in args
-                # Determine if we want to show progress (requires -s to avoid pytest capturing output)
+                quiet_mode = (
+                    "-q" in final_cmd or "-qq" in final_cmd or "--quiet" in final_cmd
+                )
                 progress_mode = not quiet_mode and (
-                    "-s" in args or "--capture=no" in args
+                    "-s" in final_cmd or "--capture=no" in final_cmd
+                )
+
+                logger.debug(
+                    f"Executing command: {' '.join(final_cmd)} in CWD: {run_cwd}"
                 )
 
                 if quiet_mode:
-                    # When in quiet mode, redirect output to devnull
                     with open(os.devnull, "w") as devnull:
-                        # Run pytest with a timeout, redirecting output to devnull
                         subprocess.run(
-                            cmd,
+                            final_cmd,
                             timeout=self.settings.pytest_timeout,
                             check=False,
                             stdout=devnull,
                             stderr=devnull,
+                            cwd=run_cwd,
                         )
                 elif progress_mode:
-                    # With progress mode enabled, make sure the output isn't being captured
                     console = Console()
-                    console.print("[cyan]Running pytest with XML report...[/cyan]")
-
-                    # Run pytest with normal output, needed for rich progress display
+                    console.print(f"[cyan]Running: {' '.join(final_cmd)}[/cyan]")
                     result = subprocess.run(
-                        cmd, timeout=self.settings.pytest_timeout, check=False
+                        final_cmd,
+                        timeout=self.settings.pytest_timeout,
+                        check=False,
+                        cwd=run_cwd,
                     )
-
-                    if result.returncode != 0 and not quiet_mode:
+                    if result.returncode != 0:
                         console.print(
                             f"[yellow]Pytest exited with code {result.returncode}[/yellow]"
                         )
                 else:
-                    # Run pytest with a timeout, normal output but no special progress display
                     subprocess.run(
-                        cmd, timeout=self.settings.pytest_timeout, check=False
+                        final_cmd,
+                        timeout=self.settings.pytest_timeout,
+                        check=False,
+                        cwd=run_cwd,
                     )
 
-                # Extract failures from XML output
                 extractor = get_extractor(
-                    Path(tmp.name), self.settings, self.path_resolver
+                    Path(tmp_file_path_str), self.settings, self.path_resolver
                 )
-                return extractor.extract_failures(Path(tmp.name))
+                return extractor.extract_failures(Path(tmp_file_path_str))
 
-            except subprocess.TimeoutExpired:
-                logger.error(
-                    f"Pytest execution timed out after {self.settings.pytest_timeout} seconds"
-                )
-                return []
+        except subprocess.TimeoutExpired:
+            logger.error(
+                f"Pytest execution timed out after {self.settings.pytest_timeout} seconds"
+            )
+            return []
+        except FileNotFoundError:
+            logger.error(
+                f"Command not found: {final_cmd[0]}. Ensure it's in PATH or installed."
+            )
+            self.state_machine.set_error(
+                FileNotFoundError(f"Command not found: {final_cmd[0]}"),
+                f"Command not found: {final_cmd[0]}",
+            )
+            return []

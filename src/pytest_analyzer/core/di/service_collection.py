@@ -41,6 +41,8 @@ from ..analysis.llm_suggester import LLMSuggester
 
 # Import at function scope to avoid circular imports
 from ..analyzer_state_machine import AnalyzerContext, AnalyzerStateMachine
+from ..environment.detector import EnvironmentManagerDetector
+from ..environment.protocol import EnvironmentManager
 from ..llm.backward_compat import LLMService
 from ..llm.llm_service_protocol import LLMServiceProtocol
 from ..protocols import Applier
@@ -320,6 +322,19 @@ def configure_services(
         PathResolver, lambda: PathResolver(container.resolve(Settings).project_root)
     )
 
+    # Register EnvironmentManagerDetector and EnvironmentManager
+    container.register_factory(
+        EnvironmentManagerDetector,
+        lambda: EnvironmentManagerDetector(
+            project_path=container.resolve(PathResolver).project_root
+        ),
+    )
+    container.register_factory(
+        EnvironmentManager,  # Registering the protocol
+        lambda: container.resolve(EnvironmentManagerDetector).get_active_manager(),
+        # This factory returns Optional[EnvironmentManager]
+    )
+
     # Register analyzer context (dependency for AnalyzerStateMachine)
     container.register_factory(
         AnalyzerContext, lambda: _create_analyzer_context(container)
@@ -349,6 +364,7 @@ def configure_services(
     from ..analyzer_service_di import DIPytestAnalyzerService
 
     # Register the analyzer service with a factory that explicitly passes the LLM service
+    # and the EnvironmentManager
     container.register_factory(
         DIPytestAnalyzerService,
         lambda:
@@ -363,6 +379,9 @@ def configure_services(
                 if container.resolve(Settings).use_llm
                 else None
             ),
+            env_manager=container.resolve(
+                EnvironmentManager
+            ),  # Inject resolved EnvironmentManager
         ),
     )
 

@@ -1,6 +1,6 @@
 # Task ID: 5
 # Title: Integrate Environment Manager Detection into CLI Module
-# Status: pending
+# Status: done
 # Dependencies: 2, 3, 4
 # Priority: high
 # Description: Update the existing CLI module to use the environment manager detection service for command execution
