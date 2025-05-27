@@ -59,3 +59,13 @@ Desktop.ini
 .taskmasterconfig
 .windsurfrules
 .mypy.ini
+.mcp.json
+/.aider/
+/.aider.tags.cache.v4/
+.aider.chat.history.md
+.aider.input.history
+/tasks/
+/logs/
+scripts/prd.txt
+scripts/example_prd.txt
+scripts/task-*.json
