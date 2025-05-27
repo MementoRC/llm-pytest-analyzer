@@ -136,14 +136,16 @@ class TestTUIEndToEndWorkflows:
             assert analysis_view is not None
 
             # Create test failure data
-            test_failures = [
-                PytestFailure(
-                    test_name="test_example.py::test_function",
-                    test_file="test_example.py",
-                    error_message="AssertionError: Expected True, got False",
-                    traceback="test_example.py:10: AssertionError",
-                )
-            ]
+            test_failure = PytestFailure(
+                test_name="test_example.py::test_function",
+                test_file="test_example.py",
+                error_type="AssertionError",
+                error_message="AssertionError: Expected True, got False",
+                traceback="test_example.py:10: AssertionError",
+            )
+            # Add outcome attribute for TUI compatibility
+            test_failure.outcome = "failed"
+            test_failures = [test_failure]
 
             # Load failures into results view
             results_view.update_results(test_failures)
@@ -256,14 +258,16 @@ class TestTUIEndToEndWorkflows:
             results_view = tui_app.screen.query_one("#test_results_view")
 
             # Create test data
-            test_failures = [
-                PytestFailure(
-                    test_name="test_workflow.py::test_communication",
-                    test_file="test_workflow.py",
-                    error_message="Communication test",
-                    traceback="test_workflow.py:5: AssertionError",
-                )
-            ]
+            test_failure = PytestFailure(
+                test_name="test_workflow.py::test_communication",
+                test_file="test_workflow.py",
+                error_type="AssertionError",
+                error_message="Communication test",
+                traceback="test_workflow.py:5: AssertionError",
+            )
+            # Add outcome attribute for TUI compatibility
+            test_failure.outcome = "failed"
+            test_failures = [test_failure]
 
             # Simulate file loading that updates results
             with patch.object(tui_app.file_controller, "load_file") as mock_load:
@@ -328,15 +332,18 @@ class TestTUIEndToEndWorkflows:
                 # Step 2: View results
                 results_view = tui_app.screen.query_one("#test_results_view")
                 # Simulate results being loaded
-                failures = [
-                    PytestFailure(
+                failures = []
+                for item in test_data:
+                    failure = PytestFailure(
                         test_name=item["name"],
                         test_file=item["name"].split("::")[0],
+                        error_type="AssertionError",
                         error_message=item["message"],
                         traceback=item["traceback"],
                     )
-                    for item in test_data
-                ]
+                    # Add outcome attribute for TUI compatibility
+                    failure.outcome = "failed"
+                    failures.append(failure)
                 results_view.update_results(failures)
 
                 # Step 3: Trigger analysis
