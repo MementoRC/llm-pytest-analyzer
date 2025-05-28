@@ -1,25 +1,19 @@
-# Task ID: 4
-# Title: Create BaseLLMService for Common LLM Service Logic
-# Status: in-progress
-# Dependencies: 1
-# Priority: medium
-# Description: Extract common initialization code from sync and async LLM services into a shared base class to eliminate duplication.
-# Details:
-Create `src/pytest_analyzer/core/infrastructure/llm/base_llm_service.py` with the following implementation:
-
-```python
-from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List
 import logging
+from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Optional
 
-# Import from the new structure
-from pytest_analyzer.core.cross_cutting.configuration.settings import Settings
-from pytest_analyzer.core.interfaces.protocols import LLMProvider
+# Import from the existing structure
+from pytest_analyzer.utils.config_types import Settings
+
 
 class BaseLLMService(ABC):
     """Base class for LLM services to eliminate code duplication between sync and async implementations."""
 
-    def __init__(self, provider: Optional[LLMProvider] = None, settings: Optional[Settings] = None):
+    def __init__(
+        self,
+        provider: Optional[LLMProvider] = None,
+        settings: Optional[Settings] = None,
+    ):
         self.settings = settings or Settings()
         self.provider = provider or self._create_default_provider()
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -36,11 +30,13 @@ class BaseLLMService(ABC):
         # This would be implemented in subclasses or use a factory pattern
         raise NotImplementedError("Subclasses must implement _create_default_provider")
 
-    def _prepare_messages(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> List[Dict[str, str]]:
+    def _prepare_messages(
+        self, prompt: str, context: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, str]]:
         """Prepare messages for the LLM provider with consistent formatting."""
         messages = [
             {"role": "system", "content": self._get_system_prompt(context)},
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": prompt},
         ]
         return messages
 
@@ -52,14 +48,3 @@ class BaseLLMService(ABC):
     def generate(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> str:
         """Generate a response from the LLM based on the prompt and context."""
         pass
-```
-
-This base class extracts the common initialization and configuration logic from the existing LLM service implementations.
-
-# Test Strategy:
-Create unit tests for BaseLLMService that verify:
-1. Constructor properly initializes all properties from settings
-2. _prepare_messages correctly formats the messages array
-3. _get_system_prompt returns the expected system prompt
-4. Attempting to instantiate the abstract class directly raises TypeError
-5. Subclassing without implementing generate and _create_default_provider raises TypeError
