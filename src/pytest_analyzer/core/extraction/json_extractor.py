@@ -123,6 +123,14 @@ class JsonResultExtractor:
                 if failure:
                     failures.append(failure)
 
+        # Process collection errors
+        collectors = data.get("collectors", [])
+        for collector in collectors:
+            if collector.get("outcome") == "failed":
+                failure = self._create_failure_from_collector(collector)
+                if failure:
+                    failures.append(failure)
+
         return failures
 
     def _create_failure_from_test(
@@ -222,6 +230,93 @@ class JsonResultExtractor:
             logger.error(f"Error creating PytestFailure from test entry: {e}")
             return None
 
+    def _create_failure_from_collector(
+        self, collector: Dict[str, Any]
+    ) -> Optional[PytestFailure]:
+        """
+        Create a PytestFailure object from a collector entry in the JSON report.
+
+        Args:
+            collector: Collector entry from the JSON report
+
+        Returns:
+            PytestFailure object, or None if collector entry is empty or extraction fails
+        """
+        # Check if the collector entry is empty or missing essential fields
+        if not collector or "nodeid" not in collector:
+            return None
+
+        try:
+            # Extract basic information
+            nodeid = collector.get("nodeid", "")
+
+            # For collection errors, nodeid is often the file path
+            test_name = nodeid
+            file_path = nodeid
+
+            # Try to resolve the file path
+            if file_path:
+                file_path = str(self.path_resolver.resolve_path(file_path))
+
+            # Extract error information from longrepr
+            longrepr = collector.get("longrepr", "")
+
+            # Parse error type and message from longrepr
+            error_type = "ImportError"  # Default for collection errors
+            error_message = longrepr
+
+            # Try to extract specific error type from longrepr
+            if longrepr:
+                # Look for error types, prioritizing more specific ones
+                # Search for specific errors first, then fall back to general ones
+                specific_errors = [
+                    "ModuleNotFoundError",
+                    "FileNotFoundError",
+                    "SyntaxError",
+                    "NameError",
+                    "AttributeError",
+                    "TypeError",
+                    "ValueError",
+                ]
+                general_errors = ["ImportError", "RuntimeError", "Exception"]
+
+                for error_type_name in specific_errors + general_errors:
+                    error_match = re.search(
+                        f"\\b{re.escape(error_type_name)}\\b", longrepr
+                    )
+                    if error_match:
+                        error_type = error_type_name
+                        break
+
+                # Extract just the error message (last line usually contains the main error)
+                lines = longrepr.strip().split("\n")
+                for line in reversed(lines):
+                    if line.strip().startswith("E   "):
+                        error_message = line.strip()[4:]  # Remove 'E   ' prefix
+                        break
+                else:
+                    # If no 'E   ' line found, use first non-empty line
+                    for line in lines:
+                        if line.strip():
+                            error_message = line.strip()
+                            break
+
+            # Create PytestFailure object for collection error
+            return PytestFailure(
+                test_name=test_name,
+                test_file=file_path,
+                line_number=None,  # Collection errors don't have line numbers
+                error_type=error_type,
+                error_message=error_message,
+                traceback=longrepr,
+                relevant_code="",
+                raw_output_section=json.dumps(collector, indent=2),
+            )
+
+        except Exception as e:
+            logger.error(f"Error creating PytestFailure from collector entry: {e}")
+            return None
+
     def _parse_json_data(self, data: Dict[str, Any]) -> List[PytestFailure]:
         """
         Parse JSON data directly and extract test failures.
@@ -239,6 +334,14 @@ class JsonResultExtractor:
         for test in tests:
             if test.get("outcome") == "failed":
                 failure = self._create_failure_from_test(test)
+                if failure:
+                    failures.append(failure)
+
+        # Process collection errors
+        collectors = data.get("collectors", [])
+        for collector in collectors:
+            if collector.get("outcome") == "failed":
+                failure = self._create_failure_from_collector(collector)
                 if failure:
                     failures.append(failure)
 
