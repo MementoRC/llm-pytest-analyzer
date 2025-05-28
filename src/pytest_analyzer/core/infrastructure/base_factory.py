@@ -1,22 +1,12 @@
-# Task ID: 3
-# Title: Implement BaseFactory Abstract Class
-# Status: done
-# Dependencies: 1
-# Priority: high
-# Description: Create a base factory class to consolidate repeated factory initialization patterns across extractor, LLM, and suggester factories.
-# Details:
-Create `src/pytest_analyzer/core/infrastructure/base_factory.py` with the following implementation:
-
-```python
-from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, Type, TypeVar
 import logging
+from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Dict, Optional, Type, TypeVar
 
-# Import the Settings class from the appropriate location
-from pytest_analyzer.core.cross_cutting.configuration.settings import Settings
+from ...utils.config_types import Settings
 
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 class BaseFactory(ABC):
     """Base factory class to eliminate duplication across factory implementations."""
@@ -47,15 +37,3 @@ class BaseFactory(ABC):
     def create(self, *args, **kwargs) -> T:
         """Create an instance of the appropriate implementation."""
         pass
-```
-
-This base factory consolidates common patterns identified in the PRD from existing factory implementations.
-
-# Test Strategy:
-Create unit tests for BaseFactory that verify:
-1. Constructor properly initializes settings and logger
-2. register method adds implementations to the registry
-3. get_implementation returns the correct implementation or raises KeyError
-4. _detect_file_type correctly extracts file extensions
-5. Attempting to instantiate the abstract class directly raises TypeError
-6. Subclassing without implementing create raises TypeError

@@ -1,42 +1,106 @@
 # Task ID: 5
-# Title: Integrate Environment Manager Detection into CLI Module
-# Status: done
-# Dependencies: 2, 3, 4
-# Priority: high
-# Description: Update the existing CLI module to use the environment manager detection service for command execution
+# Title: Implement Error Handling Utilities
+# Status: pending
+# Dependencies: 1
+# Priority: medium
+# Description: Create standardized error handling utilities to consolidate repeated try-catch-log patterns across the codebase.
 # Details:
-Modify the existing CLI module to use the environment manager detection service:
+Create `src/pytest_analyzer/core/cross_cutting/error_handling.py` with the following implementation:
 
 ```python
-from pathlib import Path
-from typing import Optional
+from contextlib import contextmanager
+from typing import Optional, Type, TypeVar, Callable, Any, Union, List
+import logging
+import functools
+import traceback
+import sys
 
-from .detection import EnvironmentManagerDetector
-from .protocol import EnvironmentManager
+# Import from the new structure
+from pytest_analyzer.core.interfaces.errors import BaseError
 
-class CLI:
-    def __init__(self):
-        self.detector = EnvironmentManagerDetector()
-        self.current_manager: Optional[EnvironmentManager] = None
+T = TypeVar('T')
+E = TypeVar('E', bound=BaseError)
 
-    def initialize(self, project_path: Path) -> None:
-        """Initialize the CLI with the appropriate environment manager"""
-        self.current_manager = self.detector.detect(project_path)
+@contextmanager
+def error_context(operation_name: str, logger: Optional[logging.Logger] = None,
+                 error_type: Optional[Type[E]] = None, reraise: bool = True):
+    """Standard error context manager for consistent error handling.
 
-    def execute_command(self, command: list[str], project_path: Path) -> int:
-        """Execute a command using the appropriate environment manager"""
-        if not self.current_manager:
-            self.initialize(project_path)
+    Args:
+        operation_name: Name of the operation being performed for logging
+        logger: Logger instance to use (creates one if not provided)
+        error_type: Custom error type to raise instead of the original
+        reraise: Whether to re-raise the exception (True) or suppress it (False)
+    """
+    logger = logger or logging.getLogger("error_context")
+    try:
+        yield
+    except Exception as e:
+        exc_info = sys.exc_info()
+        logger.error(f"{operation_name} failed: {str(e)}")
+        logger.debug(f"Exception details: {traceback.format_exception(*exc_info)}")
 
-        if self.current_manager:
-            return self.current_manager.execute_command(command)
-        else:
-            # Fall back to direct execution if no environment manager is detected
-            import subprocess
-            return subprocess.call(command, cwd=project_path)
+        if reraise:
+            if error_type:
+                raise error_type(f"{operation_name}: {str(e)}") from e
+            raise
+
+def error_handler(operation_name: str, error_type: Optional[Type[E]] = None,
+                 reraise: bool = True, logger: Optional[logging.Logger] = None):
+    """Decorator for consistent error handling across functions.
+
+    Args:
+        operation_name: Name of the operation being performed for logging
+        error_type: Custom error type to raise instead of the original
+        reraise: Whether to re-raise the exception (True) or suppress it (False)
+        logger: Logger instance to use (creates one if not provided)
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            nonlocal logger
+            logger = logger or logging.getLogger(func.__module__)
+            with error_context(operation_name, logger, error_type, reraise):
+                return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+def batch_operation(items: List[T], operation: Callable[[T], Any],
+                   operation_name: str, continue_on_error: bool = False,
+                   logger: Optional[logging.Logger] = None) -> List[Any]:
+    """Process a batch of items with consistent error handling.
+
+    Args:
+        items: List of items to process
+        operation: Function to apply to each item
+        operation_name: Name of the operation for logging
+        continue_on_error: Whether to continue processing after errors
+        logger: Logger instance to use
+
+    Returns:
+        List of results from successful operations
+    """
+    logger = logger or logging.getLogger("batch_operation")
+    results = []
+
+    for i, item in enumerate(items):
+        try:
+            result = operation(item)
+            results.append(result)
+        except Exception as e:
+            logger.error(f"{operation_name} failed for item {i}: {str(e)}")
+            if not continue_on_error:
+                raise
+
+    return results
 ```
 
-Ensure that the CLI maintains backward compatibility with existing behavior while adding the new environment manager detection functionality.
+This module provides standardized error handling utilities that can be used across the codebase to replace repeated try-catch-log patterns.
 
 # Test Strategy:
-Create unit tests for the CLI module with mocked environment managers. Test initialization and command execution with different environment managers. Test fallback behavior when no environment manager is detected. Create integration tests that verify end-to-end functionality with real commands.
+Create unit tests for error handling utilities that verify:
+1. error_context correctly logs exceptions and re-raises them
+2. error_context with reraise=False suppresses exceptions
+3. error_context with custom error_type wraps exceptions in the specified type
+4. error_handler decorator properly wraps functions with error handling
+5. batch_operation correctly processes items and handles errors according to continue_on_error

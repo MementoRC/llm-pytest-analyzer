@@ -1,79 +1,62 @@
 # Task ID: 7
-# Title: Implement CLI Flags for Environment Manager Override
-# Status: done
-# Dependencies: 5, 6
+# Title: Migrate Remaining Environment Managers to Base Class
+# Status: pending
+# Dependencies: 2, 6
 # Priority: medium
-# Description: Add command-line flags to allow users to override the environment manager detection
+# Description: Refactor Pixi, Hatch, UV, and Pipenv environment managers to inherit from BaseEnvironmentManager.
 # Details:
-Extend the CLI argument parsing to support environment manager override flags:
+Refactor the remaining environment managers following the same pattern as PoetryEnvironmentManager:
 
+1. For PixiEnvironmentManager:
 ```python
-import argparse
 from pathlib import Path
+from typing import List
 
-class CLIParser:
-    def __init__(self):
-        self.parser = argparse.ArgumentParser(description="pytest-analyzer CLI")
-        self._configure_parser()
+from pytest_analyzer.core.infrastructure.environment.base_manager import BaseEnvironmentManager
+from pytest_analyzer.core.cross_cutting.error_handling import error_context
 
-    def _configure_parser(self) -> None:
-        """Configure the argument parser"""
-        # Existing arguments...
+class PixiEnvironmentManager(BaseEnvironmentManager):
+    """Pixi-specific environment manager implementation."""
 
-        # Add environment manager group
-        env_group = self.parser.add_argument_group("Environment Manager")
-        env_group.add_argument(
-            "--env-manager",
-            choices=["auto", "pixi", "poetry", "hatch", "uv", "pipenv", "pip+venv"],
-            default="auto",
-            help="Specify the environment manager to use (default: auto-detect)"
-        )
+    def __init__(self, project_path: Path):
+        super().__init__(project_path)
+        self.pixi_executable = "pixi"
 
-    def parse(self, args=None):
-        """Parse command-line arguments"""
-        return self.parser.parse_args(args)
+    def build_command(self, base_command: List[str]) -> List[str]:
+        """Build a Pixi-specific command to run the given base command."""
+        with error_context("Building Pixi command", self.logger):
+            return [self.pixi_executable, "run"] + base_command
 ```
 
-Update the CLI module to use these flags:
-
+2. For HatchEnvironmentManager:
 ```python
-class CLI:
-    def __init__(self):
-        self.detector = EnvironmentManagerDetector()
-        self.config = Configuration()
-        self.parser = CLIParser()
-        self.current_manager: Optional[EnvironmentManager] = None
+from pathlib import Path
+from typing import List
 
-    def run(self, args=None) -> int:
-        """Run the CLI with the given arguments"""
-        parsed_args = self.parser.parse(args)
-        project_path = Path(parsed_args.project_path or ".").absolute()
+from pytest_analyzer.core.infrastructure.environment.base_manager import BaseEnvironmentManager
+from pytest_analyzer.core.cross_cutting.error_handling import error_context
 
-        # Load configuration
-        self.config.load(project_path)
+class HatchEnvironmentManager(BaseEnvironmentManager):
+    """Hatch-specific environment manager implementation."""
 
-        # Determine environment manager
-        if parsed_args.env_manager != "auto":
-            # CLI flag takes highest priority
-            self.current_manager = self._get_manager_by_name(parsed_args.env_manager, project_path)
-        else:
-            # Check config override
-            override = self.config.get_environment_manager_override()
-            if override:
-                self.current_manager = self._get_manager_by_name(override, project_path)
-            else:
-                # Auto-detect
-                self.current_manager = self.detector.detect(project_path)
+    def __init__(self, project_path: Path):
+        super().__init__(project_path)
+        self.hatch_executable = "hatch"
 
-        # Execute the command
-        command = self._build_command(parsed_args)
-        if self.current_manager:
-            return self.current_manager.execute_command(command)
-        else:
-            # Fall back to direct execution
-            import subprocess
-            return subprocess.call(command, cwd=project_path)
+    def build_command(self, base_command: List[str]) -> List[str]:
+        """Build a Hatch-specific command to run the given base command."""
+        with error_context("Building Hatch command", self.logger):
+            return [self.hatch_executable, "run"] + base_command
 ```
+
+3. For UVEnvironmentManager and PipenvEnvironmentManager, follow the same pattern.
+
+Ensure each manager only implements the methods that differ from the base class implementation.
 
 # Test Strategy:
-Create unit tests for the CLI parser with various argument combinations. Test that environment manager flags are correctly parsed. Test integration with the CLI module to ensure flag-based overrides take precedence over configuration-based overrides.
+For each environment manager, create unit tests that verify:
+1. build_command correctly prepends the appropriate executable and commands
+2. Inherited methods from BaseEnvironmentManager work correctly
+3. Integration test that verifies the manager can execute real commands in the appropriate environment
+4. Error handling works correctly when invalid commands are provided
+5. Verify that the refactored managers maintain the same behavior as the original implementations

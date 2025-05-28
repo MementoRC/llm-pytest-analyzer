@@ -1,102 +1,96 @@
 # Task ID: 8
-# Title: Implement Caching Mechanism for Detection Results
-# Status: done
-# Dependencies: 2
+# Title: Implement EnvironmentManagerFactory Using BaseFactory
+# Status: pending
+# Dependencies: 3, 6, 7
 # Priority: medium
-# Description: Create a caching system to avoid repeated file system operations during environment manager detection
+# Description: Create an EnvironmentManagerFactory that inherits from BaseFactory to create the appropriate environment manager based on project configuration.
 # Details:
-Implement a more sophisticated caching mechanism for the environment manager detector:
+Create `src/pytest_analyzer/core/infrastructure/environment/environment_manager_factory.py` with the following implementation:
 
 ```python
 from pathlib import Path
-from typing import Dict, Optional, Type, Tuple
-import time
-import os
+from typing import Type, Optional, Dict
 
-from .protocol import EnvironmentManager
+from pytest_analyzer.core.infrastructure.base_factory import BaseFactory
+from pytest_analyzer.core.infrastructure.environment.base_manager import BaseEnvironmentManager
+from pytest_analyzer.core.infrastructure.environment.poetry_manager import PoetryEnvironmentManager
+from pytest_analyzer.core.infrastructure.environment.pixi_manager import PixiEnvironmentManager
+from pytest_analyzer.core.infrastructure.environment.hatch_manager import HatchEnvironmentManager
+from pytest_analyzer.core.infrastructure.environment.uv_manager import UVEnvironmentManager
+from pytest_analyzer.core.infrastructure.environment.pipenv_manager import PipenvEnvironmentManager
+from pytest_analyzer.core.cross_cutting.configuration.settings import Settings
+from pytest_analyzer.core.cross_cutting.error_handling import error_context
 
-class EnvironmentManagerCache:
-    def __init__(self, max_size: int = 100, ttl: int = 300):
-        self.cache: Dict[Path, Tuple[EnvironmentManager, float, Dict[str, float]]] = {}
-        self.max_size = max_size  # Maximum number of entries
-        self.ttl = ttl  # Time-to-live in seconds
+class EnvironmentManagerFactory(BaseFactory):
+    """Factory for creating environment managers based on project configuration."""
 
-    def get(self, project_path: Path) -> Optional[EnvironmentManager]:
-        """Get a cached environment manager if valid"""
-        if project_path not in self.cache:
-            return None
+    def __init__(self, settings: Optional[Settings] = None):
+        super().__init__(settings)
+        self._register_default_managers()
 
-        manager, timestamp, file_mtimes = self.cache[project_path]
-        current_time = time.time()
+    def _register_default_managers(self) -> None:
+        """Register the default environment managers."""
+        self.register("poetry", PoetryEnvironmentManager)
+        self.register("pixi", PixiEnvironmentManager)
+        self.register("hatch", HatchEnvironmentManager)
+        self.register("uv", UVEnvironmentManager)
+        self.register("pipenv", PipenvEnvironmentManager)
 
-        # Check if cache entry has expired
-        if current_time - timestamp > self.ttl:
-            del self.cache[project_path]
-            return None
+    def create(self, project_path: Path, manager_type: Optional[str] = None) -> BaseEnvironmentManager:
+        """Create an environment manager for the given project path.
 
-        # Check if any relevant files have changed
-        for file_path, mtime in file_mtimes.items():
-            full_path = project_path / file_path
-            if full_path.exists() and os.path.getmtime(full_path) > mtime:
-                del self.cache[project_path]
-                return None
+        Args:
+            project_path: Path to the project directory
+            manager_type: Type of manager to create, or None to auto-detect
 
-        return manager
+        Returns:
+            An instance of the appropriate environment manager
+        """
+        with error_context("Creating environment manager", self.logger):
+            if manager_type is None:
+                manager_type = self._detect_environment_type(project_path)
 
-    def set(self, project_path: Path, manager: EnvironmentManager) -> None:
-        """Cache an environment manager"""
-        # Collect mtimes of relevant files
-        file_mtimes = {}
-        relevant_files = [
-            "pixi.toml", "pyproject.toml", "Pipfile", "Pipfile.lock",
-            "requirements.txt", "uv.lock"
-        ]
+            manager_class = self.get_implementation(manager_type)
+            return manager_class(project_path)
 
-        for file_name in relevant_files:
-            file_path = project_path / file_name
-            if file_path.exists():
-                file_mtimes[file_name] = os.path.getmtime(file_path)
+    def _detect_environment_type(self, project_path: Path) -> str:
+        """Detect the environment type based on project files."""
+        detection_files = {
+            "poetry": "pyproject.toml",  # Look for poetry section
+            "pixi": "pixi.toml",
+            "hatch": "pyproject.toml",  # Look for hatch section
+            "pipenv": "Pipfile",
+            "uv": "pyproject.toml"  # Look for uv section
+        }
 
-        # Add to cache with current timestamp
-        self.cache[project_path] = (manager, time.time(), file_mtimes)
+        # Check for pyproject.toml first and determine the tool
+        if (project_path / "pyproject.toml").exists():
+            # Read the file and check for tool sections
+            with open(project_path / "pyproject.toml", "r") as f:
+                content = f.read()
+                if "[tool.poetry]" in content:
+                    return "poetry"
+                elif "[tool.hatch]" in content:
+                    return "hatch"
+                elif "[tool.uv]" in content:
+                    return "uv"
 
-        # Evict oldest entries if cache is too large
-        if len(self.cache) > self.max_size:
-            oldest_path = min(self.cache.keys(), key=lambda p: self.cache[p][1])
-            del self.cache[oldest_path]
+        # Check for other files
+        for env_type, filename in detection_files.items():
+            if (project_path / filename).exists():
+                return env_type
+
+        # Default to poetry if nothing else is detected
+        self.logger.warning(f"Could not detect environment type for {project_path}, defaulting to poetry")
+        return "poetry"
 ```
 
-Update the detector to use this cache:
-
-```python
-class EnvironmentManagerDetector:
-    def __init__(self):
-        self._managers: List[Type[EnvironmentManager]] = [
-            PixiManager,
-            PoetryManager,
-            HatchManager,
-            UVManager,
-            PipenvManager,
-            PipVenvManager
-        ]
-        self._cache = EnvironmentManagerCache()
-
-    def detect(self, project_path: Path) -> Optional[EnvironmentManager]:
-        """Detect and return the appropriate environment manager for the project"""
-        # Check cache first
-        cached_manager = self._cache.get(project_path)
-        if cached_manager:
-            return cached_manager
-
-        # Try each manager
-        for manager_cls in self._managers:
-            if manager_cls.detect(project_path):
-                manager = manager_cls(project_path)
-                self._cache.set(project_path, manager)
-                return manager
-
-        return None
-```
+This factory uses the BaseFactory to eliminate code duplication while providing environment manager-specific functionality.
 
 # Test Strategy:
-Create unit tests for the caching mechanism with mock file systems. Test cache hits, misses, and invalidation based on file changes. Test time-based expiration. Test cache size limits and eviction policies. Measure performance improvements from caching in integration tests.
+Create unit tests for EnvironmentManagerFactory that verify:
+1. _register_default_managers correctly registers all environment managers
+2. create returns the correct manager type when explicitly specified
+3. _detect_environment_type correctly identifies environment types based on project files
+4. Integration test with different project structures to verify auto-detection works
+5. Error handling for invalid manager types

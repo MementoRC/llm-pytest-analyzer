@@ -24,11 +24,21 @@
             "DEBUG": "1"
           }
         },
+        "github": {
+           "command": "npx",
+           "args": [
+	     "-y",
+	     "@modelcontextprotocol/server-github"
+           ],
+           "env": {
+               	"GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+           }
+        },
         "aider": {
           "command": "uv",
           "args": [
             "--directory",
-            "/home/memento/ClaudeCode/aider-sse-worktree/feature-refactor-sse-coordinator",
+            "/home/memento/ClaudeCode/git_servers/src/aider-mcp-server",
             "run",
             "mcp-aider-server",
             "--server-mode",

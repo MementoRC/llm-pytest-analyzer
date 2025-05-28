@@ -1,89 +1,42 @@
 # Task ID: 6
-# Title: Implement Configuration System for Environment Manager Overrides
-# Status: done
-# Dependencies: 5
+# Title: Migrate PoetryEnvironmentManager to Use Base Class
+# Status: pending
+# Dependencies: 2
 # Priority: medium
-# Description: Extend the existing configuration system to support manual overrides of environment manager detection
+# Description: Refactor the PoetryEnvironmentManager to inherit from BaseEnvironmentManager and eliminate duplicated code.
 # Details:
-Extend the configuration system to allow users to manually specify which environment manager to use:
+Refactor `src/pytest_analyzer/core/infrastructure/environment/poetry_manager.py` to use the new base class:
 
 ```python
 from pathlib import Path
-from typing import Optional, Dict, Any
-import json
-import os
+from typing import List
 
-class Configuration:
-    def __init__(self):
-        self.config: Dict[str, Any] = {}
-        self.loaded = False
+# Import from the new structure
+from pytest_analyzer.core.infrastructure.environment.base_manager import BaseEnvironmentManager
+from pytest_analyzer.core.cross_cutting.error_handling import error_context
 
-    def load(self, project_path: Path) -> None:
-        """Load configuration from project and user config files"""
-        # Load global config
-        user_config_path = Path.home() / ".pytest-analyzer" / "config.json"
-        if user_config_path.exists():
-            with open(user_config_path, 'r') as f:
-                self.config.update(json.load(f))
+class PoetryEnvironmentManager(BaseEnvironmentManager):
+    """Poetry-specific environment manager implementation."""
 
-        # Load project config (overrides global)
-        project_config_path = project_path / ".pytest-analyzer.json"
-        if project_config_path.exists():
-            with open(project_config_path, 'r') as f:
-                self.config.update(json.load(f))
+    def __init__(self, project_path: Path):
+        super().__init__(project_path)
+        self.poetry_executable = "poetry"
 
-        # Load environment variables (override files)
-        env_manager = os.environ.get("PYTEST_ANALYZER_ENV_MANAGER")
-        if env_manager:
-            self.config["environment_manager"] = env_manager
+    def build_command(self, base_command: List[str]) -> List[str]:
+        """Build a Poetry-specific command to run the given base command."""
+        with error_context("Building Poetry command", self.logger):
+            return [self.poetry_executable, "run"] + base_command
 
-        self.loaded = True
-
-    def get_environment_manager_override(self) -> Optional[str]:
-        """Get the manually specified environment manager, if any"""
-        return self.config.get("environment_manager")
+    # Only implement methods that differ from the base class
+    # activate and deactivate can use the base class no-op implementations
+    # execute_command can use the base class implementation
 ```
 
-Update the CLI module to use this configuration:
-
-```python
-class CLI:
-    def __init__(self):
-        self.detector = EnvironmentManagerDetector()
-        self.config = Configuration()
-        self.current_manager: Optional[EnvironmentManager] = None
-
-    def initialize(self, project_path: Path) -> None:
-        """Initialize the CLI with the appropriate environment manager"""
-        # Load configuration
-        self.config.load(project_path)
-
-        # Check for override
-        override = self.config.get_environment_manager_override()
-        if override:
-            # Use the specified manager
-            self.current_manager = self._get_manager_by_name(override, project_path)
-        else:
-            # Auto-detect
-            self.current_manager = self.detector.detect(project_path)
-
-    def _get_manager_by_name(self, name: str, project_path: Path) -> Optional[EnvironmentManager]:
-        """Get an environment manager by name"""
-        # Map names to manager classes
-        managers = {
-            "pixi": PixiManager,
-            "poetry": PoetryManager,
-            "hatch": HatchManager,
-            "uv": UVManager,
-            "pipenv": PipenvManager,
-            "pip+venv": PipVenvManager
-        }
-
-        manager_cls = managers.get(name.lower())
-        if manager_cls:
-            return manager_cls(project_path)
-        return None
-```
+Repeat this pattern for other environment managers (Pixi, Hatch, UV, Pipenv) to eliminate code duplication while preserving specific behavior for each manager.
 
 # Test Strategy:
-Create unit tests for the configuration system with mock configuration files. Test loading from different sources (global, project, environment variables). Test priority of configuration sources. Test integration with the CLI module to ensure overrides work correctly.
+Create unit tests for PoetryEnvironmentManager that verify:
+1. build_command correctly prepends 'poetry run' to commands
+2. Inherited methods from BaseEnvironmentManager work correctly
+3. Integration test that verifies the manager can execute real commands in a Poetry environment
+4. Error handling works correctly when invalid commands are provided

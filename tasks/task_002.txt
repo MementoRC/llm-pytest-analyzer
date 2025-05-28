@@ -1,55 +1,53 @@
 # Task ID: 2
-# Title: Implement Environment Manager Detection Service
+# Title: Implement BaseEnvironmentManager Abstract Class
 # Status: done
 # Dependencies: 1
 # Priority: high
-# Description: Create a service that detects which environment manager is being used in a project based on project files
+# Description: Create a base abstract class for environment managers to eliminate code duplication across Poetry, Pixi, Hatch, UV, and Pipenv managers.
 # Details:
-Implement a detection service that examines project files to determine which environment manager is in use:
+Create `src/pytest_analyzer/core/infrastructure/environment/base_manager.py` with the following implementation:
 
 ```python
+from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional, Type, List
-import toml
+import subprocess
+from typing import List, Optional
+import logging
 
-from .protocol import EnvironmentManager
-from .managers import PixiManager, PoetryManager, HatchManager, UVManager, PipenvManager, PipVenvManager
+class BaseEnvironmentManager(ABC):
+    """Base class for all environment managers to eliminate code duplication."""
 
-class EnvironmentManagerDetector:
-    def __init__(self):
-        self._managers: List[Type[EnvironmentManager]] = [
-            PixiManager,
-            PoetryManager,
-            HatchManager,
-            UVManager,
-            PipenvManager,
-            PipVenvManager
-        ]
-        self._cache = {}
+    def __init__(self, project_path: Path):
+        self.project_path = project_path
+        self.logger = logging.getLogger(self.__class__.__name__)
 
-    def detect(self, project_path: Path) -> Optional[EnvironmentManager]:
-        """Detect and return the appropriate environment manager for the project"""
-        # Check cache first
-        if project_path in self._cache:
-            return self._cache[project_path]
+    def execute_command(self, command: List[str]) -> int:
+        """Common implementation for executing commands in the project directory."""
+        self.logger.debug(f"Executing command: {' '.join(command)}")
+        return subprocess.call(command, cwd=self.project_path)
 
-        # Try each manager
-        for manager_cls in self._managers:
-            if manager_cls.detect(project_path):
-                manager = manager_cls(project_path)
-                self._cache[project_path] = manager
-                return manager
+    def activate(self) -> None:
+        """Default no-op implementation for environment activation."""
+        self.logger.debug("Environment activation not required")
+        pass
 
-        return None
+    def deactivate(self) -> None:
+        """Default no-op implementation for environment deactivation."""
+        self.logger.debug("Environment deactivation not required")
+        pass
+
+    @abstractmethod
+    def build_command(self, base_command: List[str]) -> List[str]:
+        """Manager-specific command building logic to be implemented by subclasses."""
+        pass
 ```
 
-Ensure the detection logic follows the specified rules in the PRD:
-- Pixi: Check for pixi.toml file
-- Poetry: Check for pyproject.toml with [tool.poetry] section
-- Hatch: Check for pyproject.toml with [tool.hatch] section
-- UV: Check for uv.lock file or pyproject.toml with UV configuration
-- Pipenv: Check for Pipfile or Pipfile.lock
-- Pip+Venv: Check for requirements.txt with virtual environment
+This base class extracts the common functionality identified in the PRD from the existing environment manager implementations.
 
 # Test Strategy:
-Create unit tests with mock file systems to test detection of each environment manager. Include tests for edge cases like multiple environment managers present, no environment managers, and invalid configurations. Test caching behavior to ensure it works correctly.
+Create unit tests for BaseEnvironmentManager that verify:
+1. Constructor properly initializes project_path
+2. execute_command correctly calls subprocess.call with the right arguments
+3. Default activate/deactivate methods don't raise exceptions
+4. Attempting to instantiate the abstract class directly raises TypeError
+5. Subclassing without implementing build_command raises TypeError
