@@ -129,8 +129,8 @@ class AnalyzerService:
             self.logger.info(f"Generated suggestion for failure ID: {failure.id}")
             return suggestion
         except Exception as e:
-            self.logger.error(
-                f"Error during analysis or suggestion for failure ID {failure.id} ({failure.test_name}): {e}",
+            self.logger.warning(
+                f"Error during analysis or suggestion for failure ID {failure.id}: {e}",
                 exc_info=True,
             )
             fallback_suggestion = FixSuggestion.create(
