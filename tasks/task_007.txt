@@ -1,6 +1,6 @@
 # Task ID: 7
 # Title: Implement CLI Flags for Environment Manager Override
-# Status: in-progress
+# Status: done
 # Dependencies: 5, 6
 # Priority: medium
 # Description: Add command-line flags to allow users to override the environment manager detection
