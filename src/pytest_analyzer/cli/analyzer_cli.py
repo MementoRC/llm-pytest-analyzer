@@ -25,6 +25,15 @@ from ..core.analyzer_service import PytestAnalyzerService
 from ..core.models.pytest_failure import FixSuggestion, PytestFailure
 from ..utils.settings import Settings, load_settings
 
+# Load environment variables from .env file if present
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()  # Load .env from current directory or parent directories
+except ImportError:
+    # python-dotenv not available, continue without it
+    pass
+
 # Setup rich console
 console = Console()
 
