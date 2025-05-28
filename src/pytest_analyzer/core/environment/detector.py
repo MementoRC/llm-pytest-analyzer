@@ -5,13 +5,35 @@ This module provides a detector class to identify the active environment
 manager in a given project path based on characteristic project files.
 """
 
+import time
+from collections import OrderedDict
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Type
+from typing import Dict, List, Optional, Type
 
 from .pixi import PixiManager
 
 # TODO: When actual manager implementations are available, import them instead of placeholders.
 from .protocol import EnvironmentManager
+
+RELEVANT_PROJECT_FILES = [
+    "pixi.toml",
+    "pyproject.toml",
+    "Pipfile",
+    "Pipfile.lock",
+    "requirements.txt",
+    "uv.lock",
+]
+
+
+@dataclass
+class CacheEntry:
+    """Represents an entry in the EnvironmentManagerCache."""
+
+    manager_instance: Optional[EnvironmentManager]
+    timestamp: float = field(default_factory=time.monotonic)
+    file_mtimes: Dict[str, float] = field(default_factory=dict)
+
 
 # --- Placeholder Manager Implementations ---
 # These are simplified versions for the detector to work with.
@@ -140,6 +162,121 @@ DEFAULT_MANAGERS: List[Type[EnvironmentManager]] = [
 ]
 
 
+# --- EnvironmentManagerCache Class ---
+
+
+class EnvironmentManagerCache:
+    """
+    Caches detected EnvironmentManager instances for project paths.
+
+    Features:
+    - Time-based expiration (TTL) for cache entries.
+    - File modification time tracking for cache invalidation.
+    - LRU (Least Recently Used) eviction policy when cache size limit is reached.
+    """
+
+    def __init__(self, max_size: int = 128, ttl: int = 300):
+        """
+        Initializes the cache.
+
+        Args:
+            max_size: Maximum number of entries in the cache.
+            ttl: Time-to-live for cache entries in seconds.
+        """
+        self.max_size = max_size
+        self.ttl = ttl
+        self._cache: OrderedDict[Path, CacheEntry] = OrderedDict()
+
+    def _get_relevant_file_mtimes(self, project_path: Path) -> Dict[str, float]:
+        """
+        Gets the modification times of relevant project files.
+
+        Args:
+            project_path: The root path of the project.
+
+        Returns:
+            A dictionary mapping filenames to their modification timestamps.
+        """
+        mtimes: Dict[str, float] = {}
+        for filename in RELEVANT_PROJECT_FILES:
+            file_path = project_path / filename
+            if file_path.is_file():
+                try:
+                    mtimes[filename] = file_path.stat().st_mtime
+                except FileNotFoundError:
+                    # File might have been deleted between is_file() and stat()
+                    pass
+        return mtimes
+
+    def get(self, project_path: Path) -> Optional[CacheEntry]:
+        """
+        Retrieves a cache entry for the given project path if valid.
+
+        Args:
+            project_path: The project path to look up.
+
+        Returns:
+            The CacheEntry if found and valid, otherwise None.
+        """
+        if project_path not in self._cache:
+            return None
+
+        entry = self._cache[project_path]
+
+        # Check TTL
+        if time.monotonic() - entry.timestamp > self.ttl:
+            del self._cache[project_path]
+            return None
+
+        # Check file modification times
+        current_mtimes = self._get_relevant_file_mtimes(project_path)
+        if current_mtimes != entry.file_mtimes:
+            del self._cache[project_path]
+            return None
+
+        # Valid entry, move to end for LRU
+        self._cache.move_to_end(project_path)
+        return entry
+
+    def set(
+        self, project_path: Path, manager_instance: Optional[EnvironmentManager]
+    ) -> None:
+        """
+        Adds or updates a cache entry for the given project path.
+
+        Args:
+            project_path: The project path.
+            manager_instance: The EnvironmentManager instance to cache (can be None).
+        """
+        if project_path in self._cache:
+            del self._cache[project_path]  # Remove to re-insert at the end
+        elif len(self._cache) >= self.max_size:
+            self._cache.popitem(last=False)  # Evict LRU item
+
+        current_mtimes = self._get_relevant_file_mtimes(project_path)
+        entry = CacheEntry(
+            manager_instance=manager_instance, file_mtimes=current_mtimes
+        )
+        self._cache[project_path] = entry
+
+    def remove(self, project_path: Path) -> None:
+        """
+        Removes a specific entry from the cache.
+
+        Args:
+            project_path: The project path of the entry to remove.
+        """
+        if project_path in self._cache:
+            del self._cache[project_path]
+
+    def clear_all(self) -> None:
+        """Clears all entries from the cache."""
+        self._cache.clear()
+
+
+_DEFAULT_DETECTOR_CACHE = EnvironmentManagerCache()
+
+
 # --- EnvironmentManagerDetector Class ---
 
 
@@ -156,6 +293,7 @@ class EnvironmentManagerDetector:
         self,
         project_path: Path,
         manager_classes: Optional[List[Type[EnvironmentManager]]] = None,
+        cache: Optional[EnvironmentManagerCache] = None,  # Add cache parameter
     ):
         """
         Initializes the detector.
@@ -165,85 +303,89 @@ class EnvironmentManagerDetector:
             manager_classes: An optional list of environment manager classes
                              to use for detection, in order of priority.
                              If None, uses DEFAULT_MANAGERS.
+            cache: An optional instance of EnvironmentManagerCache.
+                   If None, a default cache instance is created.
         """
         self.project_path = project_path
         self.manager_classes = manager_classes or DEFAULT_MANAGERS
-        self._detected_manager_type: Optional[Type[EnvironmentManager]] = None
-        self._active_manager_instance: Optional[EnvironmentManager] = None
-        self._detection_done: bool = False
+        self.cache = cache or EnvironmentManagerCache()  # Initialize cache
 
-    def detect_environment(self) -> Optional[Type[EnvironmentManager]]:
+    @classmethod
+    def detect(
+        cls,
+        project_path: Path,
+        manager_classes: Optional[List[Type[EnvironmentManager]]] = None,
+        cache: Optional[EnvironmentManagerCache] = None,
+    ) -> Optional[EnvironmentManager]:
         """
-        Detects the environment manager type based on project files.
+        Detects and returns an instance of the active environment manager for a given path.
 
-        Iterates through the registered manager classes in order and returns
-        the type of the first one that successfully detects its presence.
-        Caches the result of the first detection.
+        Results are cached based on TTL and project file modification times.
+        If a manager type is detected but instantiation fails, this failure
+        (represented as None) is also cached.
+
+        Args:
+            project_path: The root path of the project to analyze.
+            manager_classes: An optional list of environment manager classes
+                             to use for detection, in order of priority.
+                             If None, uses DEFAULT_MANAGERS.
+            cache: An optional instance of EnvironmentManagerCache.
+                   If None, a global default cache instance is used.
 
         Returns:
-            The class (type) of the detected environment manager, or None if no
-            manager is detected.
+            An instance of the detected EnvironmentManager, or None if no
+            manager is detected, or if instantiation fails.
         """
-        if self._detection_done:
-            return self._detected_manager_type
+        effective_cache = cache if cache is not None else _DEFAULT_DETECTOR_CACHE
+        effective_manager_classes = manager_classes or DEFAULT_MANAGERS
 
-        for manager_class in self.manager_classes:
+        cached_entry = effective_cache.get(project_path)
+        if cached_entry is not None:
+            return cached_entry.manager_instance
+
+        detected_manager_instance: Optional[EnvironmentManager] = None
+
+        for manager_class in effective_manager_classes:
             try:
-                if manager_class.detect(self.project_path):
-                    self._detected_manager_type = manager_class
-                    break  # Found the first manager
+                if manager_class.detect(project_path):
+                    try:
+                        # Pass project_path to the constructor.
+                        detected_manager_instance = manager_class(
+                            project_path=project_path
+                        )  # type: ignore
+                        # Successfully instantiated
+                    except Exception:
+                        # TODO: Add proper logging for instantiation errors.
+                        # Instantiation failed, result is None for this detection cycle.
+                        detected_manager_instance = None
+                    break  # Stop after first detected manager type (whether instantiated or not)
             except Exception:
                 # TODO: Add proper logging for detection errors.
-                # For now, silently continue to allow other detectors to run.
+                # Silently continue to allow other detectors to run.
                 pass
 
-        self._detection_done = True
-        return self._detected_manager_type
+        effective_cache.set(project_path, detected_manager_instance)
+        return detected_manager_instance
 
     def get_active_manager(self) -> Optional[EnvironmentManager]:
         """
-        Gets an instance of the active environment manager.
+        Gets an instance of the active environment manager for the project path
+        configured in this detector instance.
 
-        If a manager has already been detected and instantiated, returns the
-        cached instance. Otherwise, performs detection and, if successful,
-        instantiates the detected manager.
+        This method uses the `detect` class method, passing its own
+        project_path, manager_classes, and cache instance.
 
         Returns:
             An instance of the detected EnvironmentManager, or None if no
             manager is detected or if instantiation fails.
         """
-        if self._active_manager_instance:
-            return self._active_manager_instance
-
-        detected_type = (
-            self.detect_environment()
-        )  # Uses cached type if already detected
-
-        if detected_type:
-            if self._detected_manager_type and isinstance(
-                self._active_manager_instance, self._detected_manager_type
-            ):
-                # This case implies _active_manager_instance was already set for the detected_type
-                return self._active_manager_instance
-
-            try:
-                # Assuming manager constructors are simple (no args or only project_path).
-                # Placeholder managers have simple __init__ from PlaceholderBaseManager.
-                # If real managers need project_path, their __init__ must accept it,
-                # or they should be factories.
-                # Pass project_path to the constructor.
-                self._active_manager_instance = detected_type(
-                    project_path=self.project_path
-                )  # type: ignore
-                return self._active_manager_instance
-            except Exception:
-                # TODO: Add proper logging for instantiation errors.
-                self._active_manager_instance = None  # Ensure it's None on failure
-                return None
-        return None
+        # Calls the class method `detect` using the instance's specific configuration.
+        return EnvironmentManagerDetector.detect(
+            project_path=self.project_path,
+            manager_classes=self.manager_classes,
+            cache=self.cache,
+        )
 
     def clear_cache(self) -> None:
-        """Clears the cached detected manager type and instance."""
-        self._detected_manager_type = None
-        self._active_manager_instance = None
-        self._detection_done = False
+        """Clears the cached detection result for this detector's project_path."""
+        self.cache.remove(self.project_path)
