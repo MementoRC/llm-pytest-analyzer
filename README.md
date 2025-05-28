@@ -46,6 +46,7 @@ pytest-analyzer path/to/tests --timeout 600 --max-memory 2048
 # Additional pytest arguments
 pytest-analyzer path/to/tests --pytest-args "--verbose --no-header"
 pytest-analyzer path/to/tests -k "test_specific_function"
+pytest-analyzer path/to/tests --env-manager poetry
 ```
 
 ### Python API
@@ -126,6 +127,33 @@ settings = Settings(
 
 analyzer = PytestAnalyzerService(settings=settings)
 suggestions = analyzer.run_and_analyze("tests/")
+```
+
+### Environment Manager Integration
+
+`pytest-analyzer` can automatically detect and integrate with various Python environment managers to ensure that `pytest` is executed within the correct project environment. This is crucial for projects that rely on specific package versions or configurations managed by tools like Pixi, Poetry, Hatch, UV, Pipenv, or a standard Pip+Venv setup.
+
+**Supported Environment Managers:**
+
+- **Pixi**: Detected by the presence of a `pixi.toml` file.
+- **Poetry**: Detected by a `pyproject.toml` file containing a `[tool.poetry]` section.
+- **Hatch**: Detected by a `pyproject.toml` file containing a `[tool.hatch]` section.
+- **UV**: Detected by a `uv.lock` file or a `pyproject.toml` file with a `[tool.uv]` section.
+- **Pipenv**: Detected by `Pipfile` or `Pipfile.lock`.
+- **Pip+Venv**: Detected by `requirements.txt` (often used as a fallback if a virtual environment is active).
+
+**How it Works:**
+
+By default, `pytest-analyzer` attempts to auto-detect the active environment manager. You can also manually specify which manager to use via a CLI flag, configuration file, or environment variable. This ensures that commands, especially `pytest` execution, are prefixed correctly (e.g., `poetry run pytest ...`, `hatch run pytest ...`).
+
+For more detailed information on detection logic, configuration hierarchy, and troubleshooting, please refer to the [Environment Managers Documentation](docs/environment-managers.md).
+
+**CLI Example:**
+```bash
+# Let pytest-analyzer auto-detect the environment manager
+pytest-analyzer path/to/tests
+# Explicitly specify an environment manager
+pytest-analyzer path/to/tests --env-manager poetry
 ```
 
 ### Resource Monitoring
