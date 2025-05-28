@@ -1,0 +1,2 @@
+# Minimal requirements for a pip+venv project example
+pytest>=7.0

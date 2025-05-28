@@ -1,150 +1,102 @@
 # Task ID: 8
-# Title: Implement Analyzer State Machine
+# Title: Implement Caching Mechanism for Detection Results
 # Status: done
-# Dependencies: 2, 3, 4, 5, 6, 7
-# Priority: high
-# Description: Create a state machine implementation for the test analysis workflow.
+# Dependencies: 2
+# Priority: medium
+# Description: Create a caching system to avoid repeated file system operations during environment manager detection
 # Details:
-Implement a concrete state machine for the test analysis workflow:
+Implement a more sophisticated caching mechanism for the environment manager detector:
 
 ```python
-from enum import Enum, auto
-from typing import Dict, Any, List, Optional
+from pathlib import Path
+from typing import Dict, Optional, Type, Tuple
+import time
+import os
 
-class AnalyzerState(Enum):
-    INITIALIZE = auto()
-    EXTRACT_TEST_RESULTS = auto()
-    ANALYZE_FAILURES = auto()
-    GENERATE_SUGGESTIONS = auto()
-    APPLY_FIXES = auto()
-    COMPLETE = auto()
-    ERROR = auto()
+from .protocol import EnvironmentManager
 
-class AnalyzerStateMachine(StateMachine[AnalyzerState]):
-    def __init__(self, di_container: DIContainer):
-        super().__init__(AnalyzerState.INITIALIZE)
-        self.di_container = di_container
+class EnvironmentManagerCache:
+    def __init__(self, max_size: int = 100, ttl: int = 300):
+        self.cache: Dict[Path, Tuple[EnvironmentManager, float, Dict[str, float]]] = {}
+        self.max_size = max_size  # Maximum number of entries
+        self.ttl = ttl  # Time-to-live in seconds
 
-        # Register states
-        self.add_state(AnalyzerState.INITIALIZE, self._initialize)
-        self.add_state(AnalyzerState.EXTRACT_TEST_RESULTS, self._extract_test_results)
-        self.add_state(AnalyzerState.ANALYZE_FAILURES, self._analyze_failures)
-        self.add_state(AnalyzerState.GENERATE_SUGGESTIONS, self._generate_suggestions)
-        self.add_state(AnalyzerState.APPLY_FIXES, self._apply_fixes)
-        self.add_state(AnalyzerState.COMPLETE, self._complete)
-        self.add_state(AnalyzerState.ERROR, self._handle_error)
+    def get(self, project_path: Path) -> Optional[EnvironmentManager]:
+        """Get a cached environment manager if valid"""
+        if project_path not in self.cache:
+            return None
 
-        # Register transitions
-        self.add_transition(
-            AnalyzerState.INITIALIZE,
-            AnalyzerState.EXTRACT_TEST_RESULTS,
-            lambda ctx, **kwargs: ctx.get('initialized', False)
-        )
-        self.add_transition(
-            AnalyzerState.EXTRACT_TEST_RESULTS,
-            AnalyzerState.ANALYZE_FAILURES,
-            lambda ctx, **kwargs: ctx.get('extraction_results') is not None
-        )
-        self.add_transition(
-            AnalyzerState.ANALYZE_FAILURES,
-            AnalyzerState.GENERATE_SUGGESTIONS,
-            lambda ctx, **kwargs: ctx.get('analysis_results') is not None
-        )
-        self.add_transition(
-            AnalyzerState.GENERATE_SUGGESTIONS,
-            AnalyzerState.APPLY_FIXES,
-            lambda ctx, **kwargs: ctx.get('suggestions') is not None and kwargs.get('apply_fixes', False)
-        )
-        self.add_transition(
-            AnalyzerState.GENERATE_SUGGESTIONS,
-            AnalyzerState.COMPLETE,
-            lambda ctx, **kwargs: ctx.get('suggestions') is not None and not kwargs.get('apply_fixes', False)
-        )
-        self.add_transition(
-            AnalyzerState.APPLY_FIXES,
-            AnalyzerState.COMPLETE,
-            lambda ctx, **kwargs: ctx.get('fixes_applied', False)
-        )
+        manager, timestamp, file_mtimes = self.cache[project_path]
+        current_time = time.time()
 
-        # Error transitions from any state
-        for state in AnalyzerState:
-            if state not in [AnalyzerState.COMPLETE, AnalyzerState.ERROR]:
-                self.add_transition(
-                    state,
-                    AnalyzerState.ERROR,
-                    lambda ctx, **kwargs: ctx.get('error') is not None
-                )
+        # Check if cache entry has expired
+        if current_time - timestamp > self.ttl:
+            del self.cache[project_path]
+            return None
 
-    def _initialize(self, context: Dict[str, Any], **kwargs) -> None:
-        try:
-            # Initialize components
-            context['extractor'] = self.di_container.resolve(Extractor)
-            context['analyzer'] = self.di_container.resolve(Analyzer)
-            context['suggester'] = self.di_container.resolve(Suggester)
-            context['applier'] = self.di_container.resolve(Applier)
-            context['initialized'] = True
-        except Exception as e:
-            context['error'] = str(e)
+        # Check if any relevant files have changed
+        for file_path, mtime in file_mtimes.items():
+            full_path = project_path / file_path
+            if full_path.exists() and os.path.getmtime(full_path) > mtime:
+                del self.cache[project_path]
+                return None
 
-    def _extract_test_results(self, context: Dict[str, Any], **kwargs) -> None:
-        try:
-            extractor = context['extractor']
-            test_results = kwargs.get('test_results')
-            if not test_results:
-                raise ValueError("No test results provided")
+        return manager
 
-            context['extraction_results'] = extractor.extract(test_results)
-        except Exception as e:
-            context['error'] = str(e)
+    def set(self, project_path: Path, manager: EnvironmentManager) -> None:
+        """Cache an environment manager"""
+        # Collect mtimes of relevant files
+        file_mtimes = {}
+        relevant_files = [
+            "pixi.toml", "pyproject.toml", "Pipfile", "Pipfile.lock",
+            "requirements.txt", "uv.lock"
+        ]
 
-    def _analyze_failures(self, context: Dict[str, Any], **kwargs) -> None:
-        try:
-            analyzer = context['analyzer']
-            extraction_results = context['extraction_results']
-            context['analysis_results'] = analyzer.analyze(extraction_results)
-        except Exception as e:
-            context['error'] = str(e)
+        for file_name in relevant_files:
+            file_path = project_path / file_name
+            if file_path.exists():
+                file_mtimes[file_name] = os.path.getmtime(file_path)
 
-    def _generate_suggestions(self, context: Dict[str, Any], **kwargs) -> None:
-        try:
-            suggester = context['suggester']
-            analysis_results = context['analysis_results']
-            context['suggestions'] = suggester.suggest(analysis_results)
-        except Exception as e:
-            context['error'] = str(e)
+        # Add to cache with current timestamp
+        self.cache[project_path] = (manager, time.time(), file_mtimes)
 
-    def _apply_fixes(self, context: Dict[str, Any], **kwargs) -> None:
-        try:
-            applier = context['applier']
-            suggestions = context['suggestions']
-            target_files = kwargs.get('target_files', [])
-            context['fixes_applied'] = applier.apply(suggestions, target_files)
-        except Exception as e:
-            context['error'] = str(e)
-
-    def _complete(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        # Return the final results
-        return {
-            'extraction_results': context.get('extraction_results'),
-            'analysis_results': context.get('analysis_results'),
-            'suggestions': context.get('suggestions'),
-            'fixes_applied': context.get('fixes_applied', False)
-        }
-
-    def _handle_error(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        # Return error information
-        return {
-            'error': context.get('error', 'Unknown error'),
-            'state': self.current_state.name,
-            'partial_results': {
-                'extraction_results': context.get('extraction_results'),
-                'analysis_results': context.get('analysis_results'),
-                'suggestions': context.get('suggestions')
-            }
-        }
+        # Evict oldest entries if cache is too large
+        if len(self.cache) > self.max_size:
+            oldest_path = min(self.cache.keys(), key=lambda p: self.cache[p][1])
+            del self.cache[oldest_path]
 ```
 
-This implementation should handle the complete workflow of extracting test results, analyzing failures, generating suggestions, and optionally applying fixes.
+Update the detector to use this cache:
+
+```python
+class EnvironmentManagerDetector:
+    def __init__(self):
+        self._managers: List[Type[EnvironmentManager]] = [
+            PixiManager,
+            PoetryManager,
+            HatchManager,
+            UVManager,
+            PipenvManager,
+            PipVenvManager
+        ]
+        self._cache = EnvironmentManagerCache()
+
+    def detect(self, project_path: Path) -> Optional[EnvironmentManager]:
+        """Detect and return the appropriate environment manager for the project"""
+        # Check cache first
+        cached_manager = self._cache.get(project_path)
+        if cached_manager:
+            return cached_manager
+
+        # Try each manager
+        for manager_cls in self._managers:
+            if manager_cls.detect(project_path):
+                manager = manager_cls(project_path)
+                self._cache.set(project_path, manager)
+                return manager
+
+        return None
+```
 
 # Test Strategy:
-Create unit tests that verify each state transition and handler. Use mocked dependencies to test both successful and error scenarios. Test the complete workflow with different input parameters.
+Create unit tests for the caching mechanism with mock file systems. Test cache hits, misses, and invalidation based on file changes. Test time-based expiration. Test cache size limits and eviction policies. Measure performance improvements from caching in integration tests.

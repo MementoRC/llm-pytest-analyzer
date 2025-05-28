@@ -1,70 +1,57 @@
 # Task ID: 4
-# Title: Implement LLM Service Interface and Base Implementation
+# Title: Implement Poetry, Hatch, UV, Pipenv, and Pip+Venv Managers
 # Status: done
-# Dependencies: 2, 3
+# Dependencies: 1
 # Priority: high
-# Description: Create a properly abstracted LLM service with both synchronous and asynchronous APIs.
+# Description: Create concrete implementations of the Environment Manager protocol for all other supported environment managers
 # Details:
-Implement the LLM service with the following components:
+Implement the remaining environment manager classes following the same pattern as the Pixi manager. Each implementation should:
+
+1. Correctly detect its environment based on project files
+2. Build commands appropriately for that environment
+3. Execute commands in the correct environment context
+
+For example, the Poetry implementation might look like:
 
 ```python
-from typing import Dict, Any, Optional, Protocol
-import aiohttp
-import requests
-from contextlib import contextmanager
+class PoetryManager:
+    @classmethod
+    def detect(cls, project_path: Path) -> bool:
+        """Detect if Poetry is used in the project"""
+        pyproject_path = project_path / "pyproject.toml"
+        if not pyproject_path.exists():
+            return False
 
-class LLMConfig(Protocol):
-    api_key: str
-    model_name: str
-    temperature: float
-    max_tokens: int
-    # Other configuration parameters
-
-class LLMService:
-    def __init__(self, config: LLMConfig):
-        self.config = config
-
-    @contextmanager
-    def _error_context(self, operation: str):
         try:
-            yield
-        except Exception as e:
-            # Log the error with context
-            raise LLMServiceError(f"Error during {operation}: {str(e)}") from e
+            with open(pyproject_path, 'r') as f:
+                config = toml.load(f)
+                return 'tool' in config and 'poetry' in config['tool']
+        except Exception:
+            return False
 
-    def generate(self, prompt: str, **kwargs) -> str:
-        with self._error_context("synchronous generation"):
-            # Implementation for synchronous API call
-            params = {**self.config.__dict__, **kwargs}
-            response = requests.post(
-                "https://api.openai.com/v1/completions",
-                headers={"Authorization": f"Bearer {self.config.api_key}"},
-                json={"prompt": prompt, **params}
-            )
-            response.raise_for_status()
-            return response.json()["choices"][0]["text"]
+    def __init__(self, project_path: Path):
+        self.project_path = project_path
 
-    async def generate_async(self, prompt: str, **kwargs) -> str:
-        with self._error_context("asynchronous generation"):
-            # Implementation for asynchronous API call
-            params = {**self.config.__dict__, **kwargs}
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "https://api.openai.com/v1/completions",
-                    headers={"Authorization": f"Bearer {self.config.api_key}"},
-                    json={"prompt": prompt, **params}
-                ) as response:
-                    if response.status != 200:
-                        text = await response.text()
-                        raise LLMServiceError(f"API error: {response.status}, {text}")
-                    data = await response.json()
-                    return data["choices"][0]["text"]
+    def build_command(self, command: List[str]) -> List[str]:
+        """Build a command with proper Poetry environment context"""
+        return ["poetry", "run"] + command
 
-class LLMServiceError(Exception):
-    pass
+    def execute_command(self, command: List[str]) -> int:
+        """Execute a command within the Poetry environment"""
+        full_command = self.build_command(command)
+        return subprocess.call(full_command, cwd=self.project_path)
+
+    def activate(self) -> None:
+        """Activate the Poetry environment"""
+        subprocess.call(["poetry", "shell"], cwd=self.project_path)
+
+    def deactivate(self) -> None:
+        """Deactivate the Poetry environment"""
+        # Exit the shell or use the appropriate deactivation command
+        pass
 ```
 
-Ensure the implementation is configurable, handles errors properly, and provides both synchronous and asynchronous APIs.
+Implement similar classes for Hatch, UV, Pipenv, and Pip+Venv, each with their specific detection logic and command execution patterns.
 
 # Test Strategy:
-Create unit tests with mocked HTTP responses to test both successful and error scenarios. Test both synchronous and asynchronous APIs. Verify error handling and context managers work as expected.
+Create unit tests for each environment manager implementation. Test detection logic with various project structures. Test command building and execution with mocked subprocess calls. Create integration tests with sample projects for each environment manager type.

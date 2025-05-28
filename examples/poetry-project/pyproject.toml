@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "poetry-example-project"
+version = "0.1.0"
+description = "A minimal Poetry project for pytest-analyzer detection."
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+pytest = "^7.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
