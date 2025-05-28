@@ -22,10 +22,10 @@ T = TypeVar('T')
 E = TypeVar('E', bound=BaseError)
 
 @contextmanager
-def error_context(operation_name: str, logger: Optional[logging.Logger] = None, 
+def error_context(operation_name: str, logger: Optional[logging.Logger] = None,
                  error_type: Optional[Type[E]] = None, reraise: bool = True):
     """Standard error context manager for consistent error handling.
-    
+
     Args:
         operation_name: Name of the operation being performed for logging
         logger: Logger instance to use (creates one if not provided)
@@ -39,16 +39,16 @@ def error_context(operation_name: str, logger: Optional[logging.Logger] = None,
         exc_info = sys.exc_info()
         logger.error(f"{operation_name} failed: {str(e)}")
         logger.debug(f"Exception details: {traceback.format_exception(*exc_info)}")
-        
+
         if reraise:
             if error_type:
                 raise error_type(f"{operation_name}: {str(e)}") from e
             raise
 
-def error_handler(operation_name: str, error_type: Optional[Type[E]] = None, 
+def error_handler(operation_name: str, error_type: Optional[Type[E]] = None,
                  reraise: bool = True, logger: Optional[logging.Logger] = None):
     """Decorator for consistent error handling across functions.
-    
+
     Args:
         operation_name: Name of the operation being performed for logging
         error_type: Custom error type to raise instead of the original
@@ -65,24 +65,24 @@ def error_handler(operation_name: str, error_type: Optional[Type[E]] = None,
         return wrapper
     return decorator
 
-def batch_operation(items: List[T], operation: Callable[[T], Any], 
+def batch_operation(items: List[T], operation: Callable[[T], Any],
                    operation_name: str, continue_on_error: bool = False,
                    logger: Optional[logging.Logger] = None) -> List[Any]:
     """Process a batch of items with consistent error handling.
-    
+
     Args:
         items: List of items to process
         operation: Function to apply to each item
         operation_name: Name of the operation for logging
         continue_on_error: Whether to continue processing after errors
         logger: Logger instance to use
-    
+
     Returns:
         List of results from successful operations
     """
     logger = logger or logging.getLogger("batch_operation")
     results = []
-    
+
     for i, item in enumerate(items):
         try:
             result = operation(item)
@@ -91,7 +91,7 @@ def batch_operation(items: List[T], operation: Callable[[T], Any],
             logger.error(f"{operation_name} failed for item {i}: {str(e)}")
             if not continue_on_error:
                 raise
-    
+
     return results
 ```
 
