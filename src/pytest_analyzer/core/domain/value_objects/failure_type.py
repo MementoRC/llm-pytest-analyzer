@@ -1,17 +1,17 @@
-from enum import Enum, auto
+from enum import Enum
 
 
 class FailureType(Enum):
     """Enumeration of different types of test failures."""
 
-    ASSERTION_ERROR = auto()
-    EXCEPTION = auto()
-    SYNTAX_ERROR = auto()
-    IMPORT_ERROR = auto()
-    TIMEOUT_ERROR = auto()
-    COLLECTION_ERROR = auto()
-    FIXTURE_ERROR = auto()
-    UNKNOWN = auto()
+    ASSERTION_ERROR = "assertion_error"
+    EXCEPTION = "exception"
+    SYNTAX_ERROR = "syntax_error"
+    IMPORT_ERROR = "import_error"
+    TIMEOUT_ERROR = "timeout_error"
+    COLLECTION_ERROR = "collection_error"
+    FIXTURE_ERROR = "fixture_error"
+    UNKNOWN = "unknown"
 
     @classmethod
     def from_error_type(cls, error_type: str) -> "FailureType":
