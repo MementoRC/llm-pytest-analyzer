@@ -23,11 +23,11 @@ from pytest_analyzer.core.cross_cutting.error_handling import error_context
 
 class EnvironmentManagerFactory(BaseFactory):
     """Factory for creating environment managers based on project configuration."""
-
+    
     def __init__(self, settings: Optional[Settings] = None):
         super().__init__(settings)
         self._register_default_managers()
-
+    
     def _register_default_managers(self) -> None:
         """Register the default environment managers."""
         self.register("poetry", PoetryEnvironmentManager)
@@ -35,24 +35,24 @@ class EnvironmentManagerFactory(BaseFactory):
         self.register("hatch", HatchEnvironmentManager)
         self.register("uv", UVEnvironmentManager)
         self.register("pipenv", PipenvEnvironmentManager)
-
+    
     def create(self, project_path: Path, manager_type: Optional[str] = None) -> BaseEnvironmentManager:
         """Create an environment manager for the given project path.
-
+        
         Args:
             project_path: Path to the project directory
             manager_type: Type of manager to create, or None to auto-detect
-
+            
         Returns:
             An instance of the appropriate environment manager
         """
         with error_context("Creating environment manager", self.logger):
             if manager_type is None:
                 manager_type = self._detect_environment_type(project_path)
-
+            
             manager_class = self.get_implementation(manager_type)
             return manager_class(project_path)
-
+    
     def _detect_environment_type(self, project_path: Path) -> str:
         """Detect the environment type based on project files."""
         detection_files = {
@@ -62,7 +62,7 @@ class EnvironmentManagerFactory(BaseFactory):
             "pipenv": "Pipfile",
             "uv": "pyproject.toml"  # Look for uv section
         }
-
+        
         # Check for pyproject.toml first and determine the tool
         if (project_path / "pyproject.toml").exists():
             # Read the file and check for tool sections
@@ -74,12 +74,12 @@ class EnvironmentManagerFactory(BaseFactory):
                     return "hatch"
                 elif "[tool.uv]" in content:
                     return "uv"
-
+        
         # Check for other files
         for env_type, filename in detection_files.items():
             if (project_path / filename).exists():
                 return env_type
-
+        
         # Default to poetry if nothing else is detected
         self.logger.warning(f"Could not detect environment type for {project_path}, defaulting to poetry")
         return "poetry"
