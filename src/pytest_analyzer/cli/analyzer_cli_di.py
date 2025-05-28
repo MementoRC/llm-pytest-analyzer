@@ -107,6 +107,15 @@ def setup_parser() -> argparse.ArgumentParser:
         help="Timeout in seconds for LLM requests (default: 60)",
     )
 
+    # Add new --env-manager argument here
+    parser.add_argument(
+        "--env-manager",
+        type=str.lower,  # Ensure value is lowercase
+        choices=["auto", "pixi", "poetry", "hatch", "uv", "pipenv", "pip+venv"],
+        default="auto",  # Default to auto-detection
+        help="Specify the environment manager to use. 'auto' will attempt to detect it. (default: auto)",
+    )
+
     # Output format options
     parser.add_argument(
         "--format",
@@ -181,6 +190,13 @@ def configure_settings(args: argparse.Namespace) -> Settings:
 
     if args.llm_timeout is not None:
         settings.llm_timeout = args.llm_timeout
+
+    # Environment Manager (CLI takes precedence)
+    # args.env_manager is already lowercase due to type=str.lower in add_argument
+    if args.env_manager == "auto":
+        settings.environment_manager = None  # Force auto-detection
+    else:
+        settings.environment_manager = args.env_manager  # Use specified manager
 
     if args.preferred_format:
         settings.preferred_format = args.preferred_format
