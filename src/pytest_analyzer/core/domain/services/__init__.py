@@ -1,6 +1,7 @@
-"""Domain services containing business logic operations.
+from .base_failure_analyzer import BaseFailureAnalyzer
+from .base_fix_suggester import BaseFixSuggester
 
-Domain services implement business operations that don't naturally
-belong to any single entity or value object.
-Examples: FailureAnalyzer, FixSuggester
-"""
+__all__ = [
+    "BaseFailureAnalyzer",
+    "BaseFixSuggester",
+]

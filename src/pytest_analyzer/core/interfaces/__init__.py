@@ -1,5 +1,7 @@
-"""Interface definitions and contracts.
+from .protocols import FailureAnalyzer, FixSuggester, TestResultRepository
 
-This layer defines protocols, exceptions, and types that establish
-contracts between different layers of the application.
-"""
+__all__ = [
+    "FailureAnalyzer",
+    "FixSuggester",
+    "TestResultRepository",
+]
