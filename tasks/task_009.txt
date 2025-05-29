@@ -21,23 +21,23 @@ from pytest_analyzer.core.cross_cutting.error_handling import error_context
 
 class ExtractorFactory(BaseFactory):
     """Factory for creating extractors based on file type."""
-
+    
     def __init__(self, settings: Optional[Settings] = None):
         super().__init__(settings)
         self._register_default_extractors()
-
+    
     def _register_default_extractors(self) -> None:
         """Register the default extractors."""
         self.register("json", JSONExtractor)
         self.register("xml", XMLExtractor)
         self.register("txt", TextExtractor)
-
+    
     def create(self, file_path: str) -> Extractor:
         """Create an extractor for the given file path.
-
+        
         Args:
             file_path: Path to the file to extract from
-
+            
         Returns:
             An instance of the appropriate extractor
         """

@@ -20,31 +20,31 @@ from pytest_analyzer.core.cross_cutting.error_handling import error_context
 
 class LLMServiceFactory(BaseFactory):
     """Factory for creating LLM services based on configuration."""
-
+    
     def __init__(self, settings: Optional[Settings] = None):
         super().__init__(settings)
         self._register_default_services()
-
+    
     def _register_default_services(self) -> None:
         """Register the default LLM services."""
         self.register("openai", OpenAIService)
         self.register("anthropic", AnthropicService)
         self.register("mock", MockLLMService)
-
+    
     def create(self, provider_type: Optional[str] = None, provider: Optional[LLMProvider] = None) -> LLMService:
         """Create an LLM service with the specified provider.
-
+        
         Args:
             provider_type: Type of LLM provider to use, or None to use settings
             provider: Optional pre-configured provider instance
-
+            
         Returns:
             An instance of the appropriate LLM service
         """
         with error_context("Creating LLM service", self.logger):
             if provider_type is None:
                 provider_type = self.settings.get("llm.provider", "openai")
-
+            
             service_class = self.get_implementation(provider_type)
             return service_class(provider=provider, settings=self.settings)
 ```
