@@ -1,6 +1,6 @@
 # Task ID: 7
 # Title: Migrate Remaining Environment Managers to Base Class
-# Status: pending
+# Status: in-progress
 # Dependencies: 2, 6
 # Priority: medium
 # Description: Refactor Pixi, Hatch, UV, and Pipenv environment managers to inherit from BaseEnvironmentManager.
