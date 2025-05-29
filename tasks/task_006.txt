@@ -17,16 +17,16 @@ from pytest_analyzer.core.cross_cutting.error_handling import error_context
 
 class PoetryEnvironmentManager(BaseEnvironmentManager):
     """Poetry-specific environment manager implementation."""
-    
+
     def __init__(self, project_path: Path):
         super().__init__(project_path)
         self.poetry_executable = "poetry"
-    
+
     def build_command(self, base_command: List[str]) -> List[str]:
         """Build a Poetry-specific command to run the given base command."""
         with error_context("Building Poetry command", self.logger):
             return [self.poetry_executable, "run"] + base_command
-    
+
     # Only implement methods that differ from the base class
     # activate and deactivate can use the base class no-op implementations
     # execute_command can use the base class implementation

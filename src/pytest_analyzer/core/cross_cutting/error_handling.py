@@ -10,8 +10,8 @@ module_logger = logging.getLogger(__name__)
 
 _ET = TypeVar("_ET", bound=Exception)  # Exception type variable
 _R = TypeVar("_R")  # Return type variable for error_handler
-_IT = TypeVar("_IT") # Item type for batch_operation
-_RT = TypeVar("_RT") # Result type for batch_operation
+_IT = TypeVar("_IT")  # Item type for batch_operation
+_RT = TypeVar("_RT")  # Result type for batch_operation
 
 
 @contextmanager
@@ -79,8 +79,12 @@ def error_handler(
 
     def decorator(func: Callable[..., _R]) -> Callable[..., Optional[_R]]:
         @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Optional[_R]: # Return type can be None if reraise is False
-            effective_logger.info(f"Calling function '{func.__name__}' for operation: {operation_name}")
+        def wrapper(
+            *args: Any, **kwargs: Any
+        ) -> Optional[_R]:  # Return type can be None if reraise is False
+            effective_logger.info(
+                f"Calling function '{func.__name__}' for operation: {operation_name}"
+            )
             try:
                 result = func(*args, **kwargs)
                 effective_logger.info(
@@ -90,12 +94,12 @@ def error_handler(
             except Exception as e:
                 effective_logger.error(
                     f"Error in function '{func.__name__}' during operation '{operation_name}': {e}",
-                    exc_info=True
+                    exc_info=True,
                 )
                 if reraise:
                     if isinstance(e, error_type):
-                        raise # Re-raise if it's already the target type or its subclass
-                    
+                        raise  # Re-raise if it's already the target type or its subclass
+
                     if issubclass(error_type, BaseError):
                         # Pass a prefix message for BaseError.
                         # BaseError's __str__ is expected to append original_exception.
@@ -108,8 +112,10 @@ def error_handler(
                 else:
                     # If not reraising, and function is expected to return something,
                     # it will return None by default.
-                    return None 
+                    return None
+
         return wrapper
+
     return decorator
 
 
@@ -140,22 +146,28 @@ def batch_operation(
     successful_results: List[_RT] = []
     errors: List[Tuple[_IT, Exception]] = []
 
-    effective_logger.info(f"Starting batch operation: {operation_name} for {len(items)} items.")
+    effective_logger.info(
+        f"Starting batch operation: {operation_name} for {len(items)} items."
+    )
 
     for index, item in enumerate(items):
-        item_repr = str(item) # To avoid issues if item's str() fails, though unlikely for typical inputs
+        item_repr = str(
+            item
+        )  # To avoid issues if item's str() fails, though unlikely for typical inputs
         effective_logger.debug(
             f"Processing item {index + 1}/{len(items)} ('{item_repr}') for batch operation '{operation_name}'."
         )
         try:
             result = operation(item)
             successful_results.append(result)
-            effective_logger.debug(f"Successfully processed item '{item_repr}' in '{operation_name}'.")
+            effective_logger.debug(
+                f"Successfully processed item '{item_repr}' in '{operation_name}'."
+            )
         except Exception as e:
             effective_logger.error(
                 f"Error processing item '{item_repr}' (item {index + 1}/{len(items)}) "
                 f"in batch operation '{operation_name}': {e}",
-                exc_info=True
+                exc_info=True,
             )
             errors.append((item, e))
             if not continue_on_error:
@@ -164,7 +176,7 @@ def batch_operation(
                     f"(continue_on_error=False)."
                 )
                 break
-    
+
     effective_logger.info(
         f"Batch operation '{operation_name}' completed. "
         f"Successful: {len(successful_results)}, Failed: {len(errors)}."
