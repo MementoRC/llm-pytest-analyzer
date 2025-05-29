@@ -54,6 +54,7 @@ def test_base_error_without_original_exception():
 
 
 def test_error_context_success(caplog):
+    caplog.set_level(logging.INFO, logger="test_error_handling")
     op_name = "SuccessfulOp"
     with error_context(op_name, test_logger, MyCustomError):
         pass  # Simulate work
@@ -63,6 +64,7 @@ def test_error_context_success(caplog):
 
 
 def test_error_context_catches_and_reraises_base_error_subclass(caplog):
+    caplog.set_level(logging.INFO, logger="test_error_handling")
     original_exc = ValueError("Sync failure details")
     op_name = "CTX_BASE_ERROR"
     with pytest.raises(MyCustomError) as exc_info:
@@ -78,6 +80,7 @@ def test_error_context_catches_and_reraises_base_error_subclass(caplog):
 
 
 def test_error_context_wraps_with_standard_error(caplog):
+    caplog.set_level(logging.INFO, logger="test_error_handling")
     original_exc = ValueError("Sync failure details")
     op_name = "CTX_STD_WRAP"
     # Use a standard error like RuntimeError as the error_type
@@ -93,6 +96,7 @@ def test_error_context_wraps_with_standard_error(caplog):
 
 
 def test_error_context_does_not_double_wrap(caplog):
+    caplog.set_level(logging.INFO, logger="test_error_handling")
     original_custom_exc = MyCustomError("Original custom message")
     op_name = "CTX_NO_DOUBLE_WRAP"
     with pytest.raises(MyCustomError) as exc_info:
@@ -109,6 +113,7 @@ def test_error_context_does_not_double_wrap(caplog):
 
 
 def test_error_context_suppresses_error_if_reraise_false(caplog):
+    caplog.set_level(logging.INFO, logger="test_error_handling")
     original_exc = ValueError("Suppressed failure")
     op_name = "CTX_SUPPRESS"
     try:
@@ -127,6 +132,7 @@ def test_error_context_suppresses_error_if_reraise_false(caplog):
 
 
 def test_error_handler_success(caplog):
+    caplog.set_level(logging.INFO, logger="test_error_handling")
     op_name = "HandlerSuccessOp"
 
     @error_handler(op_name, MyCustomError, logger=test_logger)
@@ -142,6 +148,7 @@ def test_error_handler_success(caplog):
 
 
 def test_error_handler_catches_and_reraises_wrapped(caplog):
+    caplog.set_level(logging.INFO, logger="test_error_handling")
     original_exc = ValueError("Sync func failure")
     op_name = "HandlerWrap"
 
@@ -166,6 +173,7 @@ def test_error_handler_catches_and_reraises_wrapped(caplog):
 
 
 def test_error_handler_does_not_double_wrap(caplog):
+    caplog.set_level(logging.INFO, logger="test_error_handling")
     original_custom_exc = MyCustomError("Original custom message for sync")
     op_name = "HandlerNoDoubleWrap"
 
@@ -185,6 +193,7 @@ def test_error_handler_does_not_double_wrap(caplog):
 
 
 def test_error_handler_suppresses_error_and_returns_none_if_reraise_false(caplog):
+    caplog.set_level(logging.INFO, logger="test_error_handling")
     original_exc = ValueError("Suppressed handler failure")
     op_name = "HandlerSuppress"
 
@@ -211,6 +220,9 @@ def test_error_handler_suppresses_error_and_returns_none_if_reraise_false(caplog
 
 
 def test_error_handler_uses_default_logger_if_none_provided(caplog):
+    caplog.set_level(
+        logging.INFO, logger="pytest_analyzer.core.cross_cutting.error_handling"
+    )
     op_name = "HandlerDefaultLogger"
 
     # Note: No logger passed to decorator
@@ -243,14 +255,46 @@ def sample_op_failure(
     fail_on: Optional[Any] = None,
     error_to_raise: Exception = ValueError("Simulated failure"),
 ) -> str:
-    if fail_on is not None and item == fail_on:
+    # Debugging prints to understand behavior in different environments
+    print(
+        f"[DEBUG] sample_op_failure: item={repr(item)} (type: {type(item)}), fail_on={repr(fail_on)}"
+    )
+
+    condition1_met = fail_on is not None and item == fail_on
+    if condition1_met:
+        print(
+            f"[DEBUG] sample_op_failure: item={repr(item)} matches fail_on={repr(fail_on)}. Raising error."
+        )
         raise error_to_raise
-    if isinstance(item, str) and item.startswith("fail"):
+
+    is_str_and_starts_with_fail = False
+    if isinstance(item, str):
+        # Explicitly capture the result of startswith for debugging
+        item_starts_with_fail = item.startswith("fail")
+        print(
+            f"[DEBUG] sample_op_failure: item={repr(item)} is str. item.startswith('fail') -> {item_starts_with_fail}"
+        )
+        if item_starts_with_fail:
+            is_str_and_starts_with_fail = True
+    else:
+        print(
+            f"[DEBUG] sample_op_failure: item={repr(item)} is not str (type: {type(item)})."
+        )
+
+    if is_str_and_starts_with_fail:
+        print(
+            f"[DEBUG] sample_op_failure: item={repr(item)} is str and starts with 'fail'. Raising error."
+        )
         raise error_to_raise
+
+    print(
+        f"[DEBUG] sample_op_failure: item={repr(item)} did not meet failure conditions (cond1_met: {condition1_met}, is_str_and_starts_with_fail: {is_str_and_starts_with_fail}). Returning success."
+    )
     return f"Processed {item}"
 
 
 def test_batch_operation_all_success(caplog):
+    caplog.set_level(logging.DEBUG, logger="test_error_handling")
     items = [1, 2, 3]
     op_name = "BatchSuccess"
     results, errors = batch_operation(
@@ -267,11 +311,29 @@ def test_batch_operation_all_success(caplog):
 
 
 def test_batch_operation_some_failures_continue_on_error_true(caplog):
-    items = [1, "fail_item", 3, "another_fail"]
+    caplog.set_level(logging.DEBUG, logger="test_error_handling")
+    items = [1, "fail_item", 3, "fail_another"]
     op_name = "BatchSomeFail"
 
+    # Make failure conditions explicit for this test to improve robustness
+    # This avoids relying on the potentially environment-sensitive `startswith("fail")`
+    # in the generic sample_op_failure for these specific items.
+    items_expected_to_fail = {"fail_item", "fail_another"}
+
     def op_func(item: Any) -> str:
-        return sample_op_failure(item, error_to_raise=ValueError(f"Failure on {item}"))
+        print(
+            f"[DEBUG] test_batch_op (continue_on_error=True): op_func processing item={repr(item)} (type: {type(item)})"
+        )
+        if item in items_expected_to_fail:
+            print(
+                f"[DEBUG] test_batch_op (continue_on_error=True): item={repr(item)} is in items_expected_to_fail. Raising error."
+            )
+            raise ValueError(f"Explicit failure on {item}")
+        # For items not in items_expected_to_fail, process them successfully.
+        print(
+            f"[DEBUG] test_batch_op (continue_on_error=True): item={repr(item)} not in items_expected_to_fail. Processing as success."
+        )
+        return f"Processed {item}"
 
     results, errors = batch_operation(
         items,
@@ -288,15 +350,15 @@ def test_batch_operation_some_failures_continue_on_error_true(caplog):
     item1, error1 = errors[0]
     assert item1 == "fail_item"
     assert isinstance(error1, ValueError)
-    assert str(error1) == "Failure on fail_item"
+    assert str(error1) == "Explicit failure on fail_item"
 
     item2, error2 = errors[1]
-    assert item2 == "another_fail"
+    assert item2 == "fail_another"
     assert isinstance(error2, ValueError)
-    assert str(error2) == "Failure on another_fail"
+    assert str(error2) == "Explicit failure on fail_another"
 
     assert "Error processing item 'fail_item'" in caplog.text
-    assert "Error processing item 'another_fail'" in caplog.text
+    assert "Error processing item 'fail_another'" in caplog.text
     assert (
         f"Batch operation '{op_name}' completed. Successful: 2, Failed: 2."
         in caplog.text
@@ -304,6 +366,7 @@ def test_batch_operation_some_failures_continue_on_error_true(caplog):
 
 
 def test_batch_operation_stops_on_first_error_if_continue_on_error_false(caplog):
+    caplog.set_level(logging.DEBUG, logger="test_error_handling")
     items = [1, "fail_item", 3, "another_fail"]
     op_name = "BatchStopOnError"
 
@@ -341,6 +404,7 @@ def test_batch_operation_stops_on_first_error_if_continue_on_error_false(caplog)
 
 
 def test_batch_operation_all_failures(caplog):
+    caplog.set_level(logging.DEBUG, logger="test_error_handling")
     items = ["fail1", "fail2"]
     op_name = "BatchAllFail"
 
@@ -366,6 +430,7 @@ def test_batch_operation_all_failures(caplog):
 
 
 def test_batch_operation_empty_list(caplog):
+    caplog.set_level(logging.INFO, logger="test_error_handling")
     items: List[Any] = []
     op_name = "BatchEmpty"
     results, errors = batch_operation(
@@ -384,6 +449,7 @@ def test_batch_operation_empty_list(caplog):
 
 
 def test_batch_operation_preserves_original_error_details_in_tuple(caplog):
+    caplog.set_level(logging.DEBUG, logger="test_error_handling")
     items = ["specific_error_item"]
     specific_error = TypeError("Specific type error for item")
     op_name = "BatchSpecificError"
@@ -411,6 +477,9 @@ def test_batch_operation_preserves_original_error_details_in_tuple(caplog):
 
 
 def test_batch_operation_uses_default_logger_if_none_provided(caplog):
+    caplog.set_level(
+        logging.DEBUG, logger="pytest_analyzer.core.cross_cutting.error_handling"
+    )
     items = [1]
     op_name = "BatchDefaultLogger"
     # Note: No logger passed
