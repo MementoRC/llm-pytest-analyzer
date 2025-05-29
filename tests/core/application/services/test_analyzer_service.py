@@ -1,4 +1,5 @@
 import logging
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -379,15 +380,17 @@ class TestAnalyzerService:
         caplog,
     ):
         """Test get_failure_summary generates correct summary statistics."""
-        # sample_failure1 is AssertionError, sample_failure2 is ValueError (EXCEPTION)
-        sample_failure1.failure_type = FailureType.ASSERTION_ERROR
-        sample_failure2.failure_type = FailureType.EXCEPTION
+        # Create modified copies instead of altering fixture instances directly
+        f1_assert_error = replace(
+            sample_failure1, failure_type=FailureType.ASSERTION_ERROR
+        )
+        f2_exception = replace(sample_failure2, failure_type=FailureType.EXCEPTION)
 
         failures = [
-            sample_failure1,
-            sample_failure2,
-            sample_failure1,
-        ]  # Two assertion, one exception
+            f1_assert_error,
+            f2_exception,
+            f1_assert_error,  # Two assertion errors, one exception
+        ]
 
         with caplog.at_level(logging.INFO):
             summary = analyzer_service.get_failure_summary(failures)
