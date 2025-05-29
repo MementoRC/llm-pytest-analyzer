@@ -1,6 +1,6 @@
 # Task ID: 9
 # Title: Migrate ExtractorFactory to Use BaseFactory
-# Status: pending
+# Status: done
 # Dependencies: 3
 # Priority: medium
 # Description: Refactor the ExtractorFactory to inherit from BaseFactory and eliminate duplicated code.

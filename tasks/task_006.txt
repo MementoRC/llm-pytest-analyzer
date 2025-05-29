@@ -1,6 +1,6 @@
 # Task ID: 6
 # Title: Migrate PoetryEnvironmentManager to Use Base Class
-# Status: in-progress
+# Status: done
 # Dependencies: 2
 # Priority: medium
 # Description: Refactor the PoetryEnvironmentManager to inherit from BaseEnvironmentManager and eliminate duplicated code.

@@ -102,8 +102,11 @@ class TestAnalyzerService:
         mock_suggester.suggest.return_value = sample_suggestion1
         report_path = Path("dummy_report.json")
 
-        with caplog.at_level(logging.INFO):
-            suggestions = analyzer_service.analyze_report(report_path)
+        caplog.set_level(
+            logging.INFO,
+            logger="pytest_analyzer.core.application.services.analyzer_service",
+        )
+        suggestions = analyzer_service.analyze_report(report_path)
 
         assert len(suggestions) == 1
         assert suggestions[0] == sample_suggestion1
@@ -141,8 +144,11 @@ class TestAnalyzerService:
         report_path = Path("dummy_report.json")
         output_path = tmp_path / "suggestions.json"
 
-        with caplog.at_level(logging.INFO):
-            suggestions = analyzer_service.analyze_report(report_path, output_path)
+        caplog.set_level(
+            logging.INFO,
+            logger="pytest_analyzer.core.application.services.analyzer_service",
+        )
+        suggestions = analyzer_service.analyze_report(report_path, output_path)
 
         assert len(suggestions) == 1
         assert suggestions[0] == sample_suggestion1
@@ -163,8 +169,11 @@ class TestAnalyzerService:
         mock_repository.get_failures.return_value = []
         report_path = Path("empty_report.json")
 
-        with caplog.at_level(logging.INFO):
-            suggestions = analyzer_service.analyze_report(report_path)
+        caplog.set_level(
+            logging.INFO,
+            logger="pytest_analyzer.core.application.services.analyzer_service",
+        )
+        suggestions = analyzer_service.analyze_report(report_path)
 
         assert len(suggestions) == 0
         mock_analyzer.analyze.assert_not_called()
@@ -180,9 +189,12 @@ class TestAnalyzerService:
             "File not found: {report_path}"
         )
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(FileNotFoundError):
-                analyzer_service.analyze_report(report_path)
+        caplog.set_level(
+            logging.ERROR,
+            logger="pytest_analyzer.core.application.services.analyzer_service",
+        )
+        with pytest.raises(FileNotFoundError):
+            analyzer_service.analyze_report(report_path)
 
         assert f"Report file not found: {report_path}" in caplog.text
 
@@ -193,9 +205,12 @@ class TestAnalyzerService:
         report_path = Path("error_report.json")
         mock_repository.get_failures.side_effect = Exception("Generic load error")
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(Exception, match="Generic load error"):
-                analyzer_service.analyze_report(report_path)
+        caplog.set_level(
+            logging.ERROR,
+            logger="pytest_analyzer.core.application.services.analyzer_service",
+        )
+        with pytest.raises(Exception, match="Generic load error"):
+            analyzer_service.analyze_report(report_path)
 
         assert (
             f"Error loading failures from report {report_path}: Generic load error"
@@ -222,8 +237,11 @@ class TestAnalyzerService:
         report_path = Path("dummy_report.json")
         output_path = tmp_path / "suggestions.json"
 
-        with caplog.at_level(logging.ERROR):
-            suggestions = analyzer_service.analyze_report(report_path, output_path)
+        caplog.set_level(
+            logging.ERROR,
+            logger="pytest_analyzer.core.application.services.analyzer_service",
+        )
+        suggestions = analyzer_service.analyze_report(report_path, output_path)
 
         assert len(suggestions) == 1  # Still returns suggestions
         assert suggestions[0] == sample_suggestion1
@@ -259,8 +277,11 @@ class TestAnalyzerService:
 
         report_path = Path("mixed_report.json")
 
-        with caplog.at_level(logging.INFO):
-            suggestions = analyzer_service.analyze_report(report_path)
+        caplog.set_level(
+            logging.INFO,
+            logger="pytest_analyzer.core.application.services.analyzer_service",
+        )  # INFO will capture WARNING too
+        suggestions = analyzer_service.analyze_report(report_path)
 
         assert len(suggestions) == 2
 
@@ -305,8 +326,11 @@ class TestAnalyzerService:
         mock_analyzer.analyze.return_value = analysis_result
         mock_suggester.suggest.return_value = sample_suggestion1
 
-        with caplog.at_level(logging.INFO):
-            suggestion = analyzer_service.analyze_single_failure(sample_failure1)
+        caplog.set_level(
+            logging.INFO,
+            logger="pytest_analyzer.core.application.services.analyzer_service",
+        )
+        suggestion = analyzer_service.analyze_single_failure(sample_failure1)
 
         assert suggestion == sample_suggestion1
         mock_analyzer.analyze.assert_called_once_with(sample_failure1)
@@ -327,8 +351,11 @@ class TestAnalyzerService:
         error_message = "Analyzer crashed"
         mock_analyzer.analyze.side_effect = Exception(error_message)
 
-        with caplog.at_level(logging.WARNING):
-            suggestion = analyzer_service.analyze_single_failure(sample_failure1)
+        caplog.set_level(
+            logging.WARNING,
+            logger="pytest_analyzer.core.application.services.analyzer_service",
+        )
+        suggestion = analyzer_service.analyze_single_failure(sample_failure1)
 
         assert suggestion.failure_id == sample_failure1.id
         assert "Automated suggestion failed." in suggestion.suggestion_text
@@ -357,8 +384,11 @@ class TestAnalyzerService:
         error_message = "Suggester crashed"
         mock_suggester.suggest.side_effect = Exception(error_message)
 
-        with caplog.at_level(logging.WARNING):
-            suggestion = analyzer_service.analyze_single_failure(sample_failure1)
+        caplog.set_level(
+            logging.WARNING,
+            logger="pytest_analyzer.core.application.services.analyzer_service",
+        )
+        suggestion = analyzer_service.analyze_single_failure(sample_failure1)
 
         assert suggestion.failure_id == sample_failure1.id
         assert "Automated suggestion failed." in suggestion.suggestion_text
@@ -392,8 +422,11 @@ class TestAnalyzerService:
             f1_assert_error,  # Two assertion errors, one exception
         ]
 
-        with caplog.at_level(logging.INFO):
-            summary = analyzer_service.get_failure_summary(failures)
+        caplog.set_level(
+            logging.INFO,
+            logger="pytest_analyzer.core.application.services.analyzer_service",
+        )
+        summary = analyzer_service.get_failure_summary(failures)
 
         expected_summary = {
             "total_failures": 3,
@@ -409,8 +442,11 @@ class TestAnalyzerService:
         self, analyzer_service: AnalyzerService, caplog
     ):
         """Test get_failure_summary handles an empty failure list."""
-        with caplog.at_level(logging.DEBUG):  # No INFO log for empty summary
-            summary = analyzer_service.get_failure_summary([])
+        caplog.set_level(
+            logging.DEBUG,
+            logger="pytest_analyzer.core.application.services.analyzer_service",
+        )
+        summary = analyzer_service.get_failure_summary([])
 
         expected_summary = {"total_failures": 0, "failures_by_type": {}}
         assert summary == expected_summary
@@ -435,8 +471,11 @@ class TestAnalyzerService:
 
         failures = [sample_failure1_copy]
 
-        with caplog.at_level(logging.WARNING):
-            summary = analyzer_service.get_failure_summary(failures)
+        caplog.set_level(
+            logging.WARNING,
+            logger="pytest_analyzer.core.application.services.analyzer_service",
+        )
+        summary = analyzer_service.get_failure_summary(failures)
 
         expected_summary = {
             "total_failures": 1,
@@ -486,8 +525,11 @@ class TestAnalyzerService:
 
         failures = [sample_failure1_copy]
 
-        with caplog.at_level(logging.WARNING):
-            summary = analyzer_service.get_failure_summary(failures)
+        caplog.set_level(
+            logging.WARNING,
+            logger="pytest_analyzer.core.application.services.analyzer_service",
+        )
+        summary = analyzer_service.get_failure_summary(failures)
 
         expected_summary = {
             "total_failures": 1,
