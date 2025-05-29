@@ -15,8 +15,8 @@ class BaseLLMService(ABC):
         settings: Optional[Settings] = None,
     ):
         self.settings = settings or Settings()
-        self.provider = provider or self._create_default_provider()
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.provider = provider or self._create_default_provider()
         self.model = self.settings.llm_model  # Direct attribute access
         # self.temperature removed
         # self.max_tokens removed

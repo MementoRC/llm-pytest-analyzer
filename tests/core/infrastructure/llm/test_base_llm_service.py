@@ -183,7 +183,7 @@ def test_instantiate_abstract_base_llm_service_raises_type_error():
     """Tests that BaseLLMService cannot be instantiated directly due to abstract 'generate'."""
     with pytest.raises(
         TypeError,
-        match="Can't instantiate abstract class BaseLLMService with abstract method generate",
+        match=r"Can't instantiate abstract class BaseLLMService (with abstract method generate|without an implementation for abstract method 'generate')",
     ):
         BaseLLMService()
 
@@ -199,7 +199,7 @@ def test_subclass_without_generate_raises_type_error(mock_settings: MagicMock):
 
     with pytest.raises(
         TypeError,
-        match="Can't instantiate abstract class SubclassWithoutGenerate with abstract method generate",
+        match=r"Can't instantiate abstract class SubclassWithoutGenerate (with abstract method generate|without an implementation for abstract method 'generate')",
     ):
         # Provider must be passed, or _create_default_provider must be valid.
         # Here, we pass settings and rely on its _create_default_provider.
