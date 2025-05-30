@@ -1,6 +1,6 @@
 # Task ID: 10
 # Title: Migrate LLMServiceFactory to Use BaseFactory
-# Status: pending
+# Status: in-progress
 # Dependencies: 3, 4
 # Priority: medium
 # Description: Refactor the LLMServiceFactory to inherit from BaseFactory and eliminate duplicated code.
