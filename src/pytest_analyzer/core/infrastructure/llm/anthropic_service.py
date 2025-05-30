@@ -1,3 +1,4 @@
+from typing import List, Optional
 from .base_llm_service import BaseLLMService
 from ..llm_service_protocol import LLMServiceProtocol
 from ...models.failure_analysis import FailureAnalysis

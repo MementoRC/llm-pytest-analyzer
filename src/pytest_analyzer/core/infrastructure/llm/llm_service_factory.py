@@ -1,7 +1,9 @@
+from typing import Optional
 from .base_factory import BaseFactory
 from .openai_service import OpenAIService
 from .anthropic_service import AnthropicService
 from .mock_service import MockLLMService
+from ..llm_service_protocol import LLMServiceProtocol
 from ...utils.config_types import Settings
 
 class LLMServiceFactory(BaseFactory):
