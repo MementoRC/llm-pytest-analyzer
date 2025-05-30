@@ -23,6 +23,7 @@ except ImportError:
 
 from ...utils.resource_manager import ResourceMonitor, TimeoutError
 from ..errors import LLMServiceError, ParsingError
+from ..infrastructure.llm.base_llm_service import BaseLLMService
 from ..models.failure_analysis import FailureAnalysis
 from ..models.pytest_failure import FixSuggestion, PytestFailure
 from ..parsers.response_parser import ResponseParser
@@ -54,7 +55,7 @@ async def error_context(error_type: Type[Exception], error_message: str):
         raise error_type(f"{error_message}: {str(e)}") from e
 
 
-class AsyncLLMService(AsyncLLMServiceProtocol):
+class AsyncLLMService(BaseLLMService, AsyncLLMServiceProtocol):
     """
     Asynchronous implementation for sending prompts to a Language Model.
     Uses dependency injection for configuration and resources.
@@ -82,13 +83,16 @@ class AsyncLLMService(AsyncLLMServiceProtocol):
             max_tokens: Maximum tokens in the response
             model_name: Model names for different providers (e.g., {"openai": "gpt-3.5-turbo", "anthropic": "claude-3-haiku-20240307"})
         """
+        # Initialize base class with provider and settings
+        super().__init__(provider=llm_client, settings=None)
+
         self.prompt_builder = prompt_builder
         self.response_parser = response_parser
         self.resource_monitor = resource_monitor or ResourceMonitor(
             max_memory_mb=None,
             max_time_seconds=timeout_seconds,
         )
-        self.llm_client = llm_client
+        self.llm_client = llm_client or self.provider  # Use provider from base class
         self.timeout_seconds = timeout_seconds
         self.max_tokens = max_tokens
         self.model_name = model_name or {
@@ -104,6 +108,22 @@ class AsyncLLMService(AsyncLLMServiceProtocol):
                 "No LLM client available or configured for AsyncLLMService. "
                 "Install 'anthropic' or 'openai' packages, or provide an llm_client."
             )
+
+    def generate(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> str:
+        """
+        Synchronous wrapper for generate_async.
+
+        This implements the abstract method from BaseLLMService.
+        """
+        return asyncio.run(self.generate_async(prompt, context))
+
+    async def generate_async(
+        self, prompt: str, context: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Generate a response asynchronously from the LLM based on the prompt and context.
+        """
+        return await self.send_prompt(prompt)
 
     async def send_prompt(self, prompt: str) -> str:
         """
@@ -205,6 +225,27 @@ class AsyncLLMService(AsyncLLMServiceProtocol):
         except Exception as e:
             raise ParsingError(f"Failed to parse suggestion response: {str(e)}") from e
 
+    def _create_default_provider(self) -> Any:
+        """
+        Create the default async LLM provider based on settings.
+
+        This implements the abstract method from BaseLLMService.
+        """
+        # Use auto-detection logic for async clients
+        if AsyncAnthropic:
+            try:
+                return AsyncAnthropic()
+            except Exception as e:
+                logger.debug(f"Failed to initialize Anthropic async client: {e}")
+
+        if openai and hasattr(openai, "AsyncOpenAI"):
+            try:
+                return openai.AsyncOpenAI()
+            except Exception as e:
+                logger.debug(f"Failed to initialize OpenAI async client: {e}")
+
+        return None
+
     def _get_async_llm_request_function(
         self,
     ) -> Optional[Callable[[str], Tuple[str, Any]]]:
@@ -240,6 +281,7 @@ class AsyncLLMService(AsyncLLMServiceProtocol):
                 client = AsyncAnthropic()
                 logger.info("Using Anthropic async client for LLM requests.")
                 self.llm_client = client
+                self.provider = client  # Update the provider in base class
                 return self._make_anthropic_async_request
             except Exception as e:
                 logger.debug(f"Failed to initialize Anthropic async client: {e}")
@@ -249,6 +291,7 @@ class AsyncLLMService(AsyncLLMServiceProtocol):
                 client = openai.AsyncOpenAI()
                 logger.info("Using OpenAI async client for LLM requests.")
                 self.llm_client = client
+                self.provider = client  # Update the provider in base class
                 return self._make_openai_async_request
             except Exception as e:
                 logger.debug(f"Failed to initialize OpenAI async client: {e}")

@@ -43,8 +43,6 @@
             "mcp-aider-server",
             "--server-mode",
             "stdio",
-            "--editor-model",
-            "gemini/gemini-2.5-pro-preview-05-06",
             "--current-working-dir",
             "/home/memento/ClaudeCode/pytest-analyzer/llm-pytest-analyzer"
           ],

@@ -3,7 +3,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pytest_analyzer.core.llm.backward_compat import LLMService
+from pytest_analyzer.core.errors import LLMServiceError
+from pytest_analyzer.core.llm.llm_service import LLMService
 from pytest_analyzer.core.llm.llm_service_protocol import LLMServiceProtocol
 from pytest_analyzer.utils.resource_manager import (
     TimeoutError as ResourceManagerTimeoutError,
@@ -210,10 +211,15 @@ class TestLLMService:
             patch("pytest_analyzer.core.llm.llm_service.Anthropic", None),
             patch("pytest_analyzer.core.llm.llm_service.openai", None),
         ):
-            service = LLMService()  # Will have no _llm_request_func
+            # Ensure ERROR logs are captured for this test
+            with caplog.at_level(
+                logging.ERROR, logger="pytest_analyzer.core.llm.llm_service"
+            ):
+                service = LLMService()  # Will have no _llm_request_func
+                with pytest.raises(LLMServiceError) as excinfo:
+                    service.send_prompt("test")
 
-        response = service.send_prompt("test")
-        assert response == ""
+        assert "No LLM request function configured" in str(excinfo.value)
         assert (
             "LLMService cannot send prompt: No LLM request function configured."
             in caplog.text
@@ -238,46 +244,62 @@ class TestLLMService:
 
         service = LLMService(llm_client=mock_client, timeout_seconds=0.1)
 
-        with pytest.raises(ResourceManagerTimeoutError):
-            service.send_prompt("test timeout")
+        with caplog.at_level(
+            logging.ERROR, logger="pytest_analyzer.core.llm.llm_service"
+        ):
+            with pytest.raises(LLMServiceError) as excinfo:
+                service.send_prompt("test timeout")
 
-        assert "LLM request timed out after 0.1 seconds." in caplog.text
+        expected_timeout_message = "Operation timed out after 0.1 seconds"
+        assert expected_timeout_message in str(
+            excinfo.value
+        )  # Check exception message from LLMServiceError
+        assert (
+            f"Failed to send prompt to language model: Timeout - {expected_timeout_message}"
+            in caplog.text
+        )
 
     def test_send_prompt_timeout_using_resource_manager_exception(self, caplog):
         mock_client = MockAnthropicClient()
         # Simulate the resource_manager's with_timeout raising the error directly
+        simulated_error_message = "Simulated timeout"
         mock_client.messages.create.side_effect = ResourceManagerTimeoutError(
-            "Simulated timeout"
+            simulated_error_message
         )
 
-        service = LLMService(
-            llm_client=mock_client, timeout_seconds=1
-        )  # Timeout value doesn't matter as much here
+        service = LLMService(llm_client=mock_client, timeout_seconds=1)
 
-        with pytest.raises(ResourceManagerTimeoutError):
-            service.send_prompt("test timeout direct")
+        with caplog.at_level(
+            logging.ERROR, logger="pytest_analyzer.core.llm.llm_service"
+        ):
+            with pytest.raises(LLMServiceError) as excinfo:
+                service.send_prompt("test timeout direct")
 
+        assert simulated_error_message in str(excinfo.value)
         assert (
-            "LLM request timed out after 1 seconds." in caplog.text
-        )  # The service's timeout is logged
+            f"Failed to send prompt to language model: Timeout - {simulated_error_message}"
+            in caplog.text
+        )
 
     def test_send_prompt_anthropic_api_error(self, caplog):
         mock_client = MockAnthropicClient()
         mock_client.messages.create.side_effect = Exception("Anthropic API Error")
         service = LLMService(llm_client=mock_client)
 
-        with caplog.at_level(logging.ERROR):
-            response = service.send_prompt("test anthropic error")
+        with caplog.at_level(
+            logging.ERROR, logger="pytest_analyzer.core.llm.llm_service"
+        ):
+            with pytest.raises(LLMServiceError) as excinfo:
+                service.send_prompt("test anthropic error")
 
-        assert response == ""  # As per _request_with_anthropic error handling
+        assert "Anthropic API Error" in str(excinfo.value)
         # Check that error messages were logged
-        assert any(
-            "Error making request with Anthropic API: Anthropic API Error" in msg
-            for msg in caplog.messages
-        )
-        # The high-level error is only logged when the exception bubbles up; in this case, it's caught and returns ""
         assert (
             "Error making request with Anthropic API: Anthropic API Error"
+            in caplog.text
+        )
+        assert (
+            "Failed to send prompt to language model: Anthropic API Error"
             in caplog.text
         )
 
@@ -286,71 +308,93 @@ class TestLLMService:
         mock_client.chat.completions.create.side_effect = Exception("OpenAI API Error")
         service = LLMService(llm_client=mock_client)
 
-        with caplog.at_level(logging.ERROR):
-            response = service.send_prompt("test openai error")
+        with caplog.at_level(
+            logging.ERROR, logger="pytest_analyzer.core.llm.llm_service"
+        ):
+            with pytest.raises(LLMServiceError) as excinfo:
+                service.send_prompt("test openai error")
 
-        assert response == ""  # As per _request_with_openai error handling
+        assert "OpenAI API Error" in str(excinfo.value)
         # Check that error messages were logged
-        assert any(
-            "Error making request with OpenAI API: OpenAI API Error" in msg
-            for msg in caplog.messages
-        )
-        # The high-level error is only logged when the exception bubbles up; in this case, it's caught and returns ""
         assert "Error making request with OpenAI API: OpenAI API Error" in caplog.text
+        assert (
+            "Failed to send prompt to language model: OpenAI API Error" in caplog.text
+        )
 
     def test_send_prompt_generic_client_error(self, caplog):
         mock_client = MockGenericClientWithGenerate()
         mock_client.generate = MagicMock(side_effect=Exception("Generic Client Error"))
         service = LLMService(llm_client=mock_client)
 
-        response = service.send_prompt("test generic error")
-        # The generic call path in _get_llm_request_function wraps str(),
-        # and send_prompt catches exceptions from timed_request_func
-        assert response == ""
-        assert "Error during LLM request: Generic Client Error" in caplog.text
+        with caplog.at_level(
+            logging.ERROR, logger="pytest_analyzer.core.llm.llm_service"
+        ):
+            with pytest.raises(LLMServiceError) as excinfo:
+                service.send_prompt("test generic error")
+
+        assert "Generic Client Error" in str(excinfo.value)
+        assert (
+            "Failed to send prompt to language model: Generic Client Error"
+            in caplog.text
+        )
 
     def test_internal_request_with_anthropic_empty_response(self, caplog):
-        mock_anthropic_client = MagicMock()
-        mock_anthropic_client.__class__.__module__ = "anthropic"
+        mock_anthropic_client = (
+            MockAnthropicClient()
+        )  # Use the actual mock client class
         # Simulate various empty/malformed responses
+
+        # Scenario 1: content is None
         mock_anthropic_client.messages.create.return_value = MagicMock(content=None)
         service = LLMService(llm_client=mock_anthropic_client)
-        assert service._request_with_anthropic("prompt", mock_anthropic_client) == ""
+        assert service._request_with_anthropic("prompt") == ""
 
+        # Scenario 2: content is empty list
         mock_anthropic_client.messages.create.return_value = MagicMock(content=[])
-        assert service._request_with_anthropic("prompt", mock_anthropic_client) == ""
+        service = LLMService(
+            llm_client=mock_anthropic_client
+        )  # Re-init or ensure client is updated if necessary
+        assert service._request_with_anthropic("prompt") == ""
 
+        # Scenario 3: content[0].text is None
         mock_text_obj = MagicMock(text=None)
         mock_anthropic_client.messages.create.return_value = MagicMock(
             content=[mock_text_obj]
         )
-        assert service._request_with_anthropic("prompt", mock_anthropic_client) == ""
+        service = LLMService(llm_client=mock_anthropic_client)
+        assert service._request_with_anthropic("prompt") == ""
 
     def test_internal_request_with_openai_empty_response(self, caplog):
-        mock_openai_client = MagicMock()
-        mock_openai_client.__class__.__module__ = "openai"
-        # Simulate various empty/malformed responses
+        mock_openai_client = MockOpenAIClient()  # Use the actual mock client class
+
+        # Scenario 1: choices is None
         mock_openai_client.chat.completions.create.return_value = MagicMock(
             choices=None
         )
         service = LLMService(llm_client=mock_openai_client)
-        assert service._request_with_openai("prompt", mock_openai_client) == ""
+        assert service._request_with_openai("prompt") == ""
 
+        # Scenario 2: choices is empty list
         mock_openai_client.chat.completions.create.return_value = MagicMock(choices=[])
-        assert service._request_with_openai("prompt", mock_openai_client) == ""
+        service = LLMService(llm_client=mock_openai_client)
+        assert service._request_with_openai("prompt") == ""
 
+        # Scenario 3: message is None
         mock_choice_no_msg = MagicMock(message=None)
         mock_openai_client.chat.completions.create.return_value = MagicMock(
             choices=[mock_choice_no_msg]
         )
-        assert service._request_with_openai("prompt", mock_openai_client) == ""
+        service = LLMService(llm_client=mock_openai_client)
+        assert service._request_with_openai("prompt") == ""
 
+        # Scenario 4: message.content is None
         mock_msg_no_content = MagicMock(content=None)
         mock_choice_msg_no_content = MagicMock(message=mock_msg_no_content)
         mock_openai_client.chat.completions.create.return_value = MagicMock(
             choices=[mock_choice_msg_no_content]
         )
-        assert service._request_with_openai("prompt", mock_openai_client) == ""
+        service = LLMService(llm_client=mock_openai_client)
+        assert service._request_with_openai("prompt") == ""
 
     def test_auto_detect_anthropic_init_fails(self, caplog):
         # Mock Anthropic to raise an exception during initialization

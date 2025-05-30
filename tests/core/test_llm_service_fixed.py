@@ -1,7 +1,7 @@
 import logging
 from unittest.mock import MagicMock, patch
 
-from pytest_analyzer.core.llm.backward_compat import LLMService
+from pytest_analyzer.core.llm.llm_service import LLMService
 
 
 # Mock classes for external clients

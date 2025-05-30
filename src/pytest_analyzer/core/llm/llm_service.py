@@ -23,6 +23,7 @@ except ImportError:
 from ...utils.resource_manager import ResourceMonitor, TimeoutError
 from ...utils.settings import Settings
 from ..errors import LLMServiceError, ParsingError
+from ..infrastructure.llm.base_llm_service import BaseLLMService
 from ..models.failure_analysis import FailureAnalysis
 from ..models.pytest_failure import FixSuggestion, PytestFailure
 from ..parsers.response_parser import ResponseParser
@@ -54,7 +55,7 @@ def error_context(error_type: Type[Exception], error_message: str):
         raise error_type(f"{error_message}: {str(e)}") from e
 
 
-class LLMService(LLMServiceProtocol):
+class LLMService(BaseLLMService, LLMServiceProtocol):
     """
     Synchronous implementation for sending prompts to a Language Model.
     Uses dependency injection for configuration and resources.
@@ -62,8 +63,8 @@ class LLMService(LLMServiceProtocol):
 
     def __init__(
         self,
-        prompt_builder: PromptBuilder,
-        response_parser: ResponseParser,
+        prompt_builder: Optional[PromptBuilder] = None,
+        response_parser: Optional[ResponseParser] = None,
         resource_monitor: Optional[ResourceMonitor] = None,
         llm_client: Optional[Any] = None,
         disable_auto_detection: bool = False,
@@ -87,15 +88,35 @@ class LLMService(LLMServiceProtocol):
             max_tokens: Maximum tokens in the response
             model_name: Model names for different providers (e.g., {"openai": "gpt-3.5-turbo", "anthropic": "claude-3-haiku-20240307"})
         """
+        self.disable_auto_detection = disable_auto_detection
+
+        # Always call super().__init__ with provider=None so that the base class will call _create_default_provider
+        # if llm_client is not provided. If llm_client is provided, we use it as the provider.
+        provider = llm_client if llm_client is not None else None
+        super().__init__(provider=provider, settings=settings)
+
+        # If llm_client is not provided, use the provider from the base class (which may be auto-detected)
+        if llm_client is None:
+            self.llm_client = self.provider
+        else:
+            self.llm_client = llm_client
+
+        # Create default prompt_builder and response_parser if not provided
+        if prompt_builder is None:
+            from ..prompts.prompt_builder import PromptBuilder
+
+            prompt_builder = PromptBuilder()
+        if response_parser is None:
+            from ..parsers.response_parser import ResponseParser
+
+            response_parser = ResponseParser()
+
         self.prompt_builder = prompt_builder
         self.response_parser = response_parser
         self.resource_monitor = resource_monitor or ResourceMonitor(
             max_memory_mb=None,
             max_time_seconds=timeout_seconds,
         )
-        self.llm_client = llm_client
-        self.disable_auto_detection = disable_auto_detection
-        self.settings = settings
         self.timeout_seconds = timeout_seconds
         self.max_tokens = max_tokens
         self.model_name = model_name or {
@@ -111,6 +132,14 @@ class LLMService(LLMServiceProtocol):
                 "No LLM client available or configured for LLMService. "
                 "Install 'anthropic' or 'openai' packages, or provide an llm_client."
             )
+
+    def generate(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> str:
+        """
+        Generate a response from the LLM based on the prompt and context.
+
+        This implements the abstract method from BaseLLMService.
+        """
+        return self.send_prompt(prompt)
 
     def send_prompt(self, prompt: str) -> str:
         """
@@ -208,6 +237,36 @@ class LLMService(LLMServiceProtocol):
         except Exception as e:
             raise ParsingError(f"Failed to parse suggestion response: {str(e)}") from e
 
+    def _create_default_provider(self) -> Any:
+        """
+        Create the default LLM provider based on settings.
+
+        This implements the abstract method from BaseLLMService.
+        """
+        # Use auto-detection logic if no provider is explicitly set
+        if self.disable_auto_detection:
+            logger.info("LLM client auto-detection is disabled.")
+            return None
+
+        if Anthropic:
+            try:
+                client = Anthropic()
+                logger.info("Using Anthropic client for LLM requests.")
+                return client
+            except Exception as e:
+                logger.debug(f"Failed to initialize Anthropic client: {e}")
+
+        if openai and hasattr(openai, "OpenAI"):
+            try:
+                client = openai.OpenAI()
+                logger.info("Using OpenAI client for LLM requests.")
+                return client
+            except Exception as e:
+                logger.debug(f"Failed to initialize OpenAI client: {e}")
+
+        logger.warning("No suitable language model clients found or auto-detected.")
+        return None
+
     def _get_llm_request_function(self) -> Optional[Callable[[str], str]]:
         """
         Get the appropriate function for making LLM requests.
@@ -248,29 +307,13 @@ class LLMService(LLMServiceProtocol):
                     )
                 return None
 
-        # If llm_client is None and auto-detection is disabled, return None
-        if self.disable_auto_detection:
-            logger.info("LLM client auto-detection is disabled.")
-            return None
-
-        # Auto-detect available clients
-        if Anthropic:
-            try:
-                client = Anthropic()
-                logger.info("Using Anthropic client for LLM requests.")
-                self.llm_client = client
+        # If llm_client is None, rely on the provider (set by _create_default_provider)
+        if self.provider:
+            client_module_name = self.provider.__class__.__module__.lower()
+            if "anthropic" in client_module_name and hasattr(self.provider, "messages"):
                 return lambda p: self._request_with_anthropic(p)
-            except Exception as e:
-                logger.debug(f"Failed to initialize Anthropic client: {e}")
-
-        if openai and hasattr(openai, "OpenAI"):
-            try:
-                client = openai.OpenAI()
-                logger.info("Using OpenAI client for LLM requests.")
-                self.llm_client = client
+            elif "openai" in client_module_name and hasattr(self.provider, "chat"):
                 return lambda p: self._request_with_openai(p)
-            except Exception as e:
-                logger.debug(f"Failed to initialize OpenAI client: {e}")
 
         logger.warning("No suitable language model clients found or auto-detected.")
         return None
@@ -289,7 +332,7 @@ class LLMService(LLMServiceProtocol):
             Exception: If there's an error with the request
         """
         try:
-            message = self.llm_client.messages.create(
+            message = self.provider.messages.create(
                 model=self.model_name.get("anthropic", "claude-3-haiku-20240307"),
                 max_tokens=self.max_tokens,
                 messages=[{"role": "user", "content": prompt}],
@@ -319,7 +362,7 @@ class LLMService(LLMServiceProtocol):
             Exception: If there's an error with the request
         """
         try:
-            completion = self.llm_client.chat.completions.create(
+            completion = self.provider.chat.completions.create(
                 model=self.model_name.get("openai", "gpt-3.5-turbo"),
                 messages=[
                     {
