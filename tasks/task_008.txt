@@ -1,150 +1,96 @@
 # Task ID: 8
-# Title: Implement Analyzer State Machine
+# Title: Implement EnvironmentManagerFactory Using BaseFactory
 # Status: done
-# Dependencies: 2, 3, 4, 5, 6, 7
-# Priority: high
-# Description: Create a state machine implementation for the test analysis workflow.
+# Dependencies: 3, 6, 7
+# Priority: medium
+# Description: Create an EnvironmentManagerFactory that inherits from BaseFactory to create the appropriate environment manager based on project configuration.
 # Details:
-Implement a concrete state machine for the test analysis workflow:
+Create `src/pytest_analyzer/core/infrastructure/environment/environment_manager_factory.py` with the following implementation:
 
 ```python
-from enum import Enum, auto
-from typing import Dict, Any, List, Optional
+from pathlib import Path
+from typing import Type, Optional, Dict
 
-class AnalyzerState(Enum):
-    INITIALIZE = auto()
-    EXTRACT_TEST_RESULTS = auto()
-    ANALYZE_FAILURES = auto()
-    GENERATE_SUGGESTIONS = auto()
-    APPLY_FIXES = auto()
-    COMPLETE = auto()
-    ERROR = auto()
+from pytest_analyzer.core.infrastructure.base_factory import BaseFactory
+from pytest_analyzer.core.infrastructure.environment.base_manager import BaseEnvironmentManager
+from pytest_analyzer.core.infrastructure.environment.poetry_manager import PoetryEnvironmentManager
+from pytest_analyzer.core.infrastructure.environment.pixi_manager import PixiEnvironmentManager
+from pytest_analyzer.core.infrastructure.environment.hatch_manager import HatchEnvironmentManager
+from pytest_analyzer.core.infrastructure.environment.uv_manager import UVEnvironmentManager
+from pytest_analyzer.core.infrastructure.environment.pipenv_manager import PipenvEnvironmentManager
+from pytest_analyzer.core.cross_cutting.configuration.settings import Settings
+from pytest_analyzer.core.cross_cutting.error_handling import error_context
 
-class AnalyzerStateMachine(StateMachine[AnalyzerState]):
-    def __init__(self, di_container: DIContainer):
-        super().__init__(AnalyzerState.INITIALIZE)
-        self.di_container = di_container
+class EnvironmentManagerFactory(BaseFactory):
+    """Factory for creating environment managers based on project configuration."""
 
-        # Register states
-        self.add_state(AnalyzerState.INITIALIZE, self._initialize)
-        self.add_state(AnalyzerState.EXTRACT_TEST_RESULTS, self._extract_test_results)
-        self.add_state(AnalyzerState.ANALYZE_FAILURES, self._analyze_failures)
-        self.add_state(AnalyzerState.GENERATE_SUGGESTIONS, self._generate_suggestions)
-        self.add_state(AnalyzerState.APPLY_FIXES, self._apply_fixes)
-        self.add_state(AnalyzerState.COMPLETE, self._complete)
-        self.add_state(AnalyzerState.ERROR, self._handle_error)
+    def __init__(self, settings: Optional[Settings] = None):
+        super().__init__(settings)
+        self._register_default_managers()
 
-        # Register transitions
-        self.add_transition(
-            AnalyzerState.INITIALIZE,
-            AnalyzerState.EXTRACT_TEST_RESULTS,
-            lambda ctx, **kwargs: ctx.get('initialized', False)
-        )
-        self.add_transition(
-            AnalyzerState.EXTRACT_TEST_RESULTS,
-            AnalyzerState.ANALYZE_FAILURES,
-            lambda ctx, **kwargs: ctx.get('extraction_results') is not None
-        )
-        self.add_transition(
-            AnalyzerState.ANALYZE_FAILURES,
-            AnalyzerState.GENERATE_SUGGESTIONS,
-            lambda ctx, **kwargs: ctx.get('analysis_results') is not None
-        )
-        self.add_transition(
-            AnalyzerState.GENERATE_SUGGESTIONS,
-            AnalyzerState.APPLY_FIXES,
-            lambda ctx, **kwargs: ctx.get('suggestions') is not None and kwargs.get('apply_fixes', False)
-        )
-        self.add_transition(
-            AnalyzerState.GENERATE_SUGGESTIONS,
-            AnalyzerState.COMPLETE,
-            lambda ctx, **kwargs: ctx.get('suggestions') is not None and not kwargs.get('apply_fixes', False)
-        )
-        self.add_transition(
-            AnalyzerState.APPLY_FIXES,
-            AnalyzerState.COMPLETE,
-            lambda ctx, **kwargs: ctx.get('fixes_applied', False)
-        )
+    def _register_default_managers(self) -> None:
+        """Register the default environment managers."""
+        self.register("poetry", PoetryEnvironmentManager)
+        self.register("pixi", PixiEnvironmentManager)
+        self.register("hatch", HatchEnvironmentManager)
+        self.register("uv", UVEnvironmentManager)
+        self.register("pipenv", PipenvEnvironmentManager)
 
-        # Error transitions from any state
-        for state in AnalyzerState:
-            if state not in [AnalyzerState.COMPLETE, AnalyzerState.ERROR]:
-                self.add_transition(
-                    state,
-                    AnalyzerState.ERROR,
-                    lambda ctx, **kwargs: ctx.get('error') is not None
-                )
+    def create(self, project_path: Path, manager_type: Optional[str] = None) -> BaseEnvironmentManager:
+        """Create an environment manager for the given project path.
 
-    def _initialize(self, context: Dict[str, Any], **kwargs) -> None:
-        try:
-            # Initialize components
-            context['extractor'] = self.di_container.resolve(Extractor)
-            context['analyzer'] = self.di_container.resolve(Analyzer)
-            context['suggester'] = self.di_container.resolve(Suggester)
-            context['applier'] = self.di_container.resolve(Applier)
-            context['initialized'] = True
-        except Exception as e:
-            context['error'] = str(e)
+        Args:
+            project_path: Path to the project directory
+            manager_type: Type of manager to create, or None to auto-detect
 
-    def _extract_test_results(self, context: Dict[str, Any], **kwargs) -> None:
-        try:
-            extractor = context['extractor']
-            test_results = kwargs.get('test_results')
-            if not test_results:
-                raise ValueError("No test results provided")
+        Returns:
+            An instance of the appropriate environment manager
+        """
+        with error_context("Creating environment manager", self.logger):
+            if manager_type is None:
+                manager_type = self._detect_environment_type(project_path)
 
-            context['extraction_results'] = extractor.extract(test_results)
-        except Exception as e:
-            context['error'] = str(e)
+            manager_class = self.get_implementation(manager_type)
+            return manager_class(project_path)
 
-    def _analyze_failures(self, context: Dict[str, Any], **kwargs) -> None:
-        try:
-            analyzer = context['analyzer']
-            extraction_results = context['extraction_results']
-            context['analysis_results'] = analyzer.analyze(extraction_results)
-        except Exception as e:
-            context['error'] = str(e)
-
-    def _generate_suggestions(self, context: Dict[str, Any], **kwargs) -> None:
-        try:
-            suggester = context['suggester']
-            analysis_results = context['analysis_results']
-            context['suggestions'] = suggester.suggest(analysis_results)
-        except Exception as e:
-            context['error'] = str(e)
-
-    def _apply_fixes(self, context: Dict[str, Any], **kwargs) -> None:
-        try:
-            applier = context['applier']
-            suggestions = context['suggestions']
-            target_files = kwargs.get('target_files', [])
-            context['fixes_applied'] = applier.apply(suggestions, target_files)
-        except Exception as e:
-            context['error'] = str(e)
-
-    def _complete(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        # Return the final results
-        return {
-            'extraction_results': context.get('extraction_results'),
-            'analysis_results': context.get('analysis_results'),
-            'suggestions': context.get('suggestions'),
-            'fixes_applied': context.get('fixes_applied', False)
+    def _detect_environment_type(self, project_path: Path) -> str:
+        """Detect the environment type based on project files."""
+        detection_files = {
+            "poetry": "pyproject.toml",  # Look for poetry section
+            "pixi": "pixi.toml",
+            "hatch": "pyproject.toml",  # Look for hatch section
+            "pipenv": "Pipfile",
+            "uv": "pyproject.toml"  # Look for uv section
         }
 
-    def _handle_error(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        # Return error information
-        return {
-            'error': context.get('error', 'Unknown error'),
-            'state': self.current_state.name,
-            'partial_results': {
-                'extraction_results': context.get('extraction_results'),
-                'analysis_results': context.get('analysis_results'),
-                'suggestions': context.get('suggestions')
-            }
-        }
+        # Check for pyproject.toml first and determine the tool
+        if (project_path / "pyproject.toml").exists():
+            # Read the file and check for tool sections
+            with open(project_path / "pyproject.toml", "r") as f:
+                content = f.read()
+                if "[tool.poetry]" in content:
+                    return "poetry"
+                elif "[tool.hatch]" in content:
+                    return "hatch"
+                elif "[tool.uv]" in content:
+                    return "uv"
+
+        # Check for other files
+        for env_type, filename in detection_files.items():
+            if (project_path / filename).exists():
+                return env_type
+
+        # Default to poetry if nothing else is detected
+        self.logger.warning(f"Could not detect environment type for {project_path}, defaulting to poetry")
+        return "poetry"
 ```
 
-This implementation should handle the complete workflow of extracting test results, analyzing failures, generating suggestions, and optionally applying fixes.
+This factory uses the BaseFactory to eliminate code duplication while providing environment manager-specific functionality.
 
 # Test Strategy:
-Create unit tests that verify each state transition and handler. Use mocked dependencies to test both successful and error scenarios. Test the complete workflow with different input parameters.
+Create unit tests for EnvironmentManagerFactory that verify:
+1. _register_default_managers correctly registers all environment managers
+2. create returns the correct manager type when explicitly specified
+3. _detect_environment_type correctly identifies environment types based on project files
+4. Integration test with different project structures to verify auto-detection works
+5. Error handling for invalid manager types

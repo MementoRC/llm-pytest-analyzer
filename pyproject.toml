@@ -34,6 +34,7 @@ dependencies = [
     "openai",
     "psutil",
     "pyyaml",
+    "python-dotenv",
     "rich>=12.0.0", # For CLI and TUI progress
     "textual>=0.50.0", # For the TUI interface
 ]
@@ -90,11 +91,9 @@ markers = [
 
 [tool.mypy]
 mypy_path = ["src"]
-namespace_packages = true
 explicit_package_bases = true
-exclude = ["examples/*", "demo_script.py"]
+exclude = ["examples/*", "demo_script.py", "src/pytest_analyzer/core/di/*"]
 python_version = "3.9"
-packages = ["pytest_analyzer"]
 ignore_errors = false
 
 [[tool.mypy.overrides]]
@@ -108,6 +107,7 @@ platforms = ["linux-64"]
 [tool.pixi.dependencies]
 "pyyaml" = "*"
 "rich" = ">=12.0.0"
+python-dotenv = ">=1.1.0,<2"
 
 [tool.pixi.pypi-dependencies]
 # pytest-analyzer = { path = ".", editable = true }

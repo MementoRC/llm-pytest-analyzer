@@ -25,6 +25,15 @@ from ..core.analyzer_service import PytestAnalyzerService
 from ..core.models.pytest_failure import FixSuggestion, PytestFailure
 from ..utils.settings import Settings, load_settings
 
+# Load environment variables from .env file if present
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()  # Load .env from current directory or parent directories
+except ImportError:
+    # python-dotenv not available, continue without it
+    pass
+
 # Setup rich console
 console = Console()
 
@@ -179,6 +188,16 @@ def setup_parser() -> argparse.ArgumentParser:
         help="Model to use (auto selects available models)",
     )
 
+    # Add new Environment Manager group here
+    env_manager_group = parser.add_argument_group("Environment Manager")
+    env_manager_group.add_argument(
+        "--env-manager",
+        type=str.lower,  # Ensure value is lowercase
+        choices=["auto", "pixi", "poetry", "hatch", "uv", "pipenv", "pip+venv"],
+        default="auto",
+        help="Specify the environment manager to use. 'auto' will attempt to detect it. (default: auto)",
+    )
+
     # Pytest options
     parser.add_argument(
         "--pytest-args", type=str, help="Additional arguments for pytest (quoted)"
@@ -258,6 +277,13 @@ def configure_settings(args) -> Settings:
     settings.llm_timeout = args.llm_timeout
     settings.llm_api_key = args.llm_api_key
     settings.llm_model = args.llm_model
+
+    # Environment Manager (CLI takes precedence)
+    # args.env_manager is already lowercase due to type=str.lower in add_argument
+    if args.env_manager == "auto":
+        settings.environment_manager = None  # Force auto-detection
+    else:
+        settings.environment_manager = args.env_manager  # Use specified manager
 
     # Extraction format
     if args.json:

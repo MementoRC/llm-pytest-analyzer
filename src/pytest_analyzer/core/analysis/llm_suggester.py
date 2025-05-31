@@ -331,6 +331,13 @@ class LLMSuggester:
         if not suggestions:
             suggestions = self._extract_suggestions_from_text(response, failure)
 
+        # If we still have no suggestions and the response is empty or near-empty,
+        # create a basic fallback suggestion for common collection errors
+        if not suggestions and (not response or len(response.strip()) < 10):
+            fallback_suggestion = self._create_fallback_suggestion(failure)
+            if fallback_suggestion:
+                suggestions.append(fallback_suggestion)
+
         return suggestions
 
     def _create_suggestion_from_json(
@@ -375,6 +382,91 @@ class LLMSuggester:
         except Exception as e:
             logger.debug(f"Error creating suggestion from JSON: {e}")
             return None
+
+    def _create_fallback_suggestion(
+        self, failure: PytestFailure
+    ) -> Optional[FixSuggestion]:
+        """
+        Create a basic fallback suggestion for common collection errors.
+
+        :param failure: The failure to create a suggestion for
+        :return: A basic FixSuggestion or None
+        """
+        error_type = failure.error_type
+        error_message = failure.error_message
+
+        # Handle ModuleNotFoundError
+        if error_type == "ModuleNotFoundError" and "No module named" in error_message:
+            # Extract module name from error message
+            import re
+
+            module_match = re.search(
+                r"No module named ['\"]([^'\"]+)['\"]", error_message
+            )
+            if module_match:
+                module_name = module_match.group(1)
+                suggestion_text = f"Install the missing module '{module_name}' using your package manager."
+
+                # Provide installation suggestions based on common package managers
+                install_commands = []
+                if module_name in ["fastapi", "uvicorn", "pydantic"]:
+                    install_commands.extend(
+                        [
+                            f"pip install {module_name}",
+                            f"poetry add {module_name}",
+                            f"pixi add {module_name}",
+                            f"uv add {module_name}",
+                        ]
+                    )
+                else:
+                    install_commands.extend(
+                        [
+                            f"pip install {module_name}",
+                            f"poetry add {module_name}",
+                            f"pixi add {module_name}",
+                        ]
+                    )
+
+                code_changes = {
+                    "installation_commands": install_commands,
+                    "source": "fallback",
+                }
+
+                return FixSuggestion(
+                    failure=failure,
+                    suggestion=suggestion_text,
+                    confidence=0.7,
+                    explanation=f"The module '{module_name}' is not installed. This is a common dependency issue during test collection.",
+                    code_changes=code_changes,
+                )
+
+        # Handle ImportError
+        elif error_type == "ImportError":
+            suggestion_text = "Fix the import error by ensuring the module is installed and the import path is correct."
+
+            return FixSuggestion(
+                failure=failure,
+                suggestion=suggestion_text,
+                confidence=0.6,
+                explanation="Import errors during test collection usually indicate missing dependencies or incorrect import paths.",
+                code_changes={"source": "fallback"},
+            )
+
+        # Handle SyntaxError
+        elif error_type == "SyntaxError":
+            suggestion_text = (
+                "Fix the syntax error in the test file or its dependencies."
+            )
+
+            return FixSuggestion(
+                failure=failure,
+                suggestion=suggestion_text,
+                confidence=0.8,
+                explanation="Syntax errors prevent test collection. Check the file for syntax issues.",
+                code_changes={"source": "fallback"},
+            )
+
+        return None
 
     def _extract_suggestions_from_text(
         self, text: str, failure: PytestFailure

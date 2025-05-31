@@ -1,0 +1,16 @@
+[project]
+name = "uv-example-project"
+version = "0.1.0"
+description = "A minimal UV project for pytest-analyzer detection (using pyproject.toml)."
+requires-python = ">=3.9"
+dependencies = [
+    "pytest>=7.0"
+]
+
+[tool.uv.sources]
+# Example, not strictly needed for detection if uv.lock is present
+# pytest = "pytest"
+
+# An empty [tool.uv] section can also be a hint for UV usage,
+# but uv.lock is a stronger indicator.
+# [tool.uv]

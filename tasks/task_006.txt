@@ -1,56 +1,42 @@
 # Task ID: 6
-# Title: Implement ResponseParser Component
+# Title: Migrate PoetryEnvironmentManager to Use Base Class
 # Status: done
-# Dependencies: 2, 4
+# Dependencies: 2
 # Priority: medium
-# Description: Create a dedicated component for parsing and validating responses from the LLM service.
+# Description: Refactor the PoetryEnvironmentManager to inherit from BaseEnvironmentManager and eliminate duplicated code.
 # Details:
-Implement a ResponseParser that handles different response formats and validation:
+Refactor `src/pytest_analyzer/core/infrastructure/environment/poetry_manager.py` to use the new base class:
 
 ```python
-from typing import Dict, Any, List, Optional, TypeVar, Generic, Type, cast
-import json
-from pydantic import BaseModel, ValidationError
+from pathlib import Path
+from typing import List
 
-T = TypeVar('T', bound=BaseModel)
+# Import from the new structure
+from pytest_analyzer.core.infrastructure.environment.base_manager import BaseEnvironmentManager
+from pytest_analyzer.core.cross_cutting.error_handling import error_context
 
-class ResponseParser(Generic[T]):
-    def __init__(self, model_class: Type[T]):
-        self.model_class = model_class
+class PoetryEnvironmentManager(BaseEnvironmentManager):
+    """Poetry-specific environment manager implementation."""
 
-    def parse_json(self, response_text: str) -> T:
-        try:
-            # Extract JSON from response if needed
-            json_str = self._extract_json(response_text)
-            # Parse JSON
-            data = json.loads(json_str)
-            # Validate with Pydantic model
-            return self.model_class.parse_obj(data)
-        except json.JSONDecodeError as e:
-            raise ResponseParseError(f"Invalid JSON in response: {str(e)}") from e
-        except ValidationError as e:
-            raise ResponseParseError(f"Response validation failed: {str(e)}") from e
+    def __init__(self, project_path: Path):
+        super().__init__(project_path)
+        self.poetry_executable = "poetry"
 
-    def _extract_json(self, text: str) -> str:
-        # Handle cases where JSON is embedded in markdown or other text
-        # This is a simple implementation - might need to be more robust
-        if text.strip().startswith('{') and text.strip().endswith('}'):
-            return text
+    def build_command(self, base_command: List[str]) -> List[str]:
+        """Build a Poetry-specific command to run the given base command."""
+        with error_context("Building Poetry command", self.logger):
+            return [self.poetry_executable, "run"] + base_command
 
-        # Try to find JSON between triple backticks
-        import re
-        json_match = re.search(r'```(?:json)?\s*(.+?)\s*```', text, re.DOTALL)
-        if json_match:
-            return json_match.group(1)
-
-        # If no JSON found, raise error
-        raise ResponseParseError("Could not extract JSON from response")
-
-class ResponseParseError(Exception):
-    pass
+    # Only implement methods that differ from the base class
+    # activate and deactivate can use the base class no-op implementations
+    # execute_command can use the base class implementation
 ```
 
-Create Pydantic models for different response types (analysis results, fix suggestions, etc.).
+Repeat this pattern for other environment managers (Pixi, Hatch, UV, Pipenv) to eliminate code duplication while preserving specific behavior for each manager.
 
 # Test Strategy:
-Write unit tests for parsing different response formats, including valid JSON, JSON embedded in markdown, and invalid responses. Test validation with Pydantic models for both valid and invalid data structures.
+Create unit tests for PoetryEnvironmentManager that verify:
+1. build_command correctly prepends 'poetry run' to commands
+2. Inherited methods from BaseEnvironmentManager work correctly
+3. Integration test that verifies the manager can execute real commands in a Poetry environment
+4. Error handling works correctly when invalid commands are provided

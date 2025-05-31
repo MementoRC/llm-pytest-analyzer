@@ -1,20 +1,42 @@
 # Task ID: 1
-# Title: Create Project Architecture Document
+# Title: Create New Directory Structure for DDD Architecture
 # Status: done
 # Dependencies: None
 # Priority: high
-# Description: Create a comprehensive architecture document outlining the new structure, component relationships, and interfaces based on the refactoring requirements.
+# Description: Implement the new Domain-Driven Design directory structure as specified in the PRD, creating the domain, infrastructure, application, interfaces, and cross-cutting layers.
 # Details:
-The architecture document should include:
-1. Component diagram showing the relationships between Extractors, Analyzers, Suggesters, Appliers, and LLM Services
-2. Interface definitions for each component using Python's Protocol type
-3. Data flow diagrams
-4. Dependency injection approach
-5. Error handling strategy
-6. State machine design
-7. Both synchronous and asynchronous API patterns
+Create the following directory structure:
 
-The document should serve as a reference for the entire refactoring process and ensure all team members have a clear understanding of the target architecture.
+```
+src/pytest_analyzer/core/
+├── domain/
+│   ├── entities/           # Core business objects (PytestFailure, FixSuggestion)
+│   ├── services/           # Domain services (FailureAnalyzer, FixSuggester)
+│   ├── repositories/       # Data access abstractions
+│   └── value_objects/      # Immutable domain concepts
+├── infrastructure/
+│   ├── llm/               # External LLM service integrations
+│   ├── environment/       # Environment manager implementations
+│   ├── extraction/        # Report parsing implementations
+│   ├── di/               # Dependency injection container
+│   └── persistence/       # File system, caching implementations
+├── application/
+│   ├── services/          # Application services (AnalyzerService)
+│   ├── workflows/         # State machines and orchestration
+│   └── facades/           # Public API facades
+├── interfaces/
+│   ├── protocols.py       # All protocol definitions
+│   ├── errors.py          # Exception definitions
+│   └── types.py           # Type definitions
+└── cross_cutting/
+    ├── logging/            # Centralized logging configuration
+    ├── monitoring/         # Health checks and metrics
+    ├── caching/           # Result caching strategies
+    ├── validation/        # Input/output validation
+    └── configuration/     # Configuration management
+```
+
+Ensure all directories have proper `__init__.py` files to maintain package structure. Create placeholder README.md files in each directory explaining its purpose according to DDD principles.
 
 # Test Strategy:
-Review the document with stakeholders to ensure it addresses all requirements in the PRD. Validate that the proposed architecture supports all current functionality while enabling the improvements specified in the project goals.
+Verify directory structure exists with correct hierarchy. Ensure all __init__.py files are properly created. Validate import paths work correctly by attempting to import from each new module.

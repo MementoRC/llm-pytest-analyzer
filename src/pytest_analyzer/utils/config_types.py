@@ -67,6 +67,11 @@ class Settings:
     # Logging settings
     log_level: str = "INFO"  # Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
 
+    # Environment Manager settings
+    environment_manager: Optional[str] = (
+        None  # Override environment manager detection (pixi, poetry, hatch, uv, pipenv, pip+venv)
+    )
+
     # Backward compatibility properties
     debug: bool = False  # Enable debug mode (backward compatibility)
 
@@ -84,3 +89,21 @@ class Settings:
             self.log_level = "DEBUG"
         elif self.log_level == "DEBUG" and not self.debug:
             self.debug = True
+
+        # Validate and normalize environment_manager
+        if self.environment_manager is not None:
+            normalized_manager = self.environment_manager.lower()
+            VALID_MANAGERS = {
+                "pixi",
+                "poetry",
+                "hatch",
+                "uv",
+                "pipenv",
+                "pip+venv",
+            }
+            if normalized_manager not in VALID_MANAGERS:
+                raise ValueError(
+                    f"Invalid environment_manager: '{self.environment_manager}'. "
+                    f"Must be one of {VALID_MANAGERS} (case-insensitive), or None."
+                )
+            self.environment_manager = normalized_manager

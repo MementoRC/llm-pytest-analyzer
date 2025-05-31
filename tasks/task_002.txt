@@ -1,33 +1,53 @@
 # Task ID: 2
-# Title: Implement Core Protocol Interfaces
+# Title: Implement BaseEnvironmentManager Abstract Class
 # Status: done
 # Dependencies: 1
 # Priority: high
-# Description: Define Protocol interfaces for all major components to establish clear contracts between system parts.
+# Description: Create a base abstract class for environment managers to eliminate code duplication across Poetry, Pixi, Hatch, UV, and Pipenv managers.
 # Details:
-Create Protocol classes for each major component type:
+Create `src/pytest_analyzer/core/infrastructure/environment/base_manager.py` with the following implementation:
 
 ```python
-from typing import Protocol, List, Dict, Any, Optional
+from abc import ABC, abstractmethod
+from pathlib import Path
+import subprocess
+from typing import List, Optional
+import logging
 
-class Extractor(Protocol):
-    def extract(self, test_results: Any) -> Dict[str, Any]: ...
+class BaseEnvironmentManager(ABC):
+    """Base class for all environment managers to eliminate code duplication."""
 
-class Analyzer(Protocol):
-    def analyze(self, extraction_results: Dict[str, Any]) -> Dict[str, Any]: ...
+    def __init__(self, project_path: Path):
+        self.project_path = project_path
+        self.logger = logging.getLogger(self.__class__.__name__)
 
-class Suggester(Protocol):
-    def suggest(self, analysis_results: Dict[str, Any]) -> List[Dict[str, Any]]: ...
+    def execute_command(self, command: List[str]) -> int:
+        """Common implementation for executing commands in the project directory."""
+        self.logger.debug(f"Executing command: {' '.join(command)}")
+        return subprocess.call(command, cwd=self.project_path)
 
-class Applier(Protocol):
-    def apply(self, suggestions: List[Dict[str, Any]], target_files: List[str]) -> bool: ...
+    def activate(self) -> None:
+        """Default no-op implementation for environment activation."""
+        self.logger.debug("Environment activation not required")
+        pass
 
-class LLMService(Protocol):
-    def generate(self, prompt: str, **kwargs) -> str: ...
-    async def generate_async(self, prompt: str, **kwargs) -> str: ...
+    def deactivate(self) -> None:
+        """Default no-op implementation for environment deactivation."""
+        self.logger.debug("Environment deactivation not required")
+        pass
+
+    @abstractmethod
+    def build_command(self, base_command: List[str]) -> List[str]:
+        """Manager-specific command building logic to be implemented by subclasses."""
+        pass
 ```
 
-Ensure each Protocol has proper type hints and docstrings explaining the expected behavior and contract.
+This base class extracts the common functionality identified in the PRD from the existing environment manager implementations.
 
 # Test Strategy:
-Create test cases that verify implementations conform to the Protocol interfaces. Use mypy or similar static type checking to validate interface compliance.
+Create unit tests for BaseEnvironmentManager that verify:
+1. Constructor properly initializes project_path
+2. execute_command correctly calls subprocess.call with the right arguments
+3. Default activate/deactivate methods don't raise exceptions
+4. Attempting to instantiate the abstract class directly raises TypeError
+5. Subclassing without implementing build_command raises TypeError

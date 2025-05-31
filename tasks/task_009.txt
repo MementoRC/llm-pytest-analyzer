@@ -1,106 +1,58 @@
 # Task ID: 9
-# Title: Implement Extractor Component
+# Title: Migrate ExtractorFactory to Use BaseFactory
 # Status: done
-# Dependencies: 2, 3
+# Dependencies: 3
 # Priority: medium
-# Description: Create the Extractor component for parsing test results according to the Protocol interface.
+# Description: Refactor the ExtractorFactory to inherit from BaseFactory and eliminate duplicated code.
 # Details:
-Implement a concrete Extractor that parses pytest test results:
+Refactor `src/pytest_analyzer/core/infrastructure/extraction/extractor_factory.py` to use the new base class:
 
 ```python
-from typing import Dict, Any, List, Optional
-import re
-import os
+from typing import Type, Optional
+from pathlib import Path
 
-class PytestExtractor:
-    def extract(self, test_results: str) -> Dict[str, Any]:
-        """Extract relevant information from pytest test results."""
-        failures = []
-        test_files = set()
+from pytest_analyzer.core.infrastructure.base_factory import BaseFactory
+from pytest_analyzer.core.interfaces.protocols import Extractor
+from pytest_analyzer.core.infrastructure.extraction.json_extractor import JSONExtractor
+from pytest_analyzer.core.infrastructure.extraction.xml_extractor import XMLExtractor
+from pytest_analyzer.core.infrastructure.extraction.text_extractor import TextExtractor
+from pytest_analyzer.core.cross_cutting.configuration.settings import Settings
+from pytest_analyzer.core.cross_cutting.error_handling import error_context
 
-        # Extract test failures using regex patterns
-        failure_pattern = r'(FAILED|ERROR) (.+?)::(.+?)\s'
-        for match in re.finditer(failure_pattern, test_results):
-            status, file_path, test_name = match.groups()
+class ExtractorFactory(BaseFactory):
+    """Factory for creating extractors based on file type."""
 
-            # Find the error message and traceback
-            error_section = self._extract_error_section(test_results, file_path, test_name)
+    def __init__(self, settings: Optional[Settings] = None):
+        super().__init__(settings)
+        self._register_default_extractors()
 
-            failures.append({
-                'status': status,
-                'file_path': file_path,
-                'test_name': test_name,
-                'error': error_section.get('error', ''),
-                'traceback': error_section.get('traceback', ''),
-                'code_context': self._extract_code_context(file_path, error_section)
-            })
+    def _register_default_extractors(self) -> None:
+        """Register the default extractors."""
+        self.register("json", JSONExtractor)
+        self.register("xml", XMLExtractor)
+        self.register("txt", TextExtractor)
 
-            test_files.add(file_path)
+    def create(self, file_path: str) -> Extractor:
+        """Create an extractor for the given file path.
 
-        return {
-            'failures': failures,
-            'test_files': list(test_files),
-            'raw_output': test_results
-        }
+        Args:
+            file_path: Path to the file to extract from
 
-    def _extract_error_section(self, test_results: str, file_path: str, test_name: str) -> Dict[str, str]:
-        # Find the section containing the error for this specific test
-        pattern = f"{file_path}::{test_name}[\s\S]+?(?=\n\n|$)"
-        match = re.search(pattern, test_results)
-        if not match:
-            return {'error': '', 'traceback': ''}
-
-        section = match.group(0)
-
-        # Extract traceback and error message
-        traceback_lines = []
-        error_message = ''
-
-        in_traceback = False
-        for line in section.split('\n'):
-            if line.strip().startswith('E '):
-                if 'Error:' in line or 'Exception:' in line or 'AssertionError:' in line:
-                    error_message = line.strip()[2:]
-                else:
-                    traceback_lines.append(line.strip()[2:])
-            elif line.strip().startswith('_ _ _'):
-                in_traceback = True
-            elif in_traceback and line.strip():
-                traceback_lines.append(line.strip())
-
-        return {
-            'error': error_message,
-            'traceback': '\n'.join(traceback_lines)
-        }
-
-    def _extract_code_context(self, file_path: str, error_section: Dict[str, str]) -> Dict[str, Any]:
-        # Extract line numbers from traceback
-        line_pattern = f"{file_path}:(\d+)"
-        line_matches = re.findall(line_pattern, error_section.get('traceback', ''))
-
-        if not line_matches or not os.path.exists(file_path):
-            return {'source_code': '', 'line_number': 0}
-
-        try:
-            line_number = int(line_matches[0])
-            with open(file_path, 'r') as f:
-                lines = f.readlines()
-
-            # Get context (5 lines before and after)
-            start = max(0, line_number - 6)
-            end = min(len(lines), line_number + 5)
-            context_lines = lines[start:end]
-
-            return {
-                'source_code': ''.join(context_lines),
-                'line_number': line_number,
-                'start_line': start + 1  # 1-based line numbering
-            }
-        except Exception as e:
-            return {'source_code': f"Error extracting code: {str(e)}", 'line_number': 0}
+        Returns:
+            An instance of the appropriate extractor
+        """
+        with error_context("Creating extractor", self.logger):
+            file_type = self._detect_file_type(file_path)
+            extractor_class = self.get_implementation(file_type)
+            return extractor_class()
 ```
 
-This implementation should handle parsing pytest output to extract test failures, error messages, tracebacks, and code context.
+This refactored factory uses the BaseFactory to eliminate code duplication while providing extractor-specific functionality.
 
 # Test Strategy:
-Create unit tests with sample pytest output to verify extraction of failures, error messages, and code context. Test with different pytest output formats and error types. Verify handling of edge cases like missing files or malformed output.
+Create unit tests for ExtractorFactory that verify:
+1. _register_default_extractors correctly registers all extractors
+2. create returns the correct extractor type based on file extension
+3. Integration test with different file types to verify correct extractor is created
+4. Error handling for unsupported file types
+5. Verify that the refactored factory maintains the same behavior as the original implementation
