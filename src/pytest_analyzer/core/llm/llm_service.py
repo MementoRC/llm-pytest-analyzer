@@ -20,7 +20,7 @@ try:
 except ImportError:
     openai = None  # type: ignore
 
-from ...utils.resource_manager import ResourceMonitor, TimeoutError
+from ...utils.resource_manager import ResourceMonitor, TimeoutError, timeout_context
 from ...utils.settings import Settings
 from ..errors import LLMServiceError, ParsingError
 from ..infrastructure.llm.base_llm_service import BaseLLMService
@@ -161,10 +161,12 @@ class LLMService(BaseLLMService, LLMServiceProtocol):
             raise LLMServiceError("No LLM request function configured")
 
         with error_context(LLMServiceError, "Failed to send prompt to language model"):
-            # Start the resource monitor
+            # Start the resource monitor for tracking
             with self.resource_monitor:
-                result = self._llm_request_func(prompt)
-                return result
+                # Enforce the timeout
+                with timeout_context(self.timeout_seconds):
+                    result = self._llm_request_func(prompt)
+                    return result
 
     def analyze_failure(self, failure: PytestFailure) -> FailureAnalysis:
         """

@@ -250,7 +250,7 @@ class TestLLMService:
             with pytest.raises(LLMServiceError) as excinfo:
                 service.send_prompt("test timeout")
 
-        expected_timeout_message = "Operation timed out after 0.1 seconds"
+        expected_timeout_message = "Operation exceeded time limit of 0.1 seconds"
         assert expected_timeout_message in str(
             excinfo.value
         )  # Check exception message from LLMServiceError
