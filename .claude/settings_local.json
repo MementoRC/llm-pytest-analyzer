@@ -58,7 +58,7 @@
       "git add src/pytest_analyzer/core/__init__.py",
       "git add scripts/task-workflow.sh",
       "git add .claude/settings_local.json",
-      "git commit -m \"feat: implement Task X - [Task Title]\"",
+      "git commit -m \"FEAT: implement Task X - [Task Title]\"",
       "git push origin feature/environment-manager-integration",
       "git push origin main"
     ],
@@ -130,7 +130,7 @@
     },
     "phase_3_implementation": {
       "description": "Core Implementation",
-      "primary_tools": ["Write", "Edit", "MultiEdit"],
+      "primary_tools": ["mcp__aider__aider_ai_code"],
       "commands": []
     },
     "phase_4_quality": {
@@ -149,7 +149,7 @@
       "primary_tools": ["mcp__taskmaster-ai__set_task_status", "TodoWrite", "Bash"],
       "commands": [
         "git add [selective staging]",
-        "git commit -m \"feat: implement Task X\"",
+        "git commit -m \"FEAT: implement Task X\"",
         "git push origin [branch]"
       ]
     },

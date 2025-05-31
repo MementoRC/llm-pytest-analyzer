@@ -1,9 +1,10 @@
 import logging
 from pathlib import Path
-from typing import Dict, Optional, Type, Union
+from typing import Optional, Type, Union
 
 from ...utils.path_resolver import PathResolver
 from ...utils.settings import Settings
+from ..infrastructure.base_factory import BaseFactory
 from .json_extractor import JsonResultExtractor
 from .xml_extractor import XmlResultExtractor
 
@@ -22,7 +23,7 @@ class BaseExtractor:
 ExtractorClass = Type[Union[JsonResultExtractor, XmlResultExtractor]]
 
 
-class ExtractorFactory:
+class ExtractorFactory(BaseFactory):
     """Factory for creating extractors based on input type."""
 
     def __init__(
@@ -37,20 +38,66 @@ class ExtractorFactory:
             settings: Settings object
             path_resolver: PathResolver instance
         """
-        self.settings = settings or Settings()
+        super().__init__(settings)
         self.path_resolver = path_resolver or PathResolver(self.settings.project_root)
 
-        # Map of file extensions to extractor classes
-        self.extractor_map: Dict[str, ExtractorClass] = {
-            ".json": JsonResultExtractor,
-            ".xml": XmlResultExtractor,
-        }
+        # Register default extractors
+        self.register("json", JsonResultExtractor)
+        self.register("xml", XmlResultExtractor)
+
+    def create(
+        self, input_path: Path
+    ) -> Union[JsonResultExtractor, XmlResultExtractor]:
+        """
+        Create an extractor instance for the given input file.
+
+        Args:
+            input_path: Path to the input file
+
+        Returns:
+            An appropriate extractor instance.
+        """
+        file_ext_key = self._detect_file_type(str(input_path))  # e.g., "json", "xml"
+        extractor_class: Optional[ExtractorClass] = None
+
+        if file_ext_key:
+            try:
+                extractor_class = self.get_implementation(file_ext_key)
+                logger.debug(
+                    f"Using {extractor_class.__name__} for {input_path} based on extension '.{file_ext_key}'"
+                )
+            except KeyError:
+                logger.debug(
+                    f"Extension '.{file_ext_key}' not directly registered. Attempting content detection for {input_path}."
+                )
+                # Fall through to content detection
+
+        if not extractor_class:
+            if self._is_json_file(input_path):
+                logger.debug(f"Detected JSON content in {input_path}")
+                extractor_class = self.get_implementation("json")
+            elif self._is_xml_file(input_path):
+                logger.debug(f"Detected XML content in {input_path}")
+                extractor_class = self.get_implementation("xml")
+            else:
+                # Default to JSON extractor with a warning
+                warning_msg = f"Unsupported or ambiguous file type for {input_path}"
+                if file_ext_key:  # if an extension was detected but not matched
+                    warning_msg += f" (extension: '.{file_ext_key}')"
+                warning_msg += ", defaulting to JSON extractor"
+                logger.warning(warning_msg)
+                extractor_class = self.get_implementation("json")
+
+        return extractor_class(
+            path_resolver=self.path_resolver, timeout=self.settings.parser_timeout
+        )
 
     def get_extractor(
         self, input_path: Path
     ) -> Union[JsonResultExtractor, XmlResultExtractor]:
         """
         Get the appropriate extractor for the input path.
+        Maintains backward compatibility.
 
         Args:
             input_path: Path to the input file
@@ -59,42 +106,13 @@ class ExtractorFactory:
             Appropriate extractor instance
 
         Raises:
-            ValueError: If the input file type is not supported
+            ValueError: If the input file type is not supported or file not found
         """
         # Check if the input path exists
         if not input_path.exists():
             raise ValueError(f"Input file not found: {input_path}")
 
-        # Determine the file type based on extension
-        file_ext = input_path.suffix.lower()
-
-        if file_ext in self.extractor_map:
-            extractor_class = self.extractor_map[file_ext]
-            logger.debug(f"Using {extractor_class.__name__} for {input_path}")
-            return extractor_class(
-                path_resolver=self.path_resolver, timeout=self.settings.parser_timeout
-            )
-
-        # If the extension is not recognized, try to guess the file type
-        if self._is_json_file(input_path):
-            logger.debug(f"Detected JSON content in {input_path}")
-            return JsonResultExtractor(
-                path_resolver=self.path_resolver, timeout=self.settings.parser_timeout
-            )
-
-        if self._is_xml_file(input_path):
-            logger.debug(f"Detected XML content in {input_path}")
-            return XmlResultExtractor(
-                path_resolver=self.path_resolver, timeout=self.settings.parser_timeout
-            )
-
-        # Default to JSON extractor with a warning
-        logger.warning(
-            f"Unsupported file type: {file_ext}, defaulting to JSON extractor"
-        )
-        return JsonResultExtractor(
-            path_resolver=self.path_resolver, timeout=self.settings.parser_timeout
-        )
+        return self.create(input_path)
 
     def _is_json_file(self, file_path: Path) -> bool:
         """

@@ -1,5 +1,6 @@
 """Pytest configuration for the pytest_analyzer tests."""
 
+import logging
 import sys
 from pathlib import Path
 from typing import Optional
@@ -10,10 +11,75 @@ import pytest
 from pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
 
 
+# Helper function to identify pytest's caplog handler
+def _is_pytest_caplog_handler(handler: logging.Handler) -> bool:
+    """Checks if a handler is pytest's LogCaptureHandler."""
+    # Check class name and module to avoid importing _pytest.logging directly
+    return (
+        handler.__class__.__name__ == "LogCaptureHandler"
+        and handler.__class__.__module__ == "_pytest.logging"
+    )
+
+
 # Register custom markers
 def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line("markers", "e2e: mark test as an end-to-end test")
+
+
+@pytest.fixture(autouse=True)
+def isolate_logging():
+    """Ensure logger isolation between tests to prevent shared state issues."""
+    # Store original logging state
+    original_handlers = {}
+    original_levels = {}
+
+    # Capture state of all existing loggers
+    for name, logger in logging.Logger.manager.loggerDict.items():
+        if isinstance(logger, logging.Logger):
+            original_handlers[name] = logger.handlers.copy()
+            original_levels[name] = logger.level
+
+    yield
+
+    # Restore original logging state
+    for name, logger_from_dict in logging.Logger.manager.loggerDict.items():
+        if isinstance(logger_from_dict, logging.Logger):
+            logger = (
+                logger_from_dict  # Use 'logger' consistently as the Logger instance
+            )
+
+            # Preserve pytest's caplog handlers that were on the logger
+            caplog_handlers_on_logger = [
+                h for h in logger.handlers if _is_pytest_caplog_handler(h)
+            ]
+
+            # Get the original handlers for this logger from setup time.
+            # These are assumed to be application-specific or non-caplog handlers.
+            initial_handlers_for_logger = original_handlers.get(name, [])
+
+            # Clear all current handlers from the logger
+            logger.handlers.clear()
+
+            # Add back the initial handlers (e.g., application's default handlers).
+            # Safeguard: ensure not to re-add a caplog handler if it was somehow in initial_handlers_for_logger.
+            for handler_to_restore in initial_handlers_for_logger:
+                if not _is_pytest_caplog_handler(handler_to_restore):
+                    logger.addHandler(handler_to_restore)
+
+            # Add back the caplog handlers that were present on the logger just before clearing.
+            # This ensures caplog continues to function for this logger.
+            # Add only if not already present (e.g. if a caplog handler was also an initial handler - unlikely but safe).
+            for caplog_handler_to_add_back in caplog_handlers_on_logger:
+                if caplog_handler_to_add_back not in logger.handlers:
+                    logger.addHandler(caplog_handler_to_add_back)
+
+            # Restore original level for this logger
+            if name in original_levels:
+                logger.level = original_levels[name]
+            # If a logger was created during the test (i.e., name not in original_levels),
+            # its level remains as set during the test or its default (NOTSET).
+            # This is consistent with the original fixture's behavior regarding levels.
 
 
 @pytest.fixture(scope="function")

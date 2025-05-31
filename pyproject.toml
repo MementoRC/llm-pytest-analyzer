@@ -88,11 +88,9 @@ markers = [
 
 [tool.mypy]
 mypy_path = ["src"]
-namespace_packages = true
 explicit_package_bases = true
-exclude = ["examples/*", "demo_script.py"]
+exclude = ["examples/*", "demo_script.py", "src/pytest_analyzer/core/di/*"]
 python_version = "3.9"
-packages = ["pytest_analyzer"]
 ignore_errors = false
 
 [[tool.mypy.overrides]]

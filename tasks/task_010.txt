@@ -1,51 +1,61 @@
 # Task ID: 10
-# Title: Update Documentation and Create Examples
+# Title: Migrate LLMServiceFactory to Use BaseFactory
 # Status: done
-# Dependencies: 1, 2, 3, 4, 5, 6, 7, 8, 9
-# Priority: low
-# Description: Update project documentation to include information about environment manager detection and create examples for each supported manager
+# Dependencies: 3, 4
+# Priority: medium
+# Description: Refactor the LLMServiceFactory to inherit from BaseFactory and eliminate duplicated code.
 # Details:
-Update the project documentation to include information about the environment manager detection feature:
+Refactor `src/pytest_analyzer/core/infrastructure/llm/llm_service_factory.py` to use the new base class:
 
-1. Update README.md with a new section on environment manager support
-2. Create a detailed documentation page explaining how the detection works
-3. Document configuration options for environment manager overrides
-4. Document CLI flags for environment manager selection
-5. Create examples for each supported environment manager
+```python
+from typing import Type, Optional, Dict, Any
 
-Example README section:
+from pytest_analyzer.core.infrastructure.base_factory import BaseFactory
+from pytest_analyzer.core.interfaces.protocols import LLMService, LLMProvider
+from pytest_analyzer.core.infrastructure.llm.openai_service import OpenAIService
+from pytest_analyzer.core.infrastructure.llm.anthropic_service import AnthropicService
+from pytest_analyzer.core.infrastructure.llm.mock_service import MockLLMService
+from pytest_analyzer.core.cross_cutting.configuration.settings import Settings
+from pytest_analyzer.core.cross_cutting.error_handling import error_context
 
-```markdown
-## Environment Manager Support
+class LLMServiceFactory(BaseFactory):
+    """Factory for creating LLM services based on configuration."""
 
-pytest-analyzer now automatically detects and integrates with your project's Python environment manager:
+    def __init__(self, settings: Optional[Settings] = None):
+        super().__init__(settings)
+        self._register_default_services()
 
-- **Pixi**: Automatically detected via `pixi.toml`
-- **Poetry**: Automatically detected via `pyproject.toml` with `[tool.poetry]`
-- **Hatch**: Automatically detected via `pyproject.toml` with `[tool.hatch]`
-- **UV**: Automatically detected via `uv.lock` or UV configuration in `pyproject.toml`
-- **Pipenv**: Automatically detected via `Pipfile` or `Pipfile.lock`
-- **Pip+Venv**: Automatically detected via `requirements.txt` with virtual environment
+    def _register_default_services(self) -> None:
+        """Register the default LLM services."""
+        self.register("openai", OpenAIService)
+        self.register("anthropic", AnthropicService)
+        self.register("mock", MockLLMService)
 
-### Manual Override
+    def create(self, provider_type: Optional[str] = None, provider: Optional[LLMProvider] = None) -> LLMService:
+        """Create an LLM service with the specified provider.
 
-You can manually specify which environment manager to use:
+        Args:
+            provider_type: Type of LLM provider to use, or None to use settings
+            provider: Optional pre-configured provider instance
 
-```bash
-# Via CLI flag
-pytest-analyzer --env-manager poetry
+        Returns:
+            An instance of the appropriate LLM service
+        """
+        with error_context("Creating LLM service", self.logger):
+            if provider_type is None:
+                provider_type = self.settings.get("llm.provider", "openai")
 
-# Via configuration file (.pytest-analyzer.json)
-{
-  "environment_manager": "poetry"
-}
-
-# Via environment variable
-PYTEST_ANALYZER_ENV_MANAGER=poetry pytest-analyzer
+            service_class = self.get_implementation(provider_type)
+            return service_class(provider=provider, settings=self.settings)
 ```
-```
 
-Create example projects for each environment manager in the `examples/` directory to demonstrate usage.
+This refactored factory uses the BaseFactory to eliminate code duplication while providing LLM service-specific functionality.
 
 # Test Strategy:
-Review documentation for accuracy and completeness. Test examples to ensure they work correctly with each environment manager. Conduct user testing to verify that the documentation is clear and helpful.
+Create unit tests for LLMServiceFactory that verify:
+1. _register_default_services correctly registers all LLM services
+2. create returns the correct service type based on provider_type
+3. create uses settings to determine provider_type when not specified
+4. create correctly passes provider and settings to the service constructor
+5. Error handling for unsupported provider types
+6. Verify that the refactored factory maintains the same behavior as the original implementation

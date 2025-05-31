@@ -1,49 +1,58 @@
 # Task ID: 9
-# Title: Update Test Execution and Quality Validation Workflows
+# Title: Migrate ExtractorFactory to Use BaseFactory
 # Status: done
-# Dependencies: 5
+# Dependencies: 3
 # Priority: medium
-# Description: Modify existing test execution and quality validation workflows to use the detected environment manager
+# Description: Refactor the ExtractorFactory to inherit from BaseFactory and eliminate duplicated code.
 # Details:
-Update the test execution and quality validation workflows to use the environment manager detection:
+Refactor `src/pytest_analyzer/core/infrastructure/extraction/extractor_factory.py` to use the new base class:
 
 ```python
+from typing import Type, Optional
 from pathlib import Path
-from typing import List, Optional
 
-from .cli import CLI
+from pytest_analyzer.core.infrastructure.base_factory import BaseFactory
+from pytest_analyzer.core.interfaces.protocols import Extractor
+from pytest_analyzer.core.infrastructure.extraction.json_extractor import JSONExtractor
+from pytest_analyzer.core.infrastructure.extraction.xml_extractor import XMLExtractor
+from pytest_analyzer.core.infrastructure.extraction.text_extractor import TextExtractor
+from pytest_analyzer.core.cross_cutting.configuration.settings import Settings
+from pytest_analyzer.core.cross_cutting.error_handling import error_context
 
-class TestExecutor:
-    def __init__(self):
-        self.cli = CLI()
+class ExtractorFactory(BaseFactory):
+    """Factory for creating extractors based on file type."""
 
-    def initialize(self, project_path: Path) -> None:
-        """Initialize the test executor with the appropriate environment manager"""
-        self.cli.initialize(project_path)
+    def __init__(self, settings: Optional[Settings] = None):
+        super().__init__(settings)
+        self._register_default_extractors()
 
-    def run_tests(self, test_paths: List[str], project_path: Path, options: List[str] = None) -> int:
-        """Run pytest with the appropriate environment manager"""
-        if options is None:
-            options = []
+    def _register_default_extractors(self) -> None:
+        """Register the default extractors."""
+        self.register("json", JSONExtractor)
+        self.register("xml", XMLExtractor)
+        self.register("txt", TextExtractor)
 
-        command = ["pytest"] + options + test_paths
-        return self.cli.execute_command(command, project_path)
+    def create(self, file_path: str) -> Extractor:
+        """Create an extractor for the given file path.
 
-    def run_linter(self, paths: List[str], project_path: Path, options: List[str] = None) -> int:
-        """Run ruff with the appropriate environment manager"""
-        if options is None:
-            options = []
+        Args:
+            file_path: Path to the file to extract from
 
-        command = ["ruff", "check"] + options + paths
-        return self.cli.execute_command(command, project_path)
-
-    def run_pre_commit(self, project_path: Path) -> int:
-        """Run pre-commit with the appropriate environment manager"""
-        command = ["pre-commit", "run", "--all-files"]
-        return self.cli.execute_command(command, project_path)
+        Returns:
+            An instance of the appropriate extractor
+        """
+        with error_context("Creating extractor", self.logger):
+            file_type = self._detect_file_type(file_path)
+            extractor_class = self.get_implementation(file_type)
+            return extractor_class()
 ```
 
-Ensure that all quality validation commands are executed within the correct environment context.
+This refactored factory uses the BaseFactory to eliminate code duplication while providing extractor-specific functionality.
 
 # Test Strategy:
-Create unit tests for the test executor with mocked CLI and environment managers. Test that commands are correctly built and executed for different quality tools. Create integration tests that verify end-to-end functionality with real commands and environment managers.
+Create unit tests for ExtractorFactory that verify:
+1. _register_default_extractors correctly registers all extractors
+2. create returns the correct extractor type based on file extension
+3. Integration test with different file types to verify correct extractor is created
+4. Error handling for unsupported file types
+5. Verify that the refactored factory maintains the same behavior as the original implementation

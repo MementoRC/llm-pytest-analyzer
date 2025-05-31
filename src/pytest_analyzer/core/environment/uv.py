@@ -5,14 +5,15 @@ This module provides a concrete implementation of the EnvironmentManager
 protocol for projects managed with UV.
 """
 
-import subprocess
 from pathlib import Path
 from typing import List
 
-from .protocol import EnvironmentManager
+from pytest_analyzer.core.infrastructure.environment.base_manager import (
+    BaseEnvironmentManager,
+)
 
 
-class UVManager(EnvironmentManager):
+class UVManager(BaseEnvironmentManager):
     """
     Manages Python environments using UV.
 
@@ -29,7 +30,7 @@ class UVManager(EnvironmentManager):
         Args:
             project_path: The root path of the UV-managed project.
         """
-        self.project_path = project_path
+        super().__init__(project_path)
 
     @classmethod
     def detect(cls, project_path: Path) -> bool:
@@ -71,31 +72,3 @@ class UVManager(EnvironmentManager):
             via 'uv run'.
         """
         return ["uv", "run"] + command
-
-    def execute_command(self, command: List[str]) -> int:
-        """
-        Execute a command within the UV-managed environment.
-
-        Args:
-            command: A list of strings representing the command and its arguments.
-
-        Returns:
-            The exit code of the executed command.
-        """
-        return subprocess.call(command, cwd=self.project_path)
-
-    def activate(self) -> None:
-        """
-        Activate the UV environment.
-
-        `uv run` handles activation implicitly. This method is a no-op.
-        """
-        pass
-
-    def deactivate(self) -> None:
-        """
-        Deactivate the UV environment.
-
-        Deactivation is handled by `uv run` process termination. This is a no-op.
-        """
-        pass

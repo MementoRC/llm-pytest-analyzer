@@ -1,57 +1,65 @@
 # Task ID: 4
-# Title: Implement Poetry, Hatch, UV, Pipenv, and Pip+Venv Managers
+# Title: Create BaseLLMService for Common LLM Service Logic
 # Status: done
 # Dependencies: 1
-# Priority: high
-# Description: Create concrete implementations of the Environment Manager protocol for all other supported environment managers
+# Priority: medium
+# Description: Extract common initialization code from sync and async LLM services into a shared base class to eliminate duplication.
 # Details:
-Implement the remaining environment manager classes following the same pattern as the Pixi manager. Each implementation should:
-
-1. Correctly detect its environment based on project files
-2. Build commands appropriately for that environment
-3. Execute commands in the correct environment context
-
-For example, the Poetry implementation might look like:
+Create `src/pytest_analyzer/core/infrastructure/llm/base_llm_service.py` with the following implementation:
 
 ```python
-class PoetryManager:
-    @classmethod
-    def detect(cls, project_path: Path) -> bool:
-        """Detect if Poetry is used in the project"""
-        pyproject_path = project_path / "pyproject.toml"
-        if not pyproject_path.exists():
-            return False
+from abc import ABC, abstractmethod
+from typing import Dict, Any, Optional, List
+import logging
 
-        try:
-            with open(pyproject_path, 'r') as f:
-                config = toml.load(f)
-                return 'tool' in config and 'poetry' in config['tool']
-        except Exception:
-            return False
+# Import from the new structure
+from pytest_analyzer.core.cross_cutting.configuration.settings import Settings
+from pytest_analyzer.core.interfaces.protocols import LLMProvider
 
-    def __init__(self, project_path: Path):
-        self.project_path = project_path
+class BaseLLMService(ABC):
+    """Base class for LLM services to eliminate code duplication between sync and async implementations."""
 
-    def build_command(self, command: List[str]) -> List[str]:
-        """Build a command with proper Poetry environment context"""
-        return ["poetry", "run"] + command
+    def __init__(self, provider: Optional[LLMProvider] = None, settings: Optional[Settings] = None):
+        self.settings = settings or Settings()
+        self.provider = provider or self._create_default_provider()
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.model = self.settings.get("llm.model", "gpt-3.5-turbo")
+        self.temperature = float(self.settings.get("llm.temperature", "0.7"))
+        self.max_tokens = int(self.settings.get("llm.max_tokens", "2000"))
+        self.timeout = int(self.settings.get("llm.timeout_seconds", "30"))
 
-    def execute_command(self, command: List[str]) -> int:
-        """Execute a command within the Poetry environment"""
-        full_command = self.build_command(command)
-        return subprocess.call(full_command, cwd=self.project_path)
+    def _create_default_provider(self) -> LLMProvider:
+        """Create the default LLM provider based on settings."""
+        provider_name = self.settings.get("llm.provider", "openai")
+        self.logger.info(f"Creating default LLM provider: {provider_name}")
 
-    def activate(self) -> None:
-        """Activate the Poetry environment"""
-        subprocess.call(["poetry", "shell"], cwd=self.project_path)
+        # This would be implemented in subclasses or use a factory pattern
+        raise NotImplementedError("Subclasses must implement _create_default_provider")
 
-    def deactivate(self) -> None:
-        """Deactivate the Poetry environment"""
-        # Exit the shell or use the appropriate deactivation command
+    def _prepare_messages(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> List[Dict[str, str]]:
+        """Prepare messages for the LLM provider with consistent formatting."""
+        messages = [
+            {"role": "system", "content": self._get_system_prompt(context)},
+            {"role": "user", "content": prompt}
+        ]
+        return messages
+
+    def _get_system_prompt(self, context: Optional[Dict[str, Any]] = None) -> str:
+        """Get the system prompt, potentially customized based on context."""
+        return self.settings.get("llm.system_prompt", "You are a helpful assistant.")
+
+    @abstractmethod
+    def generate(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> str:
+        """Generate a response from the LLM based on the prompt and context."""
         pass
 ```
 
-Implement similar classes for Hatch, UV, Pipenv, and Pip+Venv, each with their specific detection logic and command execution patterns.
+This base class extracts the common initialization and configuration logic from the existing LLM service implementations.
 
 # Test Strategy:
-Create unit tests for each environment manager implementation. Test detection logic with various project structures. Test command building and execution with mocked subprocess calls. Create integration tests with sample projects for each environment manager type.
+Create unit tests for BaseLLMService that verify:
+1. Constructor properly initializes all properties from settings
+2. _prepare_messages correctly formats the messages array
+3. _get_system_prompt returns the expected system prompt
+4. Attempting to instantiate the abstract class directly raises TypeError
+5. Subclassing without implementing generate and _create_default_provider raises TypeError
