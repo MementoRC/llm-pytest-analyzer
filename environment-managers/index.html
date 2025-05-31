@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Environment Manager Integration - llm-pytest-analyzer</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Environment Manager Integration";
+        var mkdocs_page_input_path = "environment-managers.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> llm-pytest-analyzer
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">llm-pytest-analyzer</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Environment Manager Integration</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer/edit/main/docs/environment-managers.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="environment-manager-integration">Environment Manager Integration</h1>
+<p><code>pytest-analyzer</code> is designed to work seamlessly with various Python project and environment managers. This integration ensures that <code>pytest</code> and other related commands are executed within the context of the project's defined environment, respecting its dependencies and configurations.</p>
+<h2 id="introduction">Introduction</h2>
+<p>Modern Python development often involves tools like Poetry, Hatch, Pixi, UV, or Pipenv to manage project dependencies and virtual environments. <code>pytest-analyzer</code> can detect these tools and adapt its command execution accordingly. For example, instead of just running <code>pytest</code>, it might run <code>poetry run pytest</code> or <code>hatch run test</code>.</p>
+<p>This feature helps in:
+- Ensuring tests are run with the correct dependencies.
+- Utilizing environment-specific scripts or configurations.
+- Providing a more consistent development experience.</p>
+<h2 id="supported-environment-managers">Supported Environment Managers</h2>
+<p><code>pytest-analyzer</code> currently supports the detection and integration of the following environment managers:</p>
+<table>
+<thead>
+<tr>
+<th>Manager</th>
+<th>Detection Heuristic</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Pixi</strong></td>
+<td>Presence of a <code>pixi.toml</code> file.</td>
+</tr>
+<tr>
+<td><strong>Poetry</strong></td>
+<td>Presence of <code>pyproject.toml</code> with a <code>[tool.poetry]</code> section.</td>
+</tr>
+<tr>
+<td><strong>Hatch</strong></td>
+<td>Presence of <code>pyproject.toml</code> with a <code>[tool.hatch]</code> section.</td>
+</tr>
+<tr>
+<td><strong>UV</strong></td>
+<td>Presence of <code>uv.lock</code> or <code>pyproject.toml</code> with <code>[tool.uv]</code> section.</td>
+</tr>
+<tr>
+<td><strong>Pipenv</strong></td>
+<td>Presence of <code>Pipfile</code> or <code>Pipfile.lock</code>.</td>
+</tr>
+<tr>
+<td><strong>Pip+Venv</strong></td>
+<td>Presence of <code>requirements.txt</code> (often as a fallback, assuming an active virtual environment).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="detection-mechanism">Detection Mechanism</h2>
+<p>When <code>pytest-analyzer</code> is invoked, it attempts to identify the active environment manager for the project root.</p>
+<ol>
+<li><strong>File-Based Detection</strong>: The detection process primarily relies on the presence of specific configuration files in the project's root directory (e.g., <code>pixi.toml</code>, <code>pyproject.toml</code>, <code>Pipfile</code>).</li>
+<li><strong>Order of Precedence</strong>: The managers are checked in a specific order. The first manager detected "wins". The default order is:<ol>
+<li>Pixi</li>
+<li>Poetry</li>
+<li>Hatch</li>
+<li>UV</li>
+<li>Pipenv</li>
+<li>Pip+Venv (typically a fallback)</li>
+</ol>
+</li>
+<li><strong>Caching</strong>: To improve performance, the detected manager for a project path is cached. The cache considers file modification times of relevant project files (<code>pixi.toml</code>, <code>pyproject.toml</code>, <code>Pipfile</code>, <code>Pipfile.lock</code>, <code>requirements.txt</code>, <code>uv.lock</code>) and has a Time-To-Live (TTL). If any of these files change, the cache is invalidated for that project.</li>
+</ol>
+<h2 id="configuration">Configuration</h2>
+<p>You can control <code>pytest-analyzer</code>'s environment manager behavior through several means, following a clear hierarchy of precedence:</p>
+<ol>
+<li><strong>Command-Line Interface (CLI) Flag (<code>--env-manager</code>)</strong>: Highest priority.</li>
+<li><strong>Configuration File (<code>environment_manager</code> setting)</strong>:<ul>
+<li>Project-specific: <code>.pytest-analyzer.yaml</code> or <code>.pytest-analyzer.json</code> in the project root.</li>
+<li>User-specific: Global configuration file (e.g., <code>~/.config/pytest-analyzer/config.yaml</code>).</li>
+</ul>
+</li>
+<li><strong>Environment Variable (<code>PYTEST_ANALYZER_ENV_MANAGER</code>)</strong>:</li>
+<li><strong>Auto-Detection</strong>: Lowest priority (this is the default behavior if no override is specified).</li>
+</ol>
+<h3 id="1-cli-flag">1. CLI Flag</h3>
+<p>The <code>--env-manager</code> flag allows you to specify the environment manager directly when running <code>pytest-analyzer</code> from the command line.</p>
+<pre><code class="language-bash">pytest-analyzer path/to/your/tests --env-manager poetry
+</code></pre>
+<p>Accepted values for <code>--env-manager</code>:
+- <code>auto</code> (default): Enables auto-detection.
+- <code>pixi</code>
+- <code>poetry</code>
+- <code>hatch</code>
+- <code>uv</code>
+- <code>pipenv</code>
+- <code>pip+venv</code> (for pip with a virtual environment)</p>
+<p>Example:</p>
+<pre><code class="language-bash"># Force using Pipenv, even if other managers might be detected
+pytest-analyzer . --env-manager pipenv
+
+# Disable specific manager integration and rely on system pytest (if 'auto' fails or is not desired)
+# This is effectively what happens if 'auto' finds nothing and no specific manager is set.
+# To explicitly use a generic pip+venv setup if requirements.txt exists:
+pytest-analyzer . --env-manager pip+venv
+</code></pre>
+<h3 id="2-configuration-file">2. Configuration File</h3>
+<p>You can set the <code>environment_manager</code> in your <code>pytest-analyzer</code> configuration file (e.g., <code>.pytest-analyzer.yaml</code>).</p>
+<pre><code class="language-yaml"># .pytest-analyzer.yaml
+# ... other settings ...
+environment_manager: &quot;poetry&quot; # or &quot;pixi&quot;, &quot;hatch&quot;, &quot;uv&quot;, &quot;pipenv&quot;, &quot;pip+venv&quot;, null for auto
+# ... other settings ...
+</code></pre>
+<p>If <code>environment_manager</code> is set to <code>null</code> or omitted in the config file, auto-detection will be used (unless overridden by CLI or environment variable).</p>
+<h3 id="3-environment-variable">3. Environment Variable</h3>
+<p>Set the <code>PYTEST_ANALYZER_ENV_MANAGER</code> environment variable:</p>
+<pre><code class="language-bash">export PYTEST_ANALYZER_ENV_MANAGER=&quot;hatch&quot;
+pytest-analyzer path/to/your/tests
+</code></pre>
+<p>Accepted values are the same as for the CLI flag.</p>
+<h3 id="4-auto-detection-default">4. Auto-Detection (Default)</h3>
+<p>If no override is provided through the CLI, configuration file, or environment variable, <code>pytest-analyzer</code> will automatically try to detect the environment manager based on the project files.</p>
+<h2 id="programmatic-usage-python-api">Programmatic Usage (Python API)</h2>
+<p>When using <code>pytest-analyzer</code> as a Python library, you can specify the environment manager through the <code>Settings</code> object:</p>
+<pre><code class="language-python">from pytest_analyzer.utils.settings import Settings
+from pytest_analyzer.core.analyzer_service import PytestAnalyzerService
+
+# To force a specific manager:
+settings = Settings(
+    project_root=&quot;path/to/your/project&quot;,
+    environment_manager=&quot;poetry&quot;  # Or &quot;pixi&quot;, &quot;hatch&quot;, &quot;uv&quot;, &quot;pipenv&quot;, &quot;pip+venv&quot;
+)
+
+# To rely on auto-detection (default behavior):
+settings_auto = Settings(
+    project_root=&quot;path/to/your/project&quot;,
+    environment_manager=None # or omit the parameter
+)
+
+analyzer = PytestAnalyzerService(settings=settings)
+# ... proceed with analysis ...
+</code></pre>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<ul>
+<li><strong>Incorrect Detection</strong>: If <code>pytest-analyzer</code> detects the wrong manager, or none at all:<ul>
+<li>Ensure the characteristic file for your desired manager (e.g., <code>poetry.lock</code> for Poetry, <code>pixi.toml</code> for Pixi) is present in the project root.</li>
+<li>Use the <code>--env-manager</code> CLI flag or the <code>environment_manager</code> configuration setting to explicitly specify the correct manager.</li>
+<li>Check the file permissions for the project files.</li>
+</ul>
+</li>
+<li><strong>"Manager Not Found" Errors</strong>: If you specify a manager that isn't installed or configured correctly in the project (e.g., <code>poetry run</code> fails because Poetry isn't managing the project), <code>pytest-analyzer</code> might fail. Ensure the chosen manager is appropriate for the project.</li>
+<li><strong>Cache Issues</strong>: If you've recently changed your project's environment management setup, detection might rely on a cached value. While file modification times should invalidate the cache, you can try running with a slightly modified relevant file (e.g., add a comment to <code>pyproject.toml</code>) or wait for the cache TTL to expire (default 5 minutes). Forcing a re-detection in CI/CD might involve clearing any persistent cache if applicable, though <code>pytest-analyzer</code>'s cache is in-memory per process.</li>
+</ul>
+<h2 id="examples">Examples</h2>
+<p>Minimal project setups demonstrating detection for each supported environment manager can be found in the <code>examples/</code> directory of the <code>pytest-analyzer</code> repository:</p>
+<ul>
+<li><a href="../../examples/pixi-project/"><code>examples/pixi-project/</code></a></li>
+<li><a href="../../examples/poetry-project/"><code>examples/poetry-project/</code></a></li>
+<li><a href="../../examples/hatch-project/"><code>examples/hatch-project/</code></a></li>
+<li><a href="../../examples/uv-project/"><code>examples/uv-project/</code></a></li>
+<li><a href="../../examples/pipenv-project/"><code>examples/pipenv-project/</code></a></li>
+<li><a href="../../examples/pip-venv-project/"><code>examples/pip-venv-project/</code></a></li>
+</ul>
+<p>These examples contain the basic files needed for <code>pytest-analyzer</code> to detect the respective environment manager.</p>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>
