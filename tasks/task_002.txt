@@ -1,53 +1,28 @@
 # Task ID: 2
-# Title: Implement BaseEnvironmentManager Abstract Class
-# Status: done
+# Title: Add MCP SDK Dependencies
+# Status: pending
 # Dependencies: 1
 # Priority: high
-# Description: Create a base abstract class for environment managers to eliminate code duplication across Poetry, Pixi, Hatch, UV, and Pipenv managers.
+# Description: Integrate the MCP Python SDK as a project dependency with proper version management in pyproject.toml.
 # Details:
-Create `src/pytest_analyzer/core/infrastructure/environment/base_manager.py` with the following implementation:
+Update `pyproject.toml` to include:
+1. Add MCP Python SDK as an optional dependency
+2. Create a new optional dependency group for MCP server functionality
+3. Set appropriate version constraints
+4. Ensure no conflicts with existing dependencies
+5. Update development dependencies for testing MCP functionality
 
-```python
-from abc import ABC, abstractmethod
-from pathlib import Path
-import subprocess
-from typing import List, Optional
-import logging
-
-class BaseEnvironmentManager(ABC):
-    """Base class for all environment managers to eliminate code duplication."""
-
-    def __init__(self, project_path: Path):
-        self.project_path = project_path
-        self.logger = logging.getLogger(self.__class__.__name__)
-
-    def execute_command(self, command: List[str]) -> int:
-        """Common implementation for executing commands in the project directory."""
-        self.logger.debug(f"Executing command: {' '.join(command)}")
-        return subprocess.call(command, cwd=self.project_path)
-
-    def activate(self) -> None:
-        """Default no-op implementation for environment activation."""
-        self.logger.debug("Environment activation not required")
-        pass
-
-    def deactivate(self) -> None:
-        """Default no-op implementation for environment deactivation."""
-        self.logger.debug("Environment deactivation not required")
-        pass
-
-    @abstractmethod
-    def build_command(self, base_command: List[str]) -> List[str]:
-        """Manager-specific command building logic to be implemented by subclasses."""
-        pass
+Example addition to pyproject.toml:
+```toml
+[project.optional-dependencies]
+mcp = [
+    "mcp-python-sdk>=1.0.0,<2.0.0",
+    "fastapi>=0.95.0,<1.0.0",  # For HTTP transport
+    "uvicorn>=0.22.0,<1.0.0",  # For HTTP transport
+]
 ```
 
-This base class extracts the common functionality identified in the PRD from the existing environment manager implementations.
+Run dependency resolution tests to ensure compatibility.
 
 # Test Strategy:
-Create unit tests for BaseEnvironmentManager that verify:
-1. Constructor properly initializes project_path
-2. execute_command correctly calls subprocess.call with the right arguments
-3. Default activate/deactivate methods don't raise exceptions
-4. Attempting to instantiate the abstract class directly raises TypeError
-5. Subclassing without implementing build_command raises TypeError
+Verify dependency installation with `pip install -e ".[mcp]"`. Test importing MCP SDK in Python. Check for any dependency conflicts or warnings. Ensure development environment can be set up with new dependencies.

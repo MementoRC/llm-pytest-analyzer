@@ -1,338 +1,546 @@
-# Pytest Analyzer Architecture Refactoring Project
+# Product Requirements Document: MCP Server Integration for Pytest Analyzer
+
+## Executive Summary
+
+This PRD defines the requirements for implementing a Model Context Protocol (MCP) server interface for the pytest analyzer tool. The MCP server will expose pytest analysis capabilities as standardized tools that can be consumed by AI applications like Claude Desktop, enabling seamless integration of pytest failure analysis into AI-assisted development workflows.
 
 ## Project Overview
 
-This project aims to refactor the pytest-analyzer codebase to improve maintainability, reduce code duplication, eliminate unused patterns, and enhance design patterns. The refactoring will consolidate the current well-architected foundation into a more efficient, cleaner, and better organized structure.
+### Background
+The pytest analyzer currently provides powerful test failure analysis and fix suggestion capabilities through a CLI interface. With the emergence of the Model Context Protocol (MCP) as a standard for AI tool integration, there is an opportunity to expose these capabilities as MCP tools, making them available to AI assistants and other MCP-compatible applications.
 
-## Project Objectives
+### Vision Statement
+Enable AI assistants to seamlessly analyze pytest failures, suggest fixes, and apply corrections through a standardized MCP server interface, improving developer productivity and reducing time spent debugging test failures.
 
-### Primary Goals
-1. **Eliminate Code Duplication**: Remove identified redundant implementations across environment managers, factories, and service patterns
-2. **Clean Up Unused Patterns**: Remove example files, unused decorators, and over-engineered test fixtures
-3. **Improve Design Patterns**: Enhance existing patterns with better abstractions and consistency
-4. **Reorganize Architecture**: Implement Domain-Driven Design principles for better code organization
-5. **Maintain Quality Standards**: Ensure zero regressions while improving code quality
-
-### Success Metrics
-- **Code Reduction**: Target 15-20% reduction in total lines of code through deduplication
-- **Test Coverage**: Maintain or improve existing test coverage (currently 600+ tests)
-- **Architecture Score**: Achieve better separation of concerns and reduced coupling
-- **Developer Experience**: Improve code discoverability and maintainability
+### Business Objectives
+- **Developer Productivity**: Reduce time spent on test failure analysis and fixing
+- **AI Integration**: Enable AI assistants to provide intelligent pytest support
+- **Standardization**: Adopt MCP protocol for broader ecosystem compatibility
+- **Tool Adoption**: Increase usage of pytest analyzer through AI assistant integration
 
 ## Technical Requirements
 
-### 1. Code Duplication Elimination
+### Architecture Requirements
 
-#### 1.1 Environment Manager Consolidation
-**Problem**: Nearly identical implementations across Poetry, Pixi, Hatch, UV, and Pipenv managers
-- **Files**: `src/pytest_analyzer/core/environment/*.py`
-- **Duplicated Code**:
-  - Lines 25-32: Identical `__init__` patterns
-  - Lines 72-82: Identical `execute_command` methods
-  - Lines 84-100: Identical no-op `activate`/`deactivate` methods
-  - Lines 57-70: Nearly identical `build_command` methods
+#### AR-1: Facade Integration Pattern
+**Priority**: High
+**Description**: The MCP server must implement a thin facade layer over the existing `PytestAnalyzerFacade`, maintaining consistency with the current CLI interface while minimizing code duplication.
 
-**Solution**: Create abstract base class with common implementations
-```python
-# New file: src/pytest_analyzer/core/environment/base_manager.py
-class BaseEnvironmentManager(ABC):
-    def __init__(self, project_path: Path):
-        self.project_path = project_path
+**Acceptance Criteria**:
+- MCP server uses existing `PytestAnalyzerFacade` as primary integration point
+- No duplication of business logic between CLI and MCP interfaces
+- Same dependency injection container and service configurations
+- Consistent error handling and logging patterns
 
-    def execute_command(self, command: List[str]) -> int:
-        """Common implementation for all managers"""
-        return subprocess.call(command, cwd=self.project_path)
+#### AR-2: Module Structure
+**Priority**: High
+**Description**: Create a well-organized MCP module structure within the existing project architecture.
 
-    def activate(self) -> None:
-        """Default no-op implementation"""
-        pass
+**Acceptance Criteria**:
+- New `src/pytest_analyzer/mcp/` module created
+- Separate files for server, tools, resources, prompts, and schemas
+- Clear separation of concerns between MCP protocol handling and business logic
+- Follows existing project code organization patterns
 
-    def deactivate(self) -> None:
-        """Default no-op implementation"""
-        pass
+#### AR-3: Dependency Management
+**Priority**: High
+**Description**: Integrate MCP Python SDK as a project dependency with proper version management.
 
-    @abstractmethod
-    def build_command(self, base_command: List[str]) -> List[str]:
-        """Manager-specific command building"""
-        pass
-```
-
-#### 1.2 Factory Pattern Consolidation
-**Problem**: Repeated factory initialization patterns across extractor, LLM, and suggester factories
-- **Files**:
-  - `src/pytest_analyzer/core/extraction/extractor_factory.py`
-  - `src/pytest_analyzer/core/llm/llm_service_factory.py`
-  - `src/pytest_analyzer/core/analysis/suggester_factory.py`
-
-**Solution**: Create base factory class with common patterns
-```python
-# New file: src/pytest_analyzer/core/infrastructure/base_factory.py
-class BaseFactory(ABC):
-    def __init__(self, settings: Optional[Settings] = None):
-        self.settings = settings or Settings()
-        self.logger = logging.getLogger(self.__class__.__name__)
-
-    def _detect_file_type(self, file_path: str) -> str:
-        """Common file detection logic"""
-        pass
-```
-
-#### 1.3 LLM Service Duplication Cleanup
-**Problem**: Nearly identical initialization code in sync/async LLM services
-- **Files**:
-  - `src/pytest_analyzer/core/llm/llm_service.py` (lines 63-100)
-  - `src/pytest_analyzer/core/llm/async_llm_service.py` (lines 63-100)
-
-**Solution**: Extract common initialization logic into shared base class
-
-#### 1.4 Error Handling Pattern Consolidation
-**Problem**: Repeated try-catch-log patterns across 33+ files
-**Solution**: Create standardized error handling utilities
-```python
-# New file: src/pytest_analyzer/core/infrastructure/error_handling.py
-@contextmanager
-def error_context(operation_name: str, logger: Logger):
-    """Standard error context manager"""
-    try:
-        yield
-    except Exception as e:
-        logger.error(f"{operation_name}: {str(e)}")
-        raise
-```
-
-### 2. Unused Pattern Cleanup
-
-#### 2.1 Remove Example Files
-**Target Files for Removal**:
-- `src/pytest_analyzer/core/di/examples.py` (381 lines) - Comprehensive DI examples not used in production
-- `src/pytest_analyzer/core/state_machine/example.py` (194 lines) - Document workflow example not used
-
-**Impact**: Remove ~575 lines of example code that serves no production purpose
-
-#### 2.2 Simplify Over-Engineered Test Patterns
-**Analysis Required**:
-- Review 62 test files for over-complex mocking patterns
-- Identify redundant test fixtures in `conftest.py`
-- Consolidate similar test patterns across environment manager tests
-
-#### 2.3 Remove Unused Decorators
-**Target Areas**:
-- Unused DI decorators that aren't leveraged in production code
-- Over-complex registration modes that aren't used
-
-### 3. Design Pattern Improvements
-
-#### 3.1 Implement Domain-Driven Design Structure
-**Current Structure**:
-```
-src/pytest_analyzer/core/
-├── analysis/
-├── extraction/
-├── llm/
-├── environment/
-├── di/
-├── models/
-├── state_machine/
-└── ...
-```
-
-**Proposed Structure**:
-```
-src/pytest_analyzer/core/
-├── domain/
-│   ├── entities/           # Core business objects (PytestFailure, FixSuggestion)
-│   ├── services/           # Domain services (FailureAnalyzer, FixSuggester)
-│   ├── repositories/       # Data access abstractions
-│   └── value_objects/      # Immutable domain concepts
-├── infrastructure/
-│   ├── llm/               # External LLM service integrations
-│   ├── environment/       # Environment manager implementations
-│   ├── extraction/        # Report parsing implementations
-│   ├── di/               # Dependency injection container
-│   └── persistence/       # File system, caching implementations
-├── application/
-│   ├── services/          # Application services (AnalyzerService)
-│   ├── workflows/         # State machines and orchestration
-│   └── facades/           # Public API facades
-└── interfaces/
-    ├── protocols.py       # All protocol definitions
-    ├── errors.py          # Exception definitions
-    └── types.py           # Type definitions
-```
-
-#### 3.2 Enhance Protocol Consistency
-**Current Issues**: Protocols mix generic dictionaries with typed models
-**Solution**: Standardize all protocols to use typed domain models
-```python
-@runtime_checkable
-class Extractor(Protocol):
-    def extract(self, test_results: TestInput) -> ExtractionResult:
-        """Type-safe extraction with domain models"""
-```
-
-#### 3.3 Improve Service Registration Patterns
-**Solution**: Create centralized service registry
-```python
-# New file: src/pytest_analyzer/core/infrastructure/di/registry.py
-@dataclass
-class ServiceRegistry:
-    """Centralized service registration patterns"""
-
-    def register_domain_services(self, container: Container) -> None:
-        """Register all domain services"""
-
-    def register_infrastructure_services(self, container: Container) -> None:
-        """Register all infrastructure services"""
-
-    def register_application_services(self, container: Container) -> None:
-        """Register all application services"""
-```
-
-#### 3.4 Add Cross-Cutting Concerns Layer
-**New Structure**:
-```
-src/pytest_analyzer/core/cross_cutting/
-├── logging/            # Centralized logging configuration
-├── monitoring/         # Health checks and metrics
-├── caching/           # Result caching strategies
-├── validation/        # Input/output validation
-└── configuration/     # Configuration management
-```
-
-### 4. Architecture Reorganization Tasks
-
-#### 4.1 Module Consolidation
-1. **Create domain layer** with clear business logic separation
-2. **Move infrastructure concerns** to dedicated infrastructure layer
-3. **Consolidate application services** into application layer
-4. **Centralize interface definitions** in interfaces layer
-
-#### 4.2 Import Path Updates
-- Update all imports to reflect new structure
-- Maintain backward compatibility through facade pattern
-- Update `__init__.py` files for proper module exports
-
-#### 4.3 Configuration Centralization
-- Consolidate settings and configuration logic
-- Standardize environment variable handling
-- Improve configuration validation
-
-### 5. Quality Assurance Requirements
-
-#### 5.1 Testing Strategy
-- **Maintain 100% test pass rate** throughout refactoring
-- **Preserve or improve coverage** (currently 600+ tests passing)
-- **Add tests for new abstractions** (base classes, utilities)
-- **Remove redundant test code** while maintaining coverage
-
-#### 5.2 Migration Strategy
-- **Phase 1**: Create new structure and base classes
-- **Phase 2**: Migrate environment managers to use base classes
-- **Phase 3**: Migrate factories and services
-- **Phase 4**: Remove duplicate code and unused patterns
-- **Phase 5**: Update tests and documentation
-
-#### 5.3 Backward Compatibility
-- **Maintain existing public APIs** through facade pattern
-- **Provide deprecation warnings** for old import paths
-- **Document migration path** for external users
-
-### 6. Performance Considerations
-
-#### 6.1 Expected Improvements
-- **Reduced memory footprint** from eliminated duplications
-- **Faster imports** from simplified module structure
-- **Improved test execution time** from reduced redundancy
-
-#### 6.2 Risk Mitigation
-- **Benchmark critical paths** before and after refactoring
-- **Monitor CI execution time** throughout migration
-- **Profile memory usage** to ensure no regressions
-
-### 7. Documentation Requirements
-
-#### 7.1 Architecture Documentation Updates
-- Update `docs/architecture.md` to reflect new DDD structure
-- Create migration guide for developers
-- Document new patterns and abstractions
-
-#### 7.2 Code Documentation
-- Add comprehensive docstrings to new base classes
-- Document design decisions and trade-offs
-- Update inline comments for complex logic
-
-### 8. Implementation Timeline
-
-#### Phase 1: Foundation (Tasks 1-5)
-- Create new directory structure
-- Implement base classes for environment managers
-- Create infrastructure base classes
-
-#### Phase 2: Migration (Tasks 6-15)
-- Migrate environment managers to base classes
-- Consolidate factory patterns
-- Move LLM services to infrastructure layer
-
-#### Phase 3: Cleanup (Tasks 16-20)
-- Remove example files
-- Eliminate duplicate code
-- Clean up unused patterns
-
-#### Phase 4: Enhancement (Tasks 21-25)
-- Implement DDD structure
-- Add cross-cutting concerns
-- Enhance protocols and interfaces
-
-#### Phase 5: Quality Assurance (Tasks 26-30)
-- Update all tests
-- Performance validation
-- Documentation updates
-
-### 9. Success Criteria
-
-#### Quantitative Metrics
-- **15-20% reduction** in total lines of code
-- **Zero test failures** throughout migration
-- **Maintained or improved** test coverage
-- **CI execution time** within 10% of current baseline
-
-#### Qualitative Metrics
-- **Improved code discoverability** through better organization
-- **Reduced cognitive load** from eliminated duplications
-- **Enhanced maintainability** through better abstractions
-- **Clearer separation of concerns** following DDD principles
-
-### 10. Risk Assessment
-
-#### High Risk Areas
-- **Environment manager changes** could break CI/CD integrations
-- **DI container modifications** could affect service resolution
-- **Import path changes** could break external integrations
-
-#### Mitigation Strategies
-- **Extensive integration testing** for environment managers
-- **Backward compatibility facades** for public APIs
-- **Gradual migration approach** with validation at each step
-- **Comprehensive rollback plan** if issues arise
-
-## Acceptance Criteria
+**Acceptance Criteria**:
+- MCP Python SDK added to `pyproject.toml` with appropriate version constraints
+- Optional dependency group for MCP server functionality
+- No conflicts with existing dependencies
+- Support for both development and production deployments
 
 ### Functional Requirements
-1. All existing functionality preserved
-2. All 600+ tests continue to pass
-3. No performance regressions
-4. Backward compatibility maintained
 
-### Non-Functional Requirements
-1. Code duplication reduced by target percentage
-2. Improved code organization following DDD principles
-3. Enhanced developer experience and maintainability
-4. Comprehensive documentation updates
+#### FR-1: Core Analysis Tools
+**Priority**: High
+**Description**: Implement fundamental MCP tools for pytest analysis capabilities.
 
-### Technical Debt Reduction
-1. Example files removed from production codebase
-2. Redundant patterns eliminated
-3. Consistent error handling patterns implemented
-4. Standardized service registration approach
+**MCP Tools**:
+1. **`analyze_pytest_output`**
+   - Input: File path to pytest output (JSON, XML, or text)
+   - Output: Structured list of fix suggestions with confidence scores
+   - Validation: File existence, format detection, size limits
 
-This refactoring project will transform the pytest-analyzer from a well-architected but duplicate-heavy codebase into a clean, maintainable, and efficiently organized system that follows modern software architecture principles while preserving all existing functionality and quality standards.
+2. **`run_and_analyze`**
+   - Input: Test path, optional pytest arguments, optional quiet mode
+   - Output: Test execution results and fix suggestions
+   - Validation: Path existence, argument sanitization, timeout limits
+
+3. **`suggest_fixes`**
+   - Input: Raw pytest output string
+   - Output: Structured fix suggestions with code changes
+   - Validation: Input size limits, format validation
+
+**Acceptance Criteria**:
+- All tools return consistent JSON-formatted responses
+- Proper error handling with meaningful error messages
+- Input validation using Pydantic schemas
+- Response time under 30 seconds for typical test suites
+- Support for all existing pytest output formats (JSON, XML, text)
+
+#### FR-2: Fix Application Tools
+**Priority**: Medium
+**Description**: Provide MCP tools for applying suggested fixes to code.
+
+**MCP Tools**:
+1. **`apply_suggestion`**
+   - Input: Fix suggestion object, optional target files list
+   - Output: Application result with success status, modified files, rollback info
+   - Validation: File permissions, backup creation, Git integration
+
+2. **`validate_suggestion`**
+   - Input: Fix suggestion object, target files
+   - Output: Validation result without applying changes
+   - Validation: Syntax checking, conflict detection
+
+**Acceptance Criteria**:
+- Safe application with automatic backup creation
+- Git integration when available (commit/branch creation)
+- Rollback capability on failure
+- File permission and access validation
+- Dry-run mode for validation without changes
+
+#### FR-3: Information and Summary Tools
+**Priority**: Medium
+**Description**: Provide tools for accessing test result information and statistics.
+
+**MCP Tools**:
+1. **`get_failure_summary`**
+   - Input: Test results or report path
+   - Output: Failure statistics, categorization, trends
+   - Validation: Data format validation
+
+2. **`get_test_coverage`**
+   - Input: Test execution results
+   - Output: Coverage information if available
+   - Validation: Coverage data availability
+
+**Acceptance Criteria**:
+- Clear categorization of failure types
+- Statistical summaries with counts and percentages
+- Integration with existing failure analysis logic
+- Optional coverage integration when pytest-cov is available
+
+#### FR-4: Configuration and Settings Tools
+**Priority**: Low
+**Description**: Provide tools for managing analyzer configuration.
+
+**MCP Tools**:
+1. **`get_config`**
+   - Input: None
+   - Output: Current analyzer configuration
+   - Validation: Configuration access permissions
+
+2. **`update_config`**
+   - Input: Configuration updates
+   - Output: Updated configuration confirmation
+   - Validation: Configuration value validation
+
+**Acceptance Criteria**:
+- Read-only access to current settings
+- Safe configuration updates with validation
+- Integration with existing Settings system
+- Persistence of configuration changes
+
+### Data Requirements
+
+#### DR-1: Input/Output Schemas
+**Priority**: High
+**Description**: Define comprehensive schemas for all MCP tool inputs and outputs.
+
+**Schema Categories**:
+- **Input Schemas**: Request validation for all tools
+- **Output Schemas**: Response format standardization
+- **Error Schemas**: Consistent error response format
+- **Data Transfer Objects**: Complex object serialization
+
+**Acceptance Criteria**:
+- Pydantic models for all tool inputs and outputs
+- JSON Schema generation for MCP protocol compliance
+- Comprehensive validation with descriptive error messages
+- Backward compatibility considerations for schema evolution
+
+#### DR-2: Resource Definitions
+**Priority**: Medium
+**Description**: Define MCP resources for accessing test data and analysis results.
+
+**MCP Resources**:
+1. **Test Results** (`test-results://session/{id}`)
+   - Access to parsed test execution results
+   - Filterable by status, type, or file
+
+2. **Fix Suggestions** (`suggestions://session/{id}`)
+   - Access to generated fix suggestions
+   - Organized by failure ID or confidence level
+
+3. **Analysis History** (`history://recent`)
+   - Access to recent analysis sessions
+   - Time-based filtering and pagination
+
+**Acceptance Criteria**:
+- RESTful resource URI patterns
+- Efficient data serialization and transfer
+- Proper access control and session management
+- Pagination for large datasets
+
+#### DR-3: Prompt Templates
+**Priority**: Low
+**Description**: Define MCP prompts for LLM integration and user guidance.
+
+**MCP Prompts**:
+1. **Fix Generation Prompts**
+   - Templates for LLM-based fix suggestion
+   - Context injection for specific failure types
+
+2. **Analysis Prompts**
+   - Templates for failure analysis guidance
+   - Best practice recommendations
+
+**Acceptance Criteria**:
+- Reusable prompt templates with parameter substitution
+- Integration with existing LLM service configurations
+- Contextual prompts based on failure types and patterns
+
+### Integration Requirements
+
+#### IR-1: CLI Integration
+**Priority**: High
+**Description**: Integrate MCP server functionality into the existing CLI interface.
+
+**CLI Commands**:
+- `pytest-analyzer mcp-server` - Start MCP server
+- `pytest-analyzer mcp-server --port 8000` - Start with HTTP transport
+- `pytest-analyzer mcp-server --stdio` - Start with STDIO transport
+- `pytest-analyzer mcp-server --help` - Show MCP server help
+
+**Acceptance Criteria**:
+- New CLI subcommand for MCP server management
+- Support for different transport methods (STDIO, HTTP)
+- Configuration via CLI arguments and config files
+- Graceful startup, shutdown, and error handling
+
+#### IR-2: Configuration Integration
+**Priority**: High
+**Description**: Integrate MCP server settings with the existing configuration system.
+
+**Configuration Options**:
+- Server transport method (stdio, http)
+- Port and host for HTTP transport
+- Security settings and authentication
+- Tool enablement and feature flags
+- Rate limiting and resource constraints
+
+**Acceptance Criteria**:
+- MCP settings extend existing Settings class
+- Environment variable support
+- Configuration file integration
+- Validation of MCP-specific settings
+
+#### IR-3: Logging and Monitoring
+**Priority**: Medium
+**Description**: Integrate MCP server operations with existing logging and monitoring.
+
+**Logging Requirements**:
+- MCP protocol message logging (debug level)
+- Tool execution logging with performance metrics
+- Error logging with detailed context
+- Security event logging (authentication, authorization)
+
+**Acceptance Criteria**:
+- Integration with existing logging configuration
+- Structured logging for MCP events
+- Performance metrics collection
+- Error tracking and alerting capabilities
+
+### Performance Requirements
+
+#### PR-1: Response Time
+**Priority**: High
+**Description**: MCP tools must respond within acceptable time limits.
+
+**Requirements**:
+- Tool execution under 30 seconds for typical test suites
+- File analysis under 5 seconds for reports up to 10MB
+- Configuration operations under 1 second
+- Resource access under 2 seconds
+
+**Acceptance Criteria**:
+- Performance benchmarks established and documented
+- Timeout handling with graceful degradation
+- Progress reporting for long-running operations
+- Resource usage monitoring and limits
+
+#### PR-2: Concurrency
+**Priority**: Medium
+**Description**: Support concurrent MCP tool execution and client connections.
+
+**Requirements**:
+- Multiple concurrent tool executions
+- Session isolation between clients
+- Resource sharing and conflict resolution
+- Connection pooling for HTTP transport
+
+**Acceptance Criteria**:
+- Thread-safe tool implementations
+- Session management with proper cleanup
+- Resource locking for file operations
+- Load testing with multiple concurrent clients
+
+#### PR-3: Resource Management
+**Priority**: Medium
+**Description**: Efficient resource usage and cleanup.
+
+**Requirements**:
+- Memory usage limits for large test outputs
+- Temporary file cleanup
+- Connection resource management
+- Background task cleanup
+
+**Acceptance Criteria**:
+- Memory profiling and optimization
+- Automatic resource cleanup on errors
+- Monitoring of resource usage patterns
+- Graceful handling of resource exhaustion
+
+### Security Requirements
+
+#### SR-1: Input Validation
+**Priority**: High
+**Description**: Comprehensive validation of all MCP tool inputs.
+
+**Validation Requirements**:
+- Path traversal prevention
+- File size and type restrictions
+- Command injection prevention
+- Input sanitization and escaping
+
+**Acceptance Criteria**:
+- Schema-based input validation
+- Whitelist-based path validation
+- Size limits on all file operations
+- Sanitization of user-provided arguments
+
+#### SR-2: File System Access
+**Priority**: High
+**Description**: Controlled and secure file system access.
+
+**Access Controls**:
+- Restricted to project directory by default
+- Configurable path allowlists
+- Read-only vs. read-write permissions
+- Backup and rollback for write operations
+
+**Acceptance Criteria**:
+- Sandboxed file access within project boundaries
+- Permission checking before file operations
+- Audit logging of file system access
+- Safe handling of symbolic links and special files
+
+#### SR-3: Authentication and Authorization
+**Priority**: Medium
+**Description**: Optional authentication and authorization for MCP server access.
+
+**Security Features**:
+- Token-based authentication for HTTP transport
+- Client certificate validation
+- Role-based access control for tools
+- Rate limiting and abuse prevention
+
+**Acceptance Criteria**:
+- Configurable authentication mechanisms
+- Secure token generation and validation
+- Granular permission system
+- DoS protection and rate limiting
+
+### Quality Requirements
+
+#### QR-1: Testing Coverage
+**Priority**: High
+**Description**: Comprehensive testing of MCP server functionality.
+
+**Testing Requirements**:
+- Unit tests for all MCP tools (>90% coverage)
+- Integration tests with MCP clients
+- Performance tests with load simulation
+- Security tests for input validation
+
+**Acceptance Criteria**:
+- Automated test suite with CI integration
+- Mock MCP client for integration testing
+- Performance benchmarks and regression tests
+- Security scanning and vulnerability assessment
+
+#### QR-2: Documentation
+**Priority**: High
+**Description**: Complete documentation for MCP server features.
+
+**Documentation Requirements**:
+- API documentation for all MCP tools
+- Integration guide for Claude Desktop
+- Configuration reference
+- Troubleshooting and FAQ
+
+**Acceptance Criteria**:
+- Auto-generated API documentation from schemas
+- Step-by-step integration tutorials
+- Complete configuration option documentation
+- Examples and best practices guide
+
+#### QR-3: Error Handling
+**Priority**: High
+**Description**: Robust error handling and user feedback.
+
+**Error Handling Requirements**:
+- Structured error responses with error codes
+- User-friendly error messages
+- Detailed logging for debugging
+- Graceful degradation on partial failures
+
+**Acceptance Criteria**:
+- Consistent error response format
+- Comprehensive error code documentation
+- Contextual error messages with suggestions
+- Error recovery and retry mechanisms
+
+## Implementation Plan
+
+### Phase 1: Foundation (Week 1-2)
+**Objective**: Establish MCP server infrastructure and basic functionality.
+
+**Deliverables**:
+- MCP Python SDK integration
+- Basic server module structure
+- CLI integration for server startup
+- Health check MCP tool
+- Basic configuration integration
+
+**Success Criteria**:
+- MCP server starts successfully
+- Can connect via STDIO transport
+- Health check tool responds correctly
+- Basic error handling works
+
+### Phase 2: Core Analysis Tools (Week 3-4)
+**Objective**: Implement primary analysis tools.
+
+**Deliverables**:
+- `analyze_pytest_output` tool
+- `run_and_analyze` tool
+- `suggest_fixes` tool
+- Input/output schemas
+- Integration with existing facade
+
+**Success Criteria**:
+- All core tools function correctly
+- Consistent with CLI behavior
+- Proper error handling and validation
+- Performance within requirements
+
+### Phase 3: Advanced Features (Week 5-6)
+**Objective**: Add fix application and summary tools.
+
+**Deliverables**:
+- `apply_suggestion` tool
+- `get_failure_summary` tool
+- MCP resources implementation
+- HTTP transport support
+- Security controls
+
+**Success Criteria**:
+- Fix application works safely
+- Resource access functions correctly
+- HTTP transport operational
+- Security measures in place
+
+### Phase 4: Polish and Documentation (Week 7-8)
+**Objective**: Complete testing, documentation, and integration guides.
+
+**Deliverables**:
+- Comprehensive test suite
+- Complete documentation
+- Claude Desktop integration guide
+- Performance optimizations
+- Security audit
+
+**Success Criteria**:
+- Test coverage >90%
+- Documentation complete
+- Integration guide verified
+- Security review passed
+
+## Success Metrics
+
+### Technical Metrics
+- **Response Time**: <30s for typical analysis operations
+- **Error Rate**: <1% for valid inputs
+- **Test Coverage**: >90% for MCP module
+- **Uptime**: >99.9% during operation
+
+### User Experience Metrics
+- **Integration Time**: <30 minutes to set up with Claude Desktop
+- **Tool Success Rate**: >95% for well-formed requests
+- **User Satisfaction**: >4.5/5 in feedback surveys
+- **Adoption Rate**: 50% of existing CLI users try MCP interface
+
+### Business Metrics
+- **Feature Adoption**: MCP tools used in 25% of analysis sessions
+- **Error Reduction**: 30% reduction in manual test debugging time
+- **Community Engagement**: Positive feedback from AI assistant users
+- **Ecosystem Integration**: Support from at least 3 MCP-compatible clients
+
+## Risk Assessment
+
+### Technical Risks
+- **MCP Protocol Changes**: Medium probability, high impact
+  - Mitigation: Use official SDK, monitor specification updates
+- **Performance Degradation**: Low probability, medium impact
+  - Mitigation: Performance testing, resource monitoring
+- **Security Vulnerabilities**: Medium probability, high impact
+  - Mitigation: Security review, input validation, sandboxing
+
+### Integration Risks
+- **Facade Compatibility**: Low probability, high impact
+  - Mitigation: Comprehensive testing, gradual rollout
+- **Configuration Conflicts**: Medium probability, low impact
+  - Mitigation: Isolated configuration, validation
+- **Dependency Issues**: Medium probability, medium impact
+  - Mitigation: Version pinning, compatibility testing
+
+### Adoption Risks
+- **User Learning Curve**: High probability, medium impact
+  - Mitigation: Clear documentation, examples, support
+- **Tool Discovery**: Medium probability, medium impact
+  - Mitigation: Integration guides, community outreach
+- **Performance Expectations**: Medium probability, low impact
+  - Mitigation: Clear performance documentation, optimization
+
+## Dependencies
+
+### Technical Dependencies
+- **MCP Python SDK**: Official SDK for protocol implementation
+- **Existing Facade**: Current `PytestAnalyzerFacade` interface
+- **Pydantic**: Schema validation and serialization
+- **FastAPI** (optional): HTTP transport implementation
+
+### External Dependencies
+- **Claude Desktop**: Primary target MCP client
+- **MCP Ecosystem**: Broader MCP tool compatibility
+- **Python 3.8+**: Minimum Python version support
+- **Operating System**: Cross-platform compatibility
+
+### Internal Dependencies
+- **Core Services**: Existing analyzer, suggester, extractor services
+- **Configuration System**: Current settings and configuration management
+- **Test Infrastructure**: Existing test suite and CI pipeline
+- **Documentation System**: Current documentation tooling
+
+## Conclusion
+
+The MCP server integration represents a significant enhancement to the pytest analyzer's capabilities, enabling seamless integration with AI assistants and other MCP-compatible tools. By leveraging the existing facade architecture and following MCP best practices, this implementation will provide a robust, secure, and performant interface for AI-assisted pytest failure analysis.
+
+The phased implementation approach ensures incremental value delivery while maintaining high quality standards. The comprehensive requirements outlined in this PRD provide clear guidance for implementation while allowing flexibility for technical decisions within the established architecture.
+
+Success in this project will position the pytest analyzer as a leader in AI-integrated development tools, providing significant value to developers using AI assistants for code debugging and test failure resolution.

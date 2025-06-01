@@ -1,58 +1,67 @@
 # Task ID: 9
-# Title: Migrate ExtractorFactory to Use BaseFactory
-# Status: done
-# Dependencies: 3
-# Priority: medium
-# Description: Refactor the ExtractorFactory to inherit from BaseFactory and eliminate duplicated code.
+# Title: Implement Core Analysis Tool: run_and_analyze
+# Status: pending
+# Dependencies: 6, 7, 8
+# Priority: high
+# Description: Implement the MCP tool for running pytest and analyzing the results in a single operation.
 # Details:
-Refactor `src/pytest_analyzer/core/infrastructure/extraction/extractor_factory.py` to use the new base class:
+In `src/pytest_analyzer/mcp/tools/analysis.py`, implement:
+1. `run_and_analyze` tool function
+2. Input validation for test paths and arguments
+3. Sanitization of pytest arguments
+4. Integration with MCPAnalyzerFacade
+5. Timeout handling for long-running tests
 
+Implementation should:
+- Accept test path and optional pytest arguments
+- Support quiet mode to suppress console output
+- Validate path existence and argument safety
+- Execute pytest with specified arguments
+- Analyze results and return fix suggestions
+- Include execution metrics
+
+Example implementation:
 ```python
-from typing import Type, Optional
-from pathlib import Path
+from pytest_analyzer.mcp.schemas import RunAndAnalyzeRequest, RunAndAnalyzeResponse
+import shlex
+import asyncio
 
-from pytest_analyzer.core.infrastructure.base_factory import BaseFactory
-from pytest_analyzer.core.interfaces.protocols import Extractor
-from pytest_analyzer.core.infrastructure.extraction.json_extractor import JSONExtractor
-from pytest_analyzer.core.infrastructure.extraction.xml_extractor import XMLExtractor
-from pytest_analyzer.core.infrastructure.extraction.text_extractor import TextExtractor
-from pytest_analyzer.core.cross_cutting.configuration.settings import Settings
-from pytest_analyzer.core.cross_cutting.error_handling import error_context
+async def run_and_analyze(request: RunAndAnalyzeRequest, facade: MCPAnalyzerFacade) -> RunAndAnalyzeResponse:
+    # Validate test path
+    if not os.path.exists(request.test_path):
+        raise ValueError(f"Test path does not exist: {request.test_path}")
 
-class ExtractorFactory(BaseFactory):
-    """Factory for creating extractors based on file type."""
+    # Sanitize pytest arguments
+    safe_args = []
+    if request.pytest_args:
+        for arg in request.pytest_args:
+            # Validate argument safety
+            if arg.startswith("--") or arg.startswith("-"):
+                safe_args.append(arg)
+            else:
+                # For positional args, ensure they're paths that exist
+                if os.path.exists(arg):
+                    safe_args.append(arg)
+                else:
+                    raise ValueError(f"Invalid pytest argument: {arg}")
 
-    def __init__(self, settings: Optional[Settings] = None):
-        super().__init__(settings)
-        self._register_default_extractors()
-
-    def _register_default_extractors(self) -> None:
-        """Register the default extractors."""
-        self.register("json", JSONExtractor)
-        self.register("xml", XMLExtractor)
-        self.register("txt", TextExtractor)
-
-    def create(self, file_path: str) -> Extractor:
-        """Create an extractor for the given file path.
-
-        Args:
-            file_path: Path to the file to extract from
-
-        Returns:
-            An instance of the appropriate extractor
-        """
-        with error_context("Creating extractor", self.logger):
-            file_type = self._detect_file_type(file_path)
-            extractor_class = self.get_implementation(file_type)
-            return extractor_class()
+    # Run with timeout
+    try:
+        result = await asyncio.wait_for(
+            facade.run_and_analyze(request.test_path, safe_args, request.quiet),
+            timeout=request.timeout_seconds or 30
+        )
+        return RunAndAnalyzeResponse(
+            exit_code=result.exit_code,
+            suggestions=result.suggestions,
+            execution_time_ms=result.execution_time_ms,
+            output=result.output if not request.quiet else None
+        )
+    except asyncio.TimeoutError:
+        raise TimeoutError(f"Test execution timed out after {request.timeout_seconds or 30} seconds")
 ```
 
-This refactored factory uses the BaseFactory to eliminate code duplication while providing extractor-specific functionality.
+Register this tool with the MCP server during initialization.
 
 # Test Strategy:
-Create unit tests for ExtractorFactory that verify:
-1. _register_default_extractors correctly registers all extractors
-2. create returns the correct extractor type based on file extension
-3. Integration test with different file types to verify correct extractor is created
-4. Error handling for unsupported file types
-5. Verify that the refactored factory maintains the same behavior as the original implementation
+Unit test with mock facade. Test argument sanitization with valid and invalid inputs. Verify timeout handling works correctly. Test with various test paths and configurations. Integration test with actual pytest execution. Verify output capture in both quiet and verbose modes.

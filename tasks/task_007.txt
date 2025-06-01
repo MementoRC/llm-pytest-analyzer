@@ -1,62 +1,44 @@
 # Task ID: 7
-# Title: Migrate Remaining Environment Managers to Base Class
-# Status: done
-# Dependencies: 2, 6
-# Priority: medium
-# Description: Refactor Pixi, Hatch, UV, and Pipenv environment managers to inherit from BaseEnvironmentManager.
+# Title: Implement Facade Integration Pattern
+# Status: pending
+# Dependencies: 3, 5, 6
+# Priority: high
+# Description: Create a thin facade layer over the existing PytestAnalyzerFacade to maintain consistency with the current CLI interface.
 # Details:
-Refactor the remaining environment managers following the same pattern as PoetryEnvironmentManager:
+Implement an MCP-specific facade that delegates to the existing PytestAnalyzerFacade:
+1. Create `src/pytest_analyzer/mcp/facade.py`
+2. Implement `MCPAnalyzerFacade` class that wraps the existing facade
+3. Add methods corresponding to MCP tools
+4. Ensure consistent error handling and logging
+5. Maintain dependency injection pattern
 
-1. For PixiEnvironmentManager:
+Example implementation:
 ```python
-from pathlib import Path
-from typing import List
+from pytest_analyzer.core.facade import PytestAnalyzerFacade
+from pytest_analyzer.core.logging import get_logger
+from pytest_analyzer.mcp.schemas import *
 
-from pytest_analyzer.core.infrastructure.environment.base_manager import BaseEnvironmentManager
-from pytest_analyzer.core.cross_cutting.error_handling import error_context
+class MCPAnalyzerFacade:
+    def __init__(self, analyzer_facade: PytestAnalyzerFacade):
+        self.analyzer_facade = analyzer_facade
+        self.logger = get_logger(__name__)
 
-class PixiEnvironmentManager(BaseEnvironmentManager):
-    """Pixi-specific environment manager implementation."""
-
-    def __init__(self, project_path: Path):
-        super().__init__(project_path)
-        self.pixi_executable = "pixi"
-
-    def build_command(self, base_command: List[str]) -> List[str]:
-        """Build a Pixi-specific command to run the given base command."""
-        with error_context("Building Pixi command", self.logger):
-            return [self.pixi_executable, "run"] + base_command
+    async def analyze_pytest_output(self, request: AnalyzePytestOutputRequest) -> AnalyzePytestOutputResponse:
+        try:
+            self.logger.info(f"Analyzing pytest output from {request.file_path}")
+            result = self.analyzer_facade.analyze_file(request.file_path)
+            return AnalyzePytestOutputResponse(
+                suggestions=[
+                    FixSuggestion(**suggestion) for suggestion in result.suggestions
+                ],
+                execution_time_ms=result.execution_time_ms
+            )
+        except Exception as e:
+            self.logger.error(f"Error analyzing pytest output: {str(e)}")
+            raise
 ```
 
-2. For HatchEnvironmentManager:
-```python
-from pathlib import Path
-from typing import List
-
-from pytest_analyzer.core.infrastructure.environment.base_manager import BaseEnvironmentManager
-from pytest_analyzer.core.cross_cutting.error_handling import error_context
-
-class HatchEnvironmentManager(BaseEnvironmentManager):
-    """Hatch-specific environment manager implementation."""
-
-    def __init__(self, project_path: Path):
-        super().__init__(project_path)
-        self.hatch_executable = "hatch"
-
-    def build_command(self, base_command: List[str]) -> List[str]:
-        """Build a Hatch-specific command to run the given base command."""
-        with error_context("Building Hatch command", self.logger):
-            return [self.hatch_executable, "run"] + base_command
-```
-
-3. For UVEnvironmentManager and PipenvEnvironmentManager, follow the same pattern.
-
-Ensure each manager only implements the methods that differ from the base class implementation.
+Ensure all facade methods are properly documented and follow existing patterns.
 
 # Test Strategy:
-For each environment manager, create unit tests that verify:
-1. build_command correctly prepends the appropriate executable and commands
-2. Inherited methods from BaseEnvironmentManager work correctly
-3. Integration test that verifies the manager can execute real commands in the appropriate environment
-4. Error handling works correctly when invalid commands are provided
-5. Verify that the refactored managers maintain the same behavior as the original implementations
+Unit test facade with mock analyzer facade. Verify correct delegation to underlying facade methods. Test error handling and propagation. Check logging integration. Verify input/output transformation between facades.

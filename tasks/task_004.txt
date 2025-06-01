@@ -1,65 +1,38 @@
 # Task ID: 4
-# Title: Create BaseLLMService for Common LLM Service Logic
-# Status: done
-# Dependencies: 1
-# Priority: medium
-# Description: Extract common initialization code from sync and async LLM services into a shared base class to eliminate duplication.
+# Title: Implement CLI Integration for MCP Server
+# Status: pending
+# Dependencies: 3
+# Priority: high
+# Description: Extend the existing CLI interface to support starting and configuring the MCP server.
 # Details:
-Create `src/pytest_analyzer/core/infrastructure/llm/base_llm_service.py` with the following implementation:
+Extend the CLI module to add MCP server commands:
+1. Add `mcp-server` subcommand to the main CLI entrypoint
+2. Implement options for transport selection (--stdio, --http)
+3. Add port and host configuration for HTTP transport
+4. Include help text and documentation
+5. Implement graceful shutdown handling
 
+Example implementation:
 ```python
-from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List
-import logging
+@click.group(name="mcp-server")
+def mcp_server_group():
+    """Start and manage the MCP server for AI assistant integration."""
+    pass
 
-# Import from the new structure
-from pytest_analyzer.core.cross_cutting.configuration.settings import Settings
-from pytest_analyzer.core.interfaces.protocols import LLMProvider
+@mcp_server_group.command(name="start")
+@click.option("--stdio", is_flag=True, help="Use STDIO transport (default)")
+@click.option("--http", is_flag=True, help="Use HTTP transport")
+@click.option("--port", default=8000, help="Port for HTTP transport")
+@click.option("--host", default="127.0.0.1", help="Host for HTTP transport")
+def start_server(stdio, http, port, host):
+    """Start the MCP server with specified transport."""
+    # Implementation
 
-class BaseLLMService(ABC):
-    """Base class for LLM services to eliminate code duplication between sync and async implementations."""
-
-    def __init__(self, provider: Optional[LLMProvider] = None, settings: Optional[Settings] = None):
-        self.settings = settings or Settings()
-        self.provider = provider or self._create_default_provider()
-        self.logger = logging.getLogger(self.__class__.__name__)
-        self.model = self.settings.get("llm.model", "gpt-3.5-turbo")
-        self.temperature = float(self.settings.get("llm.temperature", "0.7"))
-        self.max_tokens = int(self.settings.get("llm.max_tokens", "2000"))
-        self.timeout = int(self.settings.get("llm.timeout_seconds", "30"))
-
-    def _create_default_provider(self) -> LLMProvider:
-        """Create the default LLM provider based on settings."""
-        provider_name = self.settings.get("llm.provider", "openai")
-        self.logger.info(f"Creating default LLM provider: {provider_name}")
-
-        # This would be implemented in subclasses or use a factory pattern
-        raise NotImplementedError("Subclasses must implement _create_default_provider")
-
-    def _prepare_messages(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> List[Dict[str, str]]:
-        """Prepare messages for the LLM provider with consistent formatting."""
-        messages = [
-            {"role": "system", "content": self._get_system_prompt(context)},
-            {"role": "user", "content": prompt}
-        ]
-        return messages
-
-    def _get_system_prompt(self, context: Optional[Dict[str, Any]] = None) -> str:
-        """Get the system prompt, potentially customized based on context."""
-        return self.settings.get("llm.system_prompt", "You are a helpful assistant.")
-
-    @abstractmethod
-    def generate(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> str:
-        """Generate a response from the LLM based on the prompt and context."""
-        pass
+# Register with main CLI
+main_cli.add_command(mcp_server_group)
 ```
 
-This base class extracts the common initialization and configuration logic from the existing LLM service implementations.
+Ensure proper signal handling for graceful shutdown (SIGINT, SIGTERM).
 
 # Test Strategy:
-Create unit tests for BaseLLMService that verify:
-1. Constructor properly initializes all properties from settings
-2. _prepare_messages correctly formats the messages array
-3. _get_system_prompt returns the expected system prompt
-4. Attempting to instantiate the abstract class directly raises TypeError
-5. Subclassing without implementing generate and _create_default_provider raises TypeError
+Test CLI command registration and help text. Verify command-line arguments are correctly parsed. Test server startup with different transport options. Check signal handling for proper shutdown. Integration test with actual server instance.

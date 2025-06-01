@@ -1,42 +1,20 @@
 # Task ID: 1
-# Title: Create New Directory Structure for DDD Architecture
-# Status: done
+# Title: Create MCP Module Structure
+# Status: in-progress
 # Dependencies: None
 # Priority: high
-# Description: Implement the new Domain-Driven Design directory structure as specified in the PRD, creating the domain, infrastructure, application, interfaces, and cross-cutting layers.
+# Description: Create the foundational module structure for the MCP server integration within the existing project architecture.
 # Details:
-Create the following directory structure:
+Create the following directory and file structure:
+- `src/pytest_analyzer/mcp/` (main module directory)
+- `src/pytest_analyzer/mcp/__init__.py` (module initialization)
+- `src/pytest_analyzer/mcp/server.py` (MCP server implementation)
+- `src/pytest_analyzer/mcp/tools/` (directory for tool implementations)
+- `src/pytest_analyzer/mcp/schemas/` (directory for Pydantic schemas)
+- `src/pytest_analyzer/mcp/resources/` (directory for MCP resources)
+- `src/pytest_analyzer/mcp/prompts/` (directory for LLM prompts)
 
-```
-src/pytest_analyzer/core/
-├── domain/
-│   ├── entities/           # Core business objects (PytestFailure, FixSuggestion)
-│   ├── services/           # Domain services (FailureAnalyzer, FixSuggester)
-│   ├── repositories/       # Data access abstractions
-│   └── value_objects/      # Immutable domain concepts
-├── infrastructure/
-│   ├── llm/               # External LLM service integrations
-│   ├── environment/       # Environment manager implementations
-│   ├── extraction/        # Report parsing implementations
-│   ├── di/               # Dependency injection container
-│   └── persistence/       # File system, caching implementations
-├── application/
-│   ├── services/          # Application services (AnalyzerService)
-│   ├── workflows/         # State machines and orchestration
-│   └── facades/           # Public API facades
-├── interfaces/
-│   ├── protocols.py       # All protocol definitions
-│   ├── errors.py          # Exception definitions
-│   └── types.py           # Type definitions
-└── cross_cutting/
-    ├── logging/            # Centralized logging configuration
-    ├── monitoring/         # Health checks and metrics
-    ├── caching/           # Result caching strategies
-    ├── validation/        # Input/output validation
-    └── configuration/     # Configuration management
-```
-
-Ensure all directories have proper `__init__.py` files to maintain package structure. Create placeholder README.md files in each directory explaining its purpose according to DDD principles.
+Ensure the module structure follows existing project patterns and coding standards. Update package imports and exports as needed.
 
 # Test Strategy:
-Verify directory structure exists with correct hierarchy. Ensure all __init__.py files are properly created. Validate import paths work correctly by attempting to import from each new module.
+Verify directory structure exists and is importable. Ensure module initialization works correctly. Check that the structure follows project conventions through code review.
