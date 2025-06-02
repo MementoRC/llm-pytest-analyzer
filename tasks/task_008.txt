@@ -27,19 +27,19 @@ import time
 
 async def analyze_pytest_output(request: AnalyzePytestOutputRequest, facade: MCPAnalyzerFacade) -> AnalyzePytestOutputResponse:
     start_time = time.time()
-
+    
     # Validate file size
     file_size = os.path.getsize(request.file_path) / (1024 * 1024)  # Size in MB
     if file_size > 10:  # 10MB limit
         raise ValueError(f"File too large: {file_size:.2f}MB (max 10MB)")
-
+    
     # Delegate to facade
     result = await facade.analyze_pytest_output(request)
-
+    
     # Add execution time
     execution_time_ms = int((time.time() - start_time) * 1000)
     result.execution_time_ms = execution_time_ms
-
+    
     return result
 ```
 

@@ -1,6 +1,6 @@
 # Task ID: 2
 # Title: Add MCP SDK Dependencies
-# Status: pending
+# Status: done
 # Dependencies: 1
 # Priority: high
 # Description: Integrate the MCP Python SDK as a project dependency with proper version management in pyproject.toml.

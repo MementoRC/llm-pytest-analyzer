@@ -30,7 +30,7 @@ async def run_and_analyze(request: RunAndAnalyzeRequest, facade: MCPAnalyzerFaca
     # Validate test path
     if not os.path.exists(request.test_path):
         raise ValueError(f"Test path does not exist: {request.test_path}")
-
+    
     # Sanitize pytest arguments
     safe_args = []
     if request.pytest_args:
@@ -44,7 +44,7 @@ async def run_and_analyze(request: RunAndAnalyzeRequest, facade: MCPAnalyzerFaca
                     safe_args.append(arg)
                 else:
                     raise ValueError(f"Invalid pytest argument: {arg}")
-
+    
     # Run with timeout
     try:
         result = await asyncio.wait_for(

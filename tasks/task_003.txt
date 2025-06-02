@@ -1,6 +1,6 @@
 # Task ID: 3
 # Title: Implement MCP Server Base Class
-# Status: pending
+# Status: in-progress
 # Dependencies: 1, 2
 # Priority: high
 # Description: Create the core MCP server implementation that will handle protocol communication and tool registration.
@@ -32,13 +32,13 @@ class MCPServer:
         self.port = port
         self.protocol_handler = MCPProtocolHandler()
         self.tools = {}
-
+        
     def register_tool(self, tool_name, tool_function, schema):
         # Implementation
-
+        
     def start(self):
         # Implementation
-
+        
     def stop(self):
         # Implementation
 ```
