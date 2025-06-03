@@ -28,20 +28,20 @@ async def suggest_fixes(request: SuggestFixesRequest, facade: MCPAnalyzerFacade)
     # Validate input size
     if len(request.pytest_output) > 1_000_000:  # 1MB limit
         raise ValueError(f"Input too large: {len(request.pytest_output)} bytes (max 1MB)")
-    
+
     # Detect format
     output_format = "text"  # Default
     if request.pytest_output.startswith("{"):
         output_format = "json"
     elif request.pytest_output.startswith("<?xml"):
         output_format = "xml"
-    
+
     # Delegate to facade
     result = await facade.suggest_fixes_from_string(
         request.pytest_output,
         format=output_format
     )
-    
+
     return SuggestFixesResponse(
         suggestions=result.suggestions,
         execution_time_ms=result.execution_time_ms,

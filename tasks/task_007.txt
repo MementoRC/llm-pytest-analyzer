@@ -22,7 +22,7 @@ class MCPAnalyzerFacade:
     def __init__(self, analyzer_facade: PytestAnalyzerFacade):
         self.analyzer_facade = analyzer_facade
         self.logger = get_logger(__name__)
-    
+
     async def analyze_pytest_output(self, request: AnalyzePytestOutputRequest) -> AnalyzePytestOutputResponse:
         try:
             self.logger.info(f"Analyzing pytest output from {request.file_path}")

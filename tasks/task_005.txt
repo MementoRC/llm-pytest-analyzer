@@ -28,7 +28,7 @@ class MCPSettings(BaseSettings):
     enable_authentication: bool = False
     auth_token: Optional[str] = None
     tool_timeout_seconds: int = 30
-    
+
     @validator("transport_type")
     def validate_transport(cls, v):
         if v not in ["stdio", "http"]:

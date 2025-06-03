@@ -27,7 +27,7 @@ def mcp_server_group():
 def start_server(stdio, http, port, host):
     """Start the MCP server with specified transport."""
     # Implementation
-    
+
 # Register with main CLI
 main_cli.add_command(mcp_server_group)
 ```
