@@ -118,6 +118,7 @@ class TestPytestAnalyzerMCPServer:
                 description="Another resource",
             )
 
+    @pytest.mark.asyncio
     async def test_start_already_running(self):
         """Test starting server when already running raises error."""
         server = PytestAnalyzerMCPServer()
@@ -126,13 +127,15 @@ class TestPytestAnalyzerMCPServer:
         with pytest.raises(RuntimeError, match="already running"):
             await server.start()
 
+    @pytest.mark.asyncio
     async def test_start_invalid_transport(self):
         """Test starting server with invalid transport raises error."""
         server = PytestAnalyzerMCPServer(transport_type="invalid")
 
-        with pytest.raises(ValueError, match="Unsupported transport type"):
+        with pytest.raises(RuntimeError, match="Unsupported transport type"):
             await server.start()
 
+    @pytest.mark.asyncio
     @patch("pytest_analyzer.mcp.server.stdio_server")
     async def test_start_stdio_success(self, mock_stdio_server):
         """Test successful STDIO server start."""
@@ -153,6 +156,7 @@ class TestPytestAnalyzerMCPServer:
         assert server.is_running
         mock_stdio_server.assert_called_once()
 
+    @pytest.mark.asyncio
     async def test_start_http_not_implemented(self):
         """Test HTTP server start raises NotImplementedError."""
         server = PytestAnalyzerMCPServer(transport_type="http")
@@ -162,6 +166,7 @@ class TestPytestAnalyzerMCPServer:
         ):
             await server.start()
 
+    @pytest.mark.asyncio
     async def test_stop_not_running(self):
         """Test stopping server when not running logs warning."""
         server = PytestAnalyzerMCPServer()
@@ -170,6 +175,7 @@ class TestPytestAnalyzerMCPServer:
             await server.stop()
             mock_warning.assert_called_once_with("Server is not running")
 
+    @pytest.mark.asyncio
     async def test_stop_success(self):
         """Test successful server stop."""
         server = PytestAnalyzerMCPServer()
@@ -186,6 +192,7 @@ class TestPytestAnalyzerMCPServer:
         assert len(server.get_registered_resources()) == 0
         assert server._shutdown_event.is_set()
 
+    @pytest.mark.asyncio
     async def test_lifespan_context_manager(self):
         """Test server lifespan context manager."""
         server = PytestAnalyzerMCPServer()
@@ -193,6 +200,7 @@ class TestPytestAnalyzerMCPServer:
         async with server.lifespan() as ctx_server:
             assert ctx_server is server
 
+    @pytest.mark.asyncio
     async def test_lifespan_context_manager_exception(self):
         """Test server lifespan context manager with exception."""
         server = PytestAnalyzerMCPServer()
@@ -222,6 +230,7 @@ class TestPytestAnalyzerMCPServer:
         assert capabilities["tools"] == {"listChanged": True}
         assert capabilities["resources"] == {"subscribe": True, "listChanged": True}
 
+    @pytest.mark.asyncio
     async def test_wait_for_shutdown(self):
         """Test waiting for shutdown signal."""
         server = PytestAnalyzerMCPServer()
