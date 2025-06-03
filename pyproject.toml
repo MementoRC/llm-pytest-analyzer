@@ -82,6 +82,7 @@ path = "src/pytest_analyzer/__version__.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 python_files = "test_*.py"
 python_classes = "Test*"
