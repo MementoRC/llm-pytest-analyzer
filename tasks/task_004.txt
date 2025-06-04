@@ -1,6 +1,6 @@
 # Task ID: 4
 # Title: Implement CLI Integration for MCP Server
-# Status: pending
+# Status: done
 # Dependencies: 3
 # Priority: high
 # Description: Extend the existing CLI interface to support starting and configuring the MCP server.
