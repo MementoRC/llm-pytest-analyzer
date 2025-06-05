@@ -68,7 +68,12 @@ def test_cli_with_assertion_file(
         with patch("builtins.open", mock_open(read_data=json_content)):
             # Run the CLI
             original_argv = sys.argv.copy()
-            sys.argv = ["pytest-analyzer", str(sample_assertion_file), "--json"]
+            sys.argv = [
+                "pytest-analyzer",
+                "analyze",
+                str(sample_assertion_file),
+                "--json",
+            ]
 
             # Capture output
             import io
@@ -107,6 +112,7 @@ def test_cli_with_report_file(sample_json_report):
             sys.executable,
             "-m",
             "pytest_analyzer.cli.analyzer_cli",
+            "analyze",
             "--output-file",
             str(sample_json_report),
         ],
@@ -171,6 +177,7 @@ def test_cli_with_llm_integration(sample_json_report):
             original_argv = sys.argv.copy()
             sys.argv = [
                 "pytest-analyzer",
+                "analyze",
                 tmp_test_path,
                 "--output-file",
                 str(sample_json_report),
@@ -222,7 +229,7 @@ def test_cli_with_different_formats(sample_assertion_file, patch_subprocess):
     """Test the CLI with different output formats."""
     # Test JSON format
     original_argv = sys.argv.copy()
-    sys.argv = ["pytest-analyzer", str(sample_assertion_file), "--json"]
+    sys.argv = ["pytest-analyzer", "analyze", str(sample_assertion_file), "--json"]
 
     # Capture output
     import io
@@ -242,7 +249,7 @@ def test_cli_with_different_formats(sample_assertion_file, patch_subprocess):
     assert "json-report" in " ".join(patch_subprocess.last_command)
 
     # Test XML format
-    sys.argv = ["pytest-analyzer", str(sample_assertion_file), "--xml"]
+    sys.argv = ["pytest-analyzer", "analyze", str(sample_assertion_file), "--xml"]
 
     xml_out = io.StringIO()
     with redirect_stdout(xml_out):
