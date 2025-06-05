@@ -67,8 +67,6 @@ def setup_parser() -> argparse.ArgumentParser:
         "analyze",
         help="Analyze pytest failures and suggest fixes",
         description="Run pytest analysis to identify patterns and suggest fixes",
-        parents=[],
-        add_help=False,
     )
 
     # Set up analyze command arguments (existing functionality)
@@ -85,7 +83,7 @@ def setup_parser() -> argparse.ArgumentParser:
 
     # Make analyze the default command when no subcommand is specified
     # This maintains backward compatibility
-    setup_analyze_parser(parser)
+    # NOTE: Removed setup_analyze_parser(parser) to avoid conflicting positional args
     parser.set_defaults(func=cmd_analyze)
 
     return parser
