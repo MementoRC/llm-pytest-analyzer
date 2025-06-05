@@ -42,9 +42,9 @@ def test_cli_direct_execution_help():
 
     # Check output
     assert "Python Test Failure Analyzer" in output
-    assert "test_path" in output
-    assert "--json" in output
-    assert "--use-llm" in output
+    assert "analyze" in output  # Should show the analyze subcommand
+    assert "mcp" in output  # Should show the mcp subcommand
+    assert "Available commands" in output  # Should show subcommand help
 
 
 @pytest.mark.e2e
