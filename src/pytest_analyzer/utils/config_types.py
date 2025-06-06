@@ -6,6 +6,74 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 
+@dataclass
+class MCPSettings:
+    """Configuration settings for the MCP server."""
+
+    # Transport settings
+    transport_type: str = "stdio"  # Transport type: "stdio" or "http"
+    http_host: str = "127.0.0.1"  # Host for HTTP transport
+    http_port: int = 8000  # Port for HTTP transport
+
+    # Security settings
+    enable_authentication: bool = False  # Whether to enable authentication
+    auth_token: Optional[str] = None  # Authentication token
+    max_request_size_mb: int = 10  # Maximum request size in MB
+
+    # Tool settings
+    tool_timeout_seconds: int = 30  # Timeout for tool execution
+    max_concurrent_requests: int = 10  # Maximum concurrent tool requests
+    enable_async_execution: bool = True  # Whether to enable async tool execution
+
+    # Resource settings
+    enable_resources: bool = True  # Whether to enable MCP resources
+    max_resource_size_mb: int = 50  # Maximum resource size in MB
+    resource_cache_ttl_seconds: int = 300  # Resource cache TTL
+
+    # Logging and monitoring
+    enable_detailed_logging: bool = False  # Whether to enable detailed MCP logging
+    log_requests: bool = False  # Whether to log all MCP requests/responses
+    enable_metrics: bool = True  # Whether to enable metrics collection
+
+    # Server lifecycle settings
+    startup_timeout_seconds: int = 30  # Timeout for server startup
+    shutdown_timeout_seconds: int = 30  # Timeout for graceful shutdown
+    heartbeat_interval_seconds: int = 60  # Heartbeat interval for health checks
+
+    def __post_init__(self):
+        """Validate MCP settings after initialization."""
+        # Validate transport type
+        if self.transport_type not in ["stdio", "http"]:
+            raise ValueError(
+                f"Invalid transport_type: '{self.transport_type}'. Must be 'stdio' or 'http'"
+            )
+
+        # Validate timeouts are positive
+        if self.tool_timeout_seconds <= 0:
+            raise ValueError("tool_timeout_seconds must be positive")
+        if self.startup_timeout_seconds <= 0:
+            raise ValueError("startup_timeout_seconds must be positive")
+        if self.shutdown_timeout_seconds <= 0:
+            raise ValueError("shutdown_timeout_seconds must be positive")
+
+        # Validate port range for HTTP transport
+        if self.transport_type == "http":
+            if not (1 <= self.http_port <= 65535):
+                raise ValueError(
+                    f"Invalid http_port: {self.http_port}. Must be between 1 and 65535"
+                )
+
+        # Validate size limits
+        if self.max_request_size_mb <= 0:
+            raise ValueError("max_request_size_mb must be positive")
+        if self.max_resource_size_mb <= 0:
+            raise ValueError("max_resource_size_mb must be positive")
+
+        # Validate concurrency limits
+        if self.max_concurrent_requests <= 0:
+            raise ValueError("max_concurrent_requests must be positive")
+
+
 # --- Settings Dataclass Definition ---
 # Moved here from settings.py
 @dataclass
@@ -71,6 +139,9 @@ class Settings:
     environment_manager: Optional[str] = (
         None  # Override environment manager detection (pixi, poetry, hatch, uv, pipenv, pip+venv)
     )
+
+    # MCP Server settings
+    mcp: MCPSettings = field(default_factory=MCPSettings)  # MCP server configuration
 
     # Backward compatibility properties
     debug: bool = False  # Enable debug mode (backward compatibility)

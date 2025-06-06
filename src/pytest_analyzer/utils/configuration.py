@@ -128,7 +128,7 @@ class ConfigurationManager:
         try:
             self._config = self._load_defaults()
             self._config.update(self._load_from_file())
-            self._config.update(self._load_from_env())
+            self._merge_env_config(self._load_from_env())
             self._loaded = True
             logger.debug("Configuration loaded successfully.")
         except Exception as e:
@@ -229,7 +229,12 @@ class ConfigurationManager:
                 # Convert PYTEST_ANALYZER_SETTING_NAME to setting_name
                 setting_name = env_var[len(self.env_prefix) :].lower()
 
-                if setting_name in valid_fields:
+                # Handle nested MCP settings (PYTEST_ANALYZER_MCP_TRANSPORT_TYPE)
+                if setting_name.startswith("mcp_"):
+                    self._handle_nested_mcp_env(
+                        env_config, setting_name, value, env_var
+                    )
+                elif setting_name in valid_fields:
                     field_info = valid_fields[setting_name]
                     try:
                         typed_value = self._convert_type(value, field_info.type)
@@ -247,6 +252,79 @@ class ConfigurationManager:
                 # logger.debug(f"Ignoring environment variable '{env_var}' as it doesn't match a setting.")
 
         return env_config
+
+    def _handle_nested_mcp_env(
+        self, env_config: Dict[str, Any], setting_name: str, value: str, env_var: str
+    ) -> None:
+        """Handle nested MCP environment variables."""
+        # Extract MCP field name (mcp_transport_type -> transport_type)
+        mcp_field_name = setting_name[4:]  # Remove "mcp_" prefix
+
+        # Import MCPSettings dynamically to avoid circular imports
+        from .config_types import MCPSettings
+
+        mcp_fields = {f.name: f for f in fields(MCPSettings)}
+
+        if mcp_field_name in mcp_fields:
+            field_info = mcp_fields[mcp_field_name]
+            try:
+                typed_value = self._convert_type(value, field_info.type)
+
+                # Ensure env_config has an mcp dict
+                if "mcp" not in env_config:
+                    env_config["mcp"] = {}
+
+                env_config["mcp"][mcp_field_name] = typed_value
+                logger.debug(
+                    f"Loaded MCP setting '{mcp_field_name}' from environment variable '{env_var}'."
+                )
+            except (ValueError, TypeError) as e:
+                logger.warning(
+                    f"Could not convert MCP environment variable {env_var} "
+                    f"value '{value}' to type {field_info.type}: {e}"
+                )
+        else:
+            logger.debug(f"Ignoring unknown MCP environment variable '{env_var}'.")
+
+    def _merge_env_config(self, env_config: Dict[str, Any]) -> None:
+        """Merge environment configuration into main config, handling nested structures."""
+        for key, value in env_config.items():
+            if key == "mcp" and isinstance(value, dict):
+                # Merge MCP settings rather than replacing them
+                if "mcp" not in self._config:
+                    self._config["mcp"] = {}
+                if isinstance(self._config["mcp"], dict):
+                    self._config["mcp"].update(value)
+                else:
+                    self._config["mcp"] = value
+            else:
+                # For non-nested settings, simple replacement
+                self._config[key] = value
+
+    def _prepare_config_for_instantiation(
+        self, config: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Prepare configuration dict for Settings instantiation, handling nested MCPSettings."""
+        config_copy = config.copy()
+
+        # Handle MCP settings if present
+        if "mcp" in config_copy and isinstance(config_copy["mcp"], dict):
+            # Import MCPSettings dynamically to avoid circular imports
+            from .config_types import MCPSettings
+
+            try:
+                # Create MCPSettings instance from the mcp dict
+                mcp_config = config_copy["mcp"]
+                config_copy["mcp"] = MCPSettings(**mcp_config)
+                logger.debug("Created MCPSettings instance from configuration.")
+            except Exception as e:
+                logger.warning(
+                    f"Failed to create MCPSettings from config: {e}. Using defaults."
+                )
+                # Fall back to default MCPSettings instance
+                config_copy["mcp"] = MCPSettings()
+
+        return config_copy
 
     def _convert_type(self, value: str, target_type: Any) -> Any:
         """Convert string value to the target type."""
@@ -332,9 +410,14 @@ class ConfigurationManager:
                         ) from e_default
 
             try:
+                # Handle nested MCP settings before creating Settings instance
+                config_for_instantiation = self._prepare_config_for_instantiation(
+                    self._config
+                )
+
                 # Use dictionary unpacking to instantiate the dataclass
                 # Dataclass validation happens implicitly here
-                self._settings_instance = self.settings_cls(**self._config)
+                self._settings_instance = self.settings_cls(**config_for_instantiation)
                 logger.debug("Created settings instance from loaded configuration.")
             except TypeError as e:
                 # Catches errors if required fields are missing or types are wrong

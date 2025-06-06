@@ -1,6 +1,6 @@
 # Task ID: 6
 # Title: Define Input/Output Schemas
-# Status: pending
+# Status: done
 # Dependencies: 1, 2
 # Priority: high
 # Description: Create Pydantic models for all MCP tool inputs and outputs to ensure proper validation and serialization.
@@ -31,7 +31,7 @@ import os
 
 class AnalyzePytestOutputRequest(BaseModel):
     file_path: str = Field(..., description="Path to pytest output file")
-
+    
     @validator("file_path")
     def validate_file_exists(cls, v):
         if not os.path.exists(v):

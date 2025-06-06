@@ -1,6 +1,6 @@
 # Task ID: 5
 # Title: Implement MCP Configuration Integration
-# Status: pending
+# Status: done
 # Dependencies: 3
 # Priority: high
 # Description: Integrate MCP server settings with the existing configuration system.
@@ -28,7 +28,7 @@ class MCPSettings(BaseSettings):
     enable_authentication: bool = False
     auth_token: Optional[str] = None
     tool_timeout_seconds: int = 30
-
+    
     @validator("transport_type")
     def validate_transport(cls, v):
         if v not in ["stdio", "http"]:
