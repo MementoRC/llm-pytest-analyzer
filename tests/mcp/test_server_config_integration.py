@@ -104,5 +104,5 @@ class TestMCPServerConfigIntegration:
         # Should mention transport type, host, and port
         init_message = log_records[0].message
         assert "http transport" in init_message
-        assert re.search(r'\btest\.example\.com\b', init_message)
+        assert re.search(r"\btest\.example\.com\b", init_message)
         assert "8888" in init_message
