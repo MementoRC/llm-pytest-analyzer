@@ -32,7 +32,7 @@ class ValidateSuggestionRequest:
     tool_name: str
     suggestion_id: str
     target_file: str
-    
+
     # Optional fields with defaults
     request_id: str = field(default_factory=lambda: str(uuid4()))
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -44,7 +44,7 @@ class ValidateSuggestionRequest:
     def validate(self) -> List[str]:
         """Validate request data."""
         errors = []
-        
+
         # Validate common fields
         if not self.tool_name:
             errors.append("tool_name is required")
@@ -66,6 +66,7 @@ class ValidateSuggestionRequest:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         from dataclasses import asdict
+
         return asdict(self)
 
 
@@ -79,7 +80,7 @@ class ValidateSuggestionResponse:
     # Required fields first
     success: bool
     request_id: str
-    
+
     # Optional fields with defaults
     execution_time_ms: int = 0
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -122,11 +123,13 @@ class ValidateSuggestionResponse:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         from dataclasses import asdict
+
         return asdict(self)
 
     def to_json(self) -> str:
         """Convert to JSON string."""
         import json
+
         return json.dumps(self.to_dict(), indent=2)
 
 
