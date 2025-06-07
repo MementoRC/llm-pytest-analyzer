@@ -13,11 +13,11 @@ from uuid import uuid4
 @dataclass
 class MCPRequest:
     """Base MCP request schema with common fields."""
-    
+
     tool_name: str
     request_id: str = field(default_factory=lambda: str(uuid4()))
     metadata: Dict[str, Any] = field(default_factory=dict)
-    
+
     def validate(self) -> List[str]:
         """Validate common request fields."""
         errors = []
@@ -26,7 +26,7 @@ class MCPRequest:
         if not self.request_id:
             errors.append("request_id is required")
         return errors
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return asdict(self)
@@ -35,34 +35,34 @@ class MCPRequest:
 @dataclass
 class MCPResponse:
     """Base MCP response schema with success/error handling."""
-    
+
     success: bool
     request_id: str
     execution_time_ms: int = 0
     metadata: Dict[str, Any] = field(default_factory=dict)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return asdict(self)
-    
+
     def to_json(self) -> str:
         """Convert to JSON string."""
         return json.dumps(self.to_dict(), indent=2)
 
 
-@dataclass 
+@dataclass
 class MCPError:
     """MCP error response schema."""
-    
+
     code: str
     message: str
     details: Optional[Dict[str, Any]] = None
     request_id: Optional[str] = None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return asdict(self)
-    
+
     def to_json(self) -> str:
         """Convert to JSON string."""
         return json.dumps(self.to_dict(), indent=2)
@@ -71,7 +71,7 @@ class MCPError:
 @dataclass
 class FixSuggestionData:
     """Data transfer object for fix suggestions in MCP responses."""
-    
+
     id: str
     failure_id: str
     suggestion_text: str
@@ -81,7 +81,7 @@ class FixSuggestionData:
     alternative_approaches: List[str] = field(default_factory=list)
     file_path: Optional[str] = None
     line_number: Optional[int] = None
-    
+
     def validate(self) -> List[str]:
         """Validate suggestion data."""
         errors = []
@@ -96,7 +96,7 @@ class FixSuggestionData:
         if self.line_number is not None and self.line_number < 1:
             errors.append("line_number must be positive")
         return errors
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return asdict(self)
@@ -105,7 +105,7 @@ class FixSuggestionData:
 @dataclass
 class PytestFailureData:
     """Data transfer object for pytest failures in MCP responses."""
-    
+
     id: str
     test_name: str
     file_path: str
@@ -115,7 +115,7 @@ class PytestFailureData:
     function_name: Optional[str] = None
     class_name: Optional[str] = None
     traceback: List[str] = field(default_factory=list)
-    
+
     def validate(self) -> List[str]:
         """Validate failure data."""
         errors = []
@@ -132,7 +132,7 @@ class PytestFailureData:
         if self.line_number is not None and self.line_number < 1:
             errors.append("line_number must be positive")
         return errors
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return asdict(self)
@@ -142,6 +142,7 @@ class PytestFailureData:
 def validate_file_path(file_path: str) -> List[str]:
     """Validate file path exists and is accessible."""
     import os
+
     errors = []
     if not file_path:
         errors.append("file_path is required")
@@ -159,7 +160,9 @@ def validate_output_format(format_type: str) -> List[str]:
     errors = []
     valid_formats = {"json", "xml", "text", "junit"}
     if format_type not in valid_formats:
-        errors.append(f"Invalid format '{format_type}'. Must be one of: {valid_formats}")
+        errors.append(
+            f"Invalid format '{format_type}'. Must be one of: {valid_formats}"
+        )
     return errors
 
 
@@ -175,7 +178,7 @@ def validate_timeout(timeout: int) -> List[str]:
 
 __all__ = [
     "MCPRequest",
-    "MCPResponse", 
+    "MCPResponse",
     "MCPError",
     "FixSuggestionData",
     "PytestFailureData",
