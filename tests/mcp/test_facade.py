@@ -10,14 +10,14 @@ from pytest_analyzer.core.interfaces.errors import BaseError
 from pytest_analyzer.mcp.facade import MCPAnalyzerFacade
 from pytest_analyzer.mcp.schemas import MCPError
 from pytest_analyzer.mcp.schemas.analyze_pytest_output import AnalyzePytestOutputRequest
-from pytest_analyzer.mcp.schemas.run_and_analyze import RunAndAnalyzeRequest
-from pytest_analyzer.mcp.schemas.suggest_fixes import SuggestFixesRequest
 from pytest_analyzer.mcp.schemas.apply_suggestion import ApplySuggestionRequest
-from pytest_analyzer.mcp.schemas.validate_suggestion import ValidateSuggestionRequest
+from pytest_analyzer.mcp.schemas.get_config import GetConfigRequest
 from pytest_analyzer.mcp.schemas.get_failure_summary import GetFailureSummaryRequest
 from pytest_analyzer.mcp.schemas.get_test_coverage import GetTestCoverageRequest
-from pytest_analyzer.mcp.schemas.get_config import GetConfigRequest
+from pytest_analyzer.mcp.schemas.run_and_analyze import RunAndAnalyzeRequest
+from pytest_analyzer.mcp.schemas.suggest_fixes import SuggestFixesRequest
 from pytest_analyzer.mcp.schemas.update_config import UpdateConfigRequest
+from pytest_analyzer.mcp.schemas.validate_suggestion import ValidateSuggestionRequest
 
 
 @pytest.fixture
@@ -52,7 +52,9 @@ class TestMCPAnalyzerFacade:
         facade = MCPAnalyzerFacade(mock_analyzer)
         assert facade.analyzer == mock_analyzer
 
-    async def test_analyze_pytest_output_success(self, mcp_facade, tmp_path, sample_suggestion):
+    async def test_analyze_pytest_output_success(
+        self, mcp_facade, tmp_path, sample_suggestion
+    ):
         """Test successful pytest output analysis."""
         # Create test file
         test_file = tmp_path / "pytest_output.txt"
@@ -63,8 +65,7 @@ class TestMCPAnalyzerFacade:
 
         # Create request
         request = AnalyzePytestOutputRequest(
-            tool_name="analyze_pytest_output",
-            file_path=str(test_file)
+            tool_name="analyze_pytest_output", file_path=str(test_file)
         )
 
         # Execute
@@ -74,17 +75,18 @@ class TestMCPAnalyzerFacade:
         assert response.success is True
         assert len(response.suggestions) == 1
         assert response.execution_time_ms > 0
-        mcp_facade.analyzer.analyze_pytest_output.assert_called_once_with(str(test_file))
+        mcp_facade.analyzer.analyze_pytest_output.assert_called_once_with(
+            str(test_file)
+        )
 
     async def test_analyze_pytest_output_validation_error(self, mcp_facade):
         """Test analysis with invalid file path."""
         request = AnalyzePytestOutputRequest(
-            tool_name="analyze_pytest_output",
-            file_path="/nonexistent/file.txt"
+            tool_name="analyze_pytest_output", file_path="/nonexistent/file.txt"
         )
 
         response = await mcp_facade.analyze_pytest_output(request)
-        
+
         assert response.success is False
         assert len(response.parsing_errors) > 0
         assert not mcp_facade.analyzer.analyze_pytest_output.called
@@ -94,9 +96,7 @@ class TestMCPAnalyzerFacade:
         mcp_facade.analyzer.run_and_analyze.return_value = [sample_suggestion]
 
         request = RunAndAnalyzeRequest(
-            tool_name="run_and_analyze",
-            test_pattern="tests/",
-            pytest_args=[]
+            tool_name="run_and_analyze", test_pattern="tests/", pytest_args=[]
         )
 
         response = await mcp_facade.run_and_analyze(request)
@@ -111,8 +111,7 @@ class TestMCPAnalyzerFacade:
         mcp_facade.analyzer.suggest_fixes.return_value = [sample_suggestion]
 
         request = SuggestFixesRequest(
-            tool_name="suggest_fixes",
-            raw_output="test output"
+            tool_name="suggest_fixes", raw_output="test output"
         )
 
         response = await mcp_facade.suggest_fixes(request)
@@ -127,13 +126,11 @@ class TestMCPAnalyzerFacade:
         mcp_facade.analyzer.apply_suggestion.return_value = {
             "success": True,
             "applied_files": ["test.py"],
-            "rolled_back_files": []
+            "rolled_back_files": [],
         }
 
         request = ApplySuggestionRequest(
-            tool_name="apply_suggestion",
-            suggestion_id="test-id",
-            target_file="test.py"
+            tool_name="apply_suggestion", suggestion_id="test-id", target_file="test.py"
         )
 
         response = await mcp_facade.apply_suggestion(request)
@@ -148,7 +145,7 @@ class TestMCPAnalyzerFacade:
         request = ValidateSuggestionRequest(
             tool_name="validate_suggestion",
             suggestion_id="test-id",
-            target_file="test.py"
+            target_file="test.py",
         )
 
         response = await mcp_facade.validate_suggestion(request)
@@ -158,9 +155,7 @@ class TestMCPAnalyzerFacade:
 
     async def test_get_failure_summary_success(self, mcp_facade):
         """Test successful failure summary retrieval."""
-        request = GetFailureSummaryRequest(
-            tool_name="get_failure_summary"
-        )
+        request = GetFailureSummaryRequest(tool_name="get_failure_summary")
 
         response = await mcp_facade.get_failure_summary(request)
 
@@ -169,9 +164,7 @@ class TestMCPAnalyzerFacade:
 
     async def test_get_test_coverage_success(self, mcp_facade):
         """Test successful test coverage retrieval."""
-        request = GetTestCoverageRequest(
-            tool_name="get_test_coverage"
-        )
+        request = GetTestCoverageRequest(tool_name="get_test_coverage")
 
         response = await mcp_facade.get_test_coverage(request)
 
@@ -180,9 +173,7 @@ class TestMCPAnalyzerFacade:
 
     async def test_get_config_success(self, mcp_facade):
         """Test successful config retrieval."""
-        request = GetConfigRequest(
-            tool_name="get_config"
-        )
+        request = GetConfigRequest(tool_name="get_config")
 
         response = await mcp_facade.get_config(request)
 
@@ -192,8 +183,7 @@ class TestMCPAnalyzerFacade:
     async def test_update_config_success(self, mcp_facade):
         """Test successful config update."""
         request = UpdateConfigRequest(
-            tool_name="update_config",
-            config_updates={"key": "value"}
+            tool_name="update_config", config_updates={"key": "value"}
         )
 
         response = await mcp_facade.update_config(request)
@@ -201,17 +191,20 @@ class TestMCPAnalyzerFacade:
         assert response.success is True
         assert isinstance(response.updated_fields, list)
 
-    @pytest.mark.parametrize("method_name,request_class", [
-        ("analyze_pytest_output", AnalyzePytestOutputRequest),
-        ("run_and_analyze", RunAndAnalyzeRequest),
-        ("suggest_fixes", SuggestFixesRequest),
-        ("apply_suggestion", ApplySuggestionRequest),
-        ("validate_suggestion", ValidateSuggestionRequest),
-        ("get_failure_summary", GetFailureSummaryRequest),
-        ("get_test_coverage", GetTestCoverageRequest),
-        ("get_config", GetConfigRequest),
-        ("update_config", UpdateConfigRequest),
-    ])
+    @pytest.mark.parametrize(
+        "method_name,request_class",
+        [
+            ("analyze_pytest_output", AnalyzePytestOutputRequest),
+            ("run_and_analyze", RunAndAnalyzeRequest),
+            ("suggest_fixes", SuggestFixesRequest),
+            ("apply_suggestion", ApplySuggestionRequest),
+            ("validate_suggestion", ValidateSuggestionRequest),
+            ("get_failure_summary", GetFailureSummaryRequest),
+            ("get_test_coverage", GetTestCoverageRequest),
+            ("get_config", GetConfigRequest),
+            ("update_config", UpdateConfigRequest),
+        ],
+    )
     async def test_error_handling(self, mcp_facade, method_name, request_class, caplog):
         """Test error handling across all methods."""
         # Setup
@@ -235,7 +228,7 @@ class TestMCPAnalyzerFacade:
     def test_transform_suggestion_to_mcp(self, mcp_facade, sample_suggestion):
         """Test transformation of domain suggestion to MCP format."""
         mcp_suggestion = mcp_facade._transform_suggestion_to_mcp(sample_suggestion)
-        
+
         assert mcp_suggestion.id == str(sample_suggestion.id)
         assert mcp_suggestion.suggestion_text == sample_suggestion.description
         assert mcp_suggestion.confidence_score == sample_suggestion.confidence_score
@@ -243,22 +236,25 @@ class TestMCPAnalyzerFacade:
     def test_transform_failure_to_mcp(self, mcp_facade, sample_failure):
         """Test transformation of domain failure to MCP format."""
         mcp_failure = mcp_facade._transform_failure_to_mcp(sample_failure)
-        
+
         assert mcp_failure.id == str(sample_failure.id)
         assert mcp_failure.test_name == sample_failure.test_name
         assert mcp_failure.failure_message == sample_failure.message
 
-    @pytest.mark.parametrize("method_name", [
-        "analyze_pytest_output",
-        "run_and_analyze",
-        "suggest_fixes",
-        "apply_suggestion",
-        "validate_suggestion",
-        "get_failure_summary",
-        "get_test_coverage",
-        "get_config",
-        "update_config",
-    ])
+    @pytest.mark.parametrize(
+        "method_name",
+        [
+            "analyze_pytest_output",
+            "run_and_analyze",
+            "suggest_fixes",
+            "apply_suggestion",
+            "validate_suggestion",
+            "get_failure_summary",
+            "get_test_coverage",
+            "get_config",
+            "update_config",
+        ],
+    )
     async def test_execution_time_tracking(self, mcp_facade, method_name):
         """Test execution time tracking for all methods."""
         # Create minimal valid request for each method
@@ -270,5 +266,5 @@ class TestMCPAnalyzerFacade:
         response = await method(request)
 
         # Verify execution time is tracked
-        assert hasattr(response, 'execution_time_ms')
+        assert hasattr(response, "execution_time_ms")
         assert response.execution_time_ms >= 0
