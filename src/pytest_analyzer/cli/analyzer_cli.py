@@ -54,8 +54,43 @@ console = Console(
 def setup_parser() -> argparse.ArgumentParser:
     """Set up the command-line argument parser."""
     parser = argparse.ArgumentParser(
-        description="Python Test Failure Analyzer with enhanced extraction strategies"
+        description="Python Test Failure Analyzer with enhanced extraction strategies and MCP server"
     )
+
+    # Add subcommands support
+    subparsers = parser.add_subparsers(
+        dest="command", help="Available commands", metavar="COMMAND"
+    )
+
+    # Create analyze subcommand (default behavior)
+    analyze_parser = subparsers.add_parser(
+        "analyze",
+        help="Analyze pytest failures and suggest fixes",
+        description="Run pytest analysis to identify patterns and suggest fixes",
+    )
+
+    # Set up analyze command arguments (existing functionality)
+    setup_analyze_parser(analyze_parser)
+    analyze_parser.set_defaults(func=cmd_analyze)
+
+    # Import and setup MCP commands
+    try:
+        from .mcp_cli import setup_mcp_parser
+
+        setup_mcp_parser(subparsers)
+    except ImportError as e:
+        logger.warning(f"MCP functionality not available: {e}")
+
+    # Make analyze the default command when no subcommand is specified
+    # This maintains backward compatibility
+    # NOTE: Removed setup_analyze_parser(parser) to avoid conflicting positional args
+    parser.set_defaults(func=cmd_analyze)
+
+    return parser
+
+
+def setup_analyze_parser(parser: argparse.ArgumentParser) -> None:
+    """Set up the analyze command arguments."""
 
     # Main arguments
     parser.add_argument(
@@ -244,8 +279,6 @@ def setup_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Automatically apply suggested fixes without confirmation (use with caution)",
     )
-
-    return parser
 
 
 def configure_settings(args) -> Settings:
@@ -512,25 +545,22 @@ def display_suggestions(suggestions: List[FixSuggestion], args):
         displayed_count += len(group) - 1
 
 
-def main() -> int:
-    """Main entry point for the CLI application."""
-    # Parse command-line arguments
-    parser = setup_parser()
-    args = parser.parse_args()
+def cmd_analyze(args: argparse.Namespace) -> int:
+    """Command handler for the analyze command."""
 
     # Handle quiet arguments (--quiet and -qq override --verbosity)
-    if args.quiet:
+    if hasattr(args, "quiet") and args.quiet:
         args.verbosity = 0
-    elif getattr(args, "qq", False):  # Check if -qq is set
+    elif hasattr(args, "qq") and getattr(args, "qq", False):  # Check if -qq is set
         args.verbosity = 0  # Set verbosity to minimal
         # Also add -qq flag to pytest args for super quiet mode
-        if not args.pytest_args:
+        if not hasattr(args, "pytest_args") or not args.pytest_args:
             args.pytest_args = "-qq --tb=short --disable-warnings"
         else:
             args.pytest_args += " -qq --tb=short --disable-warnings"
 
     # Configure logging
-    if args.debug:
+    if hasattr(args, "debug") and args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
         logger.setLevel(logging.DEBUG)
         logger.debug("Debug logging enabled")
@@ -650,7 +680,10 @@ def main() -> int:
                 args.test_path, settings.pytest_args, quiet=quiet_mode
             )
         else:
-            parser.error("Either test_path or --output-file must be provided")
+            console.print(
+                "[bold red]Error: Either test_path or --output-file must be provided[/bold red]"
+            )
+            return 1
 
         # Display suggestions
         display_suggestions(suggestions, args)
@@ -664,9 +697,24 @@ def main() -> int:
 
     except Exception as e:
         logger.error(f"An error occurred: {str(e)}")
-        if args.debug:
+        if hasattr(args, "debug") and args.debug:
             logger.exception("Detailed error information:")
         return 2
+
+
+def main() -> int:
+    """Main entry point for the CLI application."""
+    # Parse command-line arguments
+    parser = setup_parser()
+    args = parser.parse_args()
+
+    # Handle case where no subcommand is specified (backward compatibility)
+    if not hasattr(args, "func"):
+        # Default to analyze behavior for backward compatibility
+        return cmd_analyze(args)
+
+    # Execute the appropriate command function
+    return args.func(args)
 
 
 def show_file_diff(file_path: str, new_content: str) -> bool:

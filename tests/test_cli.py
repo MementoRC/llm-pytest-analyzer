@@ -78,7 +78,7 @@ def test_cli_main_success(mock_display, mock_service):
     mock_analyzer.run_and_analyze.return_value = ["suggestion1", "suggestion2"]
 
     # Execute
-    with patch.object(sys, "argv", ["pytest-analyzer", "test_path"]):
+    with patch.object(sys, "argv", ["pytest-analyzer", "analyze", "test_path"]):
         result = main()
 
     # Assert
@@ -98,7 +98,9 @@ def test_cli_main_with_output_file(mock_display, mock_service):
 
     # Execute
     with patch.object(
-        sys, "argv", ["pytest-analyzer", "test_path", "--output-file", "output.json"]
+        sys,
+        "argv",
+        ["pytest-analyzer", "analyze", "test_path", "--output-file", "output.json"],
     ):
         result = main()
 
@@ -118,7 +120,7 @@ def test_cli_main_no_suggestions(mock_display, mock_service):
     mock_analyzer.run_and_analyze.return_value = []
 
     # Execute
-    with patch.object(sys, "argv", ["pytest-analyzer", "test_path"]):
+    with patch.object(sys, "argv", ["pytest-analyzer", "analyze", "test_path"]):
         result = main()
 
     # Assert
@@ -136,7 +138,7 @@ def test_cli_main_exception(mock_service):
     mock_analyzer.run_and_analyze.side_effect = Exception("Test error")
 
     # Execute
-    with patch.object(sys, "argv", ["pytest-analyzer", "test_path"]):
+    with patch.object(sys, "argv", ["pytest-analyzer", "analyze", "test_path"]):
         result = main()
 
     # Assert
@@ -172,7 +174,9 @@ def test_cli_main_with_debug(mock_display, mock_logging, mock_service):
     mock_analyzer.run_and_analyze.return_value = [suggestion]
 
     # Execute
-    with patch.object(sys, "argv", ["pytest-analyzer", "test_path", "--debug"]):
+    with patch.object(
+        sys, "argv", ["pytest-analyzer", "analyze", "test_path", "--debug"]
+    ):
         result = main()
 
     # Assert
@@ -186,6 +190,7 @@ def test_configure_settings():
     parser = setup_parser()
     args = parser.parse_args(
         [
+            "analyze",
             "test_path",
             "--json",
             "--max-failures",
@@ -226,6 +231,7 @@ def test_configure_settings_with_config_file():
     parser = setup_parser()
     args = parser.parse_args(
         [
+            "analyze",
             "test_path",
             "--config-file",
             "config.json",
@@ -244,7 +250,7 @@ def test_configure_settings_with_config_file():
 def test_configure_settings_with_test_functions():
     """Test settings configuration with test function filtering."""
     parser = setup_parser()
-    args = parser.parse_args(["test_path", "-k", "test_specific_function"])
+    args = parser.parse_args(["analyze", "test_path", "-k", "test_specific_function"])
 
     settings = configure_settings(args)
 
@@ -257,6 +263,7 @@ def test_configure_settings_with_llm_options():
     parser = setup_parser()
     args = parser.parse_args(
         [
+            "analyze",
             "test_path",
             "--use-llm",
             "--llm-timeout",
