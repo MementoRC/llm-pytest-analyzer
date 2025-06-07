@@ -5,15 +5,11 @@ This tool provides test coverage information and reporting.
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
-
-from . import (
-    MCPRequest,
-    MCPResponse,
-)
+from uuid import uuid4
 
 
 @dataclass
-class GetTestCoverageRequest(MCPRequest):
+class GetTestCoverageRequest:
     """Request schema for get_test_coverage MCP tool.
 
     Gets test coverage information and generates reports.
@@ -28,6 +24,12 @@ class GetTestCoverageRequest(MCPRequest):
         )
     """
 
+    # Required fields first
+    tool_name: str
+    
+    # Optional fields with defaults
+    request_id: str = field(default_factory=lambda: str(uuid4()))
+    metadata: Dict[str, Any] = field(default_factory=dict)
     format: str = "json"  # json, xml, html, text
     include_files: List[str] = field(default_factory=list)
     exclude_patterns: List[str] = field(default_factory=list)
@@ -37,7 +39,13 @@ class GetTestCoverageRequest(MCPRequest):
 
     def validate(self) -> List[str]:
         """Validate request data."""
-        errors = super().validate()
+        errors = []
+        
+        # Validate common fields
+        if not self.tool_name:
+            errors.append("tool_name is required")
+        if not self.request_id:
+            errors.append("request_id is required")
 
         # Validate format
         valid_formats = {"json", "xml", "html", "text", "lcov"}
@@ -52,6 +60,11 @@ class GetTestCoverageRequest(MCPRequest):
                 errors.append("minimum_coverage must be between 0.0 and 100.0")
 
         return errors
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        from dataclasses import asdict
+        return asdict(self)
 
 
 @dataclass
@@ -73,12 +86,19 @@ class CoverageFileData:
 
 
 @dataclass
-class GetTestCoverageResponse(MCPResponse):
+class GetTestCoverageResponse:
     """Response schema for get_test_coverage MCP tool.
 
     Contains test coverage data and reporting information.
     """
 
+    # Required fields first
+    success: bool
+    request_id: str
+    
+    # Optional fields with defaults
+    execution_time_ms: int = 0
+    metadata: Dict[str, Any] = field(default_factory=dict)
     coverage_data: Dict[str, Any] = field(default_factory=dict)
     report_path: Optional[str] = None
     percentage: float = 0.0
@@ -133,6 +153,16 @@ class GetTestCoverageResponse(MCPResponse):
     def get_uncovered_lines(self) -> Dict[str, List[int]]:
         """Get mapping of files to their uncovered line numbers."""
         return {f.file_path: f.missing_lines for f in self.files if f.missing_lines}
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        from dataclasses import asdict
+        return asdict(self)
+
+    def to_json(self) -> str:
+        """Convert to JSON string."""
+        import json
+        return json.dumps(self.to_dict(), indent=2)
 
 
 __all__ = ["GetTestCoverageRequest", "GetTestCoverageResponse", "CoverageFileData"]

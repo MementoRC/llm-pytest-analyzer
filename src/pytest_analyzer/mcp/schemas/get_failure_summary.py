@@ -5,16 +5,15 @@ This tool provides failure statistics and categorization.
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
 from . import (
-    MCPRequest,
-    MCPResponse,
     PytestFailureData,
 )
 
 
 @dataclass
-class GetFailureSummaryRequest(MCPRequest):
+class GetFailureSummaryRequest:
     """Request schema for get_failure_summary MCP tool.
 
     Gets failure statistics and categorization.
@@ -28,6 +27,12 @@ class GetFailureSummaryRequest(MCPRequest):
         )
     """
 
+    # Required fields first
+    tool_name: str
+    
+    # Optional fields with defaults
+    request_id: str = field(default_factory=lambda: str(uuid4()))
+    metadata: Dict[str, Any] = field(default_factory=dict)
     include_details: bool = True
     group_by: str = "type"  # type, file, class, function
     time_range: str = "last_run"  # last_run, last_hour, last_day
@@ -37,7 +42,13 @@ class GetFailureSummaryRequest(MCPRequest):
 
     def validate(self) -> List[str]:
         """Validate request data."""
-        errors = super().validate()
+        errors = []
+        
+        # Validate common fields
+        if not self.tool_name:
+            errors.append("tool_name is required")
+        if not self.request_id:
+            errors.append("request_id is required")
 
         # Validate group_by
         valid_group_by = {"type", "file", "class", "function", "none"}
@@ -61,14 +72,26 @@ class GetFailureSummaryRequest(MCPRequest):
 
         return errors
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        from dataclasses import asdict
+        return asdict(self)
+
 
 @dataclass
-class GetFailureSummaryResponse(MCPResponse):
+class GetFailureSummaryResponse:
     """Response schema for get_failure_summary MCP tool.
 
     Contains failure statistics and categorization data.
     """
 
+    # Required fields first
+    success: bool
+    request_id: str
+    
+    # Optional fields with defaults
+    execution_time_ms: int = 0
+    metadata: Dict[str, Any] = field(default_factory=dict)
     total_failures: int = 0
     failure_groups: Dict[str, List[PytestFailureData]] = field(default_factory=dict)
     summary_stats: Dict[str, Any] = field(default_factory=dict)
@@ -127,6 +150,16 @@ class GetFailureSummaryResponse(MCPResponse):
                 [f for f in group_failures if f.failure_type == failure_type]
             )
         return failures
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        from dataclasses import asdict
+        return asdict(self)
+
+    def to_json(self) -> str:
+        """Convert to JSON string."""
+        import json
+        return json.dumps(self.to_dict(), indent=2)
 
 
 __all__ = ["GetFailureSummaryRequest", "GetFailureSummaryResponse"]

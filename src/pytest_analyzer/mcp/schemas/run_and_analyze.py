@@ -5,18 +5,17 @@ This tool executes pytest and analyzes results in one operation.
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
 from . import (
     FixSuggestionData,
-    MCPRequest,
-    MCPResponse,
     PytestFailureData,
     validate_timeout,
 )
 
 
 @dataclass
-class RunAndAnalyzeRequest(MCPRequest):
+class RunAndAnalyzeRequest:
     """Request schema for run_and_analyze MCP tool.
 
     Executes pytest with specified parameters and analyzes the results.
@@ -31,6 +30,12 @@ class RunAndAnalyzeRequest(MCPRequest):
         )
     """
 
+    # Required fields first
+    tool_name: str
+    
+    # Optional fields with defaults
+    request_id: str = field(default_factory=lambda: str(uuid4()))
+    metadata: Dict[str, Any] = field(default_factory=dict)
     test_pattern: str = ""  # Empty string means run all tests
     pytest_args: List[str] = field(default_factory=list)
     timeout: int = 300  # 5 minutes default
@@ -41,7 +46,13 @@ class RunAndAnalyzeRequest(MCPRequest):
 
     def validate(self) -> List[str]:
         """Validate request data."""
-        errors = super().validate()
+        errors = []
+        
+        # Validate common fields
+        if not self.tool_name:
+            errors.append("tool_name is required")
+        if not self.request_id:
+            errors.append("request_id is required")
 
         # Validate timeout
         errors.extend(validate_timeout(self.timeout))
@@ -67,14 +78,26 @@ class RunAndAnalyzeRequest(MCPRequest):
 
         return errors
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        from dataclasses import asdict
+        return asdict(self)
+
 
 @dataclass
-class RunAndAnalyzeResponse(MCPResponse):
+class RunAndAnalyzeResponse:
     """Response schema for run_and_analyze MCP tool.
 
     Contains pytest execution results and generated fix suggestions.
     """
 
+    # Required fields first
+    success: bool
+    request_id: str
+    
+    # Optional fields with defaults
+    execution_time_ms: int = 0
+    metadata: Dict[str, Any] = field(default_factory=dict)
     pytest_success: bool = False
     suggestions: List[FixSuggestionData] = field(default_factory=list)
     failures: List[PytestFailureData] = field(default_factory=list)
@@ -98,6 +121,16 @@ class RunAndAnalyzeResponse(MCPResponse):
     def has_failures(self) -> bool:
         """Check if there are any test failures."""
         return self.tests_failed > 0 or len(self.failures) > 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        from dataclasses import asdict
+        return asdict(self)
+
+    def to_json(self) -> str:
+        """Convert to JSON string."""
+        import json
+        return json.dumps(self.to_dict(), indent=2)
 
 
 __all__ = ["RunAndAnalyzeRequest", "RunAndAnalyzeResponse"]

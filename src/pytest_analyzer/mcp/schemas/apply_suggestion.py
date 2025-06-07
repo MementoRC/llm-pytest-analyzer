@@ -4,17 +4,16 @@ This tool applies suggested fixes to code files with backup/rollback support.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
 from . import (
-    MCPRequest,
-    MCPResponse,
     validate_file_path,
 )
 
 
 @dataclass
-class ApplySuggestionRequest(MCPRequest):
+class ApplySuggestionRequest:
     """Request schema for apply_suggestion MCP tool.
 
     Applies suggested fixes to code files with backup and rollback support.
@@ -29,8 +28,14 @@ class ApplySuggestionRequest(MCPRequest):
         )
     """
 
+    # Required fields first
+    tool_name: str
     suggestion_id: str
     target_file: str
+    
+    # Optional fields with defaults
+    request_id: str = field(default_factory=lambda: str(uuid4()))
+    metadata: Dict[str, Any] = field(default_factory=dict)
     create_backup: bool = True
     validate_syntax: bool = True
     dry_run: bool = False
@@ -38,7 +43,13 @@ class ApplySuggestionRequest(MCPRequest):
 
     def validate(self) -> List[str]:
         """Validate request data."""
-        errors = super().validate()
+        errors = []
+        
+        # Validate common fields
+        if not self.tool_name:
+            errors.append("tool_name is required")
+        if not self.request_id:
+            errors.append("request_id is required")
 
         # Validate suggestion_id
         if not self.suggestion_id:
@@ -57,14 +68,26 @@ class ApplySuggestionRequest(MCPRequest):
 
         return errors
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        from dataclasses import asdict
+        return asdict(self)
+
 
 @dataclass
-class ApplySuggestionResponse(MCPResponse):
+class ApplySuggestionResponse:
     """Response schema for apply_suggestion MCP tool.
 
     Contains results of applying a fix suggestion to a code file.
     """
 
+    # Required fields first
+    success: bool
+    request_id: str
+    
+    # Optional fields with defaults
+    execution_time_ms: int = 0
+    metadata: Dict[str, Any] = field(default_factory=dict)
     suggestion_id: str = ""
     target_file: str = ""
     backup_path: Optional[str] = None
@@ -84,6 +107,16 @@ class ApplySuggestionResponse(MCPResponse):
     def can_rollback(self) -> bool:
         """Check if rollback is possible."""
         return self.rollback_available and self.backup_path is not None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        from dataclasses import asdict
+        return asdict(self)
+
+    def to_json(self) -> str:
+        """Convert to JSON string."""
+        import json
+        return json.dumps(self.to_dict(), indent=2)
 
 
 __all__ = ["ApplySuggestionRequest", "ApplySuggestionResponse"]

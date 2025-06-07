@@ -5,15 +5,11 @@ This tool updates analyzer configuration settings.
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
-
-from . import (
-    MCPRequest,
-    MCPResponse,
-)
+from uuid import uuid4
 
 
 @dataclass
-class UpdateConfigRequest(MCPRequest):
+class UpdateConfigRequest:
     """Request schema for update_config MCP tool.
 
     Updates analyzer configuration settings.
@@ -32,7 +28,13 @@ class UpdateConfigRequest(MCPRequest):
         )
     """
 
+    # Required fields first
+    tool_name: str
     config_updates: Dict[str, Any]
+    
+    # Optional fields with defaults
+    request_id: str = field(default_factory=lambda: str(uuid4()))
+    metadata: Dict[str, Any] = field(default_factory=dict)
     validate_only: bool = False
     create_backup: bool = True
     section: Optional[str] = None
@@ -40,7 +42,13 @@ class UpdateConfigRequest(MCPRequest):
 
     def validate(self) -> List[str]:
         """Validate request data."""
-        errors = super().validate()
+        errors = []
+        
+        # Validate common fields
+        if not self.tool_name:
+            errors.append("tool_name is required")
+        if not self.request_id:
+            errors.append("request_id is required")
 
         # Validate config_updates
         if not self.config_updates:
@@ -95,14 +103,26 @@ class UpdateConfigRequest(MCPRequest):
 
         return errors
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        from dataclasses import asdict
+        return asdict(self)
+
 
 @dataclass
-class UpdateConfigResponse(MCPResponse):
+class UpdateConfigResponse:
     """Response schema for update_config MCP tool.
 
     Contains results of configuration update operation.
     """
 
+    # Required fields first
+    success: bool
+    request_id: str
+    
+    # Optional fields with defaults
+    execution_time_ms: int = 0
+    metadata: Dict[str, Any] = field(default_factory=dict)
     updated_fields: List[str] = field(default_factory=list)
     validation_errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
@@ -144,6 +164,16 @@ class UpdateConfigResponse(MCPResponse):
                 section = field_name.split(".")[0]
                 sections.add(section)
         return list(sections)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        from dataclasses import asdict
+        return asdict(self)
+
+    def to_json(self) -> str:
+        """Convert to JSON string."""
+        import json
+        return json.dumps(self.to_dict(), indent=2)
 
 
 __all__ = ["UpdateConfigRequest", "UpdateConfigResponse"]

@@ -5,16 +5,15 @@ This tool validates fix suggestions without applying changes (dry-run mode).
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
+from uuid import uuid4
 
 from . import (
-    MCPRequest,
-    MCPResponse,
     validate_file_path,
 )
 
 
 @dataclass
-class ValidateSuggestionRequest(MCPRequest):
+class ValidateSuggestionRequest:
     """Request schema for validate_suggestion MCP tool.
 
     Validates fix suggestions without applying changes.
@@ -29,8 +28,14 @@ class ValidateSuggestionRequest(MCPRequest):
         )
     """
 
+    # Required fields first
+    tool_name: str
     suggestion_id: str
     target_file: str
+    
+    # Optional fields with defaults
+    request_id: str = field(default_factory=lambda: str(uuid4()))
+    metadata: Dict[str, Any] = field(default_factory=dict)
     check_syntax: bool = True
     check_imports: bool = True
     check_tests: bool = False
@@ -38,7 +43,13 @@ class ValidateSuggestionRequest(MCPRequest):
 
     def validate(self) -> List[str]:
         """Validate request data."""
-        errors = super().validate()
+        errors = []
+        
+        # Validate common fields
+        if not self.tool_name:
+            errors.append("tool_name is required")
+        if not self.request_id:
+            errors.append("request_id is required")
 
         # Validate suggestion_id
         if not self.suggestion_id:
@@ -52,14 +63,26 @@ class ValidateSuggestionRequest(MCPRequest):
 
         return errors
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        from dataclasses import asdict
+        return asdict(self)
+
 
 @dataclass
-class ValidateSuggestionResponse(MCPResponse):
+class ValidateSuggestionResponse:
     """Response schema for validate_suggestion MCP tool.
 
     Contains validation results for a fix suggestion.
     """
 
+    # Required fields first
+    success: bool
+    request_id: str
+    
+    # Optional fields with defaults
+    execution_time_ms: int = 0
+    metadata: Dict[str, Any] = field(default_factory=dict)
     suggestion_id: str = ""
     target_file: str = ""
     is_valid: bool = True
@@ -95,6 +118,16 @@ class ValidateSuggestionResponse(MCPResponse):
     def imports_valid(self) -> bool:
         """Check if import validation passed."""
         return self.import_check.get("valid", True)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        from dataclasses import asdict
+        return asdict(self)
+
+    def to_json(self) -> str:
+        """Convert to JSON string."""
+        import json
+        return json.dumps(self.to_dict(), indent=2)
 
 
 __all__ = ["ValidateSuggestionRequest", "ValidateSuggestionResponse"]

@@ -5,15 +5,11 @@ This tool retrieves current analyzer configuration settings.
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
-
-from . import (
-    MCPRequest,
-    MCPResponse,
-)
+from uuid import uuid4
 
 
 @dataclass
-class GetConfigRequest(MCPRequest):
+class GetConfigRequest:
     """Request schema for get_config MCP tool.
 
     Gets current analyzer configuration settings.
@@ -27,6 +23,12 @@ class GetConfigRequest(MCPRequest):
         )
     """
 
+    # Required fields first
+    tool_name: str
+    
+    # Optional fields with defaults
+    request_id: str = field(default_factory=lambda: str(uuid4()))
+    metadata: Dict[str, Any] = field(default_factory=dict)
     section: Optional[str] = None  # llm, mcp, analysis, etc.
     include_defaults: bool = True
     include_sensitive: bool = False
@@ -34,7 +36,13 @@ class GetConfigRequest(MCPRequest):
 
     def validate(self) -> List[str]:
         """Validate request data."""
-        errors = super().validate()
+        errors = []
+        
+        # Validate common fields
+        if not self.tool_name:
+            errors.append("tool_name is required")
+        if not self.request_id:
+            errors.append("request_id is required")
 
         # Validate section if provided
         if self.section is not None:
@@ -53,14 +61,26 @@ class GetConfigRequest(MCPRequest):
 
         return errors
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        from dataclasses import asdict
+        return asdict(self)
+
 
 @dataclass
-class GetConfigResponse(MCPResponse):
+class GetConfigResponse:
     """Response schema for get_config MCP tool.
 
     Contains current analyzer configuration data.
     """
 
+    # Required fields first
+    success: bool
+    request_id: str
+    
+    # Optional fields with defaults
+    execution_time_ms: int = 0
+    metadata: Dict[str, Any] = field(default_factory=dict)
     config_data: Dict[str, Any] = field(default_factory=dict)
     config_source: str = "settings"
     sections: List[str] = field(default_factory=list)
@@ -98,6 +118,16 @@ class GetConfigResponse(MCPResponse):
         if section_data is None:
             return default
         return section_data.get(key, default)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        from dataclasses import asdict
+        return asdict(self)
+
+    def to_json(self) -> str:
+        """Convert to JSON string."""
+        import json
+        return json.dumps(self.to_dict(), indent=2)
 
 
 __all__ = ["GetConfigRequest", "GetConfigResponse"]
