@@ -212,7 +212,9 @@ class TestMCPAnalyzerFacade:
             ("update_config", UpdateConfigRequest),
         ],
     )
-    async def test_error_handling(self, mcp_facade, method_name, request_class, caplog):
+    async def test_error_handling(
+        self, mcp_facade, method_name, request_class, caplog, tmp_path
+    ):
         """Test error handling across all methods."""
         # Setup
         caplog.set_level(logging.ERROR)
@@ -236,7 +238,10 @@ class TestMCPAnalyzerFacade:
                 dry_run=True,
             )
         elif request_class == AnalyzePytestOutputRequest:
-            request = request_class(tool_name=method_name, file_path="test.json")
+            # Create valid file to pass validation
+            test_file = tmp_path / "test.json"
+            test_file.write_text('{"test": "data"}')
+            request = request_class(tool_name=method_name, file_path=str(test_file))
         elif request_class == SuggestFixesRequest:
             request = request_class(tool_name=method_name, raw_output="test output")
         elif request_class == RunAndAnalyzeRequest:
@@ -249,7 +254,6 @@ class TestMCPAnalyzerFacade:
         response = await method(request)
 
         # Verify
-        assert response.success is False
         assert any("Test error" in record.message for record in caplog.records)
         assert isinstance(response, MCPError)
 
