@@ -130,7 +130,10 @@ class TestMCPAnalyzerFacade:
         }
 
         request = ApplySuggestionRequest(
-            tool_name="apply_suggestion", suggestion_id="test-id", target_file="test.py"
+            tool_name="apply_suggestion",
+            suggestion_id="test-id",
+            target_file="test.py",
+            dry_run=True,
         )
 
         response = await mcp_facade.apply_suggestion(request)
@@ -213,8 +216,29 @@ class TestMCPAnalyzerFacade:
         if mock_method:
             mock_method.side_effect = BaseError("Test error")
 
-        # Create minimal valid request
-        request = request_class(tool_name=method_name)
+        # Create minimal valid request based on class requirements
+        if request_class == ApplySuggestionRequest:
+            request = request_class(
+                tool_name=method_name,
+                suggestion_id="test-id",
+                target_file="test.py",
+                dry_run=True,
+            )
+        elif request_class == ValidateSuggestionRequest:
+            request = request_class(
+                tool_name=method_name,
+                suggestion_id="test-id",
+                target_file="test.py",
+                dry_run=True,
+            )
+        elif request_class == AnalyzePytestOutputRequest:
+            request = request_class(tool_name=method_name, file_path="test.json")
+        elif request_class == SuggestFixesRequest:
+            request = request_class(tool_name=method_name, raw_output="test output")
+        elif request_class == RunAndAnalyzeRequest:
+            request = request_class(tool_name=method_name, test_pattern="test_*.py")
+        else:
+            request = request_class(tool_name=method_name)
 
         # Execute
         method = getattr(mcp_facade, method_name)

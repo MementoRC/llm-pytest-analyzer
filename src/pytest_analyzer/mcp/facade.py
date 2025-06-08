@@ -249,7 +249,7 @@ class MCPAnalyzerFacade:
                 execution_time_ms=execution_time_ms,
             )
 
-        result = self.analyzer.apply_suggestion(request.suggestion)
+        result = self.analyzer.apply_suggestion(request.suggestion_id)
 
         execution_time_ms = max(1, int((time.time() - start_time) * 1000))
         return ApplySuggestionResponse(
