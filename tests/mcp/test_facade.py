@@ -205,32 +205,19 @@ class TestMCPAnalyzerFacade:
             ("run_and_analyze", RunAndAnalyzeRequest),
             ("suggest_fixes", SuggestFixesRequest),
             ("apply_suggestion", ApplySuggestionRequest),
-            ("validate_suggestion", ValidateSuggestionRequest),
-            ("get_failure_summary", GetFailureSummaryRequest),
-            ("get_test_coverage", GetTestCoverageRequest),
-            ("get_config", GetConfigRequest),
-            ("update_config", UpdateConfigRequest),
         ],
     )
-    async def test_error_handling(
+    async def test_error_handling_analyzer_methods(
         self, mcp_facade, method_name, request_class, caplog, tmp_path
     ):
-        """Test error handling across all methods."""
+        """Test error handling for methods that call the underlying analyzer."""
         # Setup
         caplog.set_level(logging.ERROR)
-        mock_method = getattr(mcp_facade.analyzer, method_name, None)
-        if mock_method:
-            mock_method.side_effect = BaseError("Test error")
+        mock_method = getattr(mcp_facade.analyzer, method_name)
+        mock_method.side_effect = BaseError("Test error")
 
         # Create minimal valid request based on class requirements
         if request_class == ApplySuggestionRequest:
-            request = request_class(
-                tool_name=method_name,
-                suggestion_id="test-id",
-                target_file="test.py",
-                dry_run=True,
-            )
-        elif request_class == ValidateSuggestionRequest:
             request = request_class(
                 tool_name=method_name,
                 suggestion_id="test-id",
@@ -246,8 +233,6 @@ class TestMCPAnalyzerFacade:
             request = request_class(tool_name=method_name, raw_output="test output")
         elif request_class == RunAndAnalyzeRequest:
             request = request_class(tool_name=method_name, test_pattern="test_*.py")
-        else:
-            request = request_class(tool_name=method_name)
 
         # Execute
         method = getattr(mcp_facade, method_name)
@@ -256,6 +241,44 @@ class TestMCPAnalyzerFacade:
         # Verify
         assert any("Test error" in record.message for record in caplog.records)
         assert isinstance(response, MCPError)
+
+    @pytest.mark.parametrize(
+        "method_name,request_class",
+        [
+            ("validate_suggestion", ValidateSuggestionRequest),
+            ("get_failure_summary", GetFailureSummaryRequest),
+            ("get_test_coverage", GetTestCoverageRequest),
+            ("get_config", GetConfigRequest),
+            ("update_config", UpdateConfigRequest),
+        ],
+    )
+    async def test_standalone_methods_success(
+        self, mcp_facade, method_name, request_class, tmp_path
+    ):
+        """Test standalone methods that don't call the underlying analyzer."""
+        # Create minimal valid request based on class requirements
+        if request_class == ValidateSuggestionRequest:
+            # Create a real test file
+            test_file = tmp_path / "test.py"
+            test_file.write_text("print('hello world')")
+            request = request_class(
+                tool_name=method_name,
+                suggestion_id="test-id",
+                target_file=str(test_file),
+            )
+        elif request_class == UpdateConfigRequest:
+            request = request_class(
+                tool_name=method_name, config_updates={"key": "value"}
+            )
+        else:
+            request = request_class(tool_name=method_name)
+
+        # Execute
+        method = getattr(mcp_facade, method_name)
+        response = await method(request)
+
+        # Verify - these methods should succeed as they're implemented directly
+        assert response.success is True
 
     def test_transform_suggestion_to_mcp(self, mcp_facade, sample_suggestion):
         """Test transformation of domain suggestion to MCP format."""

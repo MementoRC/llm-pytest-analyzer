@@ -5,12 +5,12 @@ MCP-compatible endpoints. It handles schema validation, error handling, and
 transforms between MCP schemas and domain models.
 """
 
+import functools
 import logging
 import time
-from typing import Any
+from typing import Any, Callable, TypeVar
 
 from pytest_analyzer.core.analyzer_facade import PytestAnalyzerFacade
-from pytest_analyzer.core.cross_cutting.error_handling import error_handler
 
 from .schemas import FixSuggestionData, MCPError, PytestFailureData
 from .schemas.analyze_pytest_output import (
@@ -33,6 +33,33 @@ from .schemas.validate_suggestion import (
 )
 
 logger = logging.getLogger(__name__)
+
+_R = TypeVar("_R")
+
+
+def async_error_handler(operation_name: str):
+    """Async error handler decorator for MCP facade methods."""
+
+    def decorator(func: Callable[..., _R]) -> Callable[..., _R]:
+        @functools.wraps(func)
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            try:
+                result = await func(*args, **kwargs)
+                return result
+            except Exception as e:
+                logger.error(f"Error in {operation_name}: {e}")
+                # Extract request from args to get request_id
+                request = args[1] if len(args) > 1 else None
+                request_id = getattr(request, "request_id", None)
+                return MCPError(
+                    code=f"{operation_name.upper()}_FAILED",
+                    message=str(e),
+                    request_id=request_id,
+                )
+
+        return wrapper
+
+    return decorator
 
 
 class MCPAnalyzerFacade:
@@ -255,7 +282,7 @@ class MCPAnalyzerFacade:
                 request_id=request.request_id,
             )
 
-    @error_handler("apply_suggestion", MCPError)
+    @async_error_handler("apply_suggestion")
     async def apply_suggestion(
         self, request: ApplySuggestionRequest
     ) -> ApplySuggestionResponse:
@@ -286,7 +313,7 @@ class MCPAnalyzerFacade:
             execution_time_ms=execution_time_ms,
         )
 
-    @error_handler("validate_suggestion", MCPError)
+    @async_error_handler("validate_suggestion")
     async def validate_suggestion(
         self, request: ValidateSuggestionRequest
     ) -> ValidateSuggestionResponse:
@@ -315,7 +342,7 @@ class MCPAnalyzerFacade:
             execution_time_ms=execution_time_ms,
         )
 
-    @error_handler("get_failure_summary", MCPError)
+    @async_error_handler("get_failure_summary")
     async def get_failure_summary(
         self, request: GetFailureSummaryRequest
     ) -> GetFailureSummaryResponse:
@@ -334,7 +361,7 @@ class MCPAnalyzerFacade:
             failure_groups={},
         )
 
-    @error_handler("get_test_coverage", MCPError)
+    @async_error_handler("get_test_coverage")
     async def get_test_coverage(
         self, request: GetTestCoverageRequest
     ) -> GetTestCoverageResponse:
@@ -348,7 +375,7 @@ class MCPAnalyzerFacade:
             success=True, request_id=request.request_id, percentage=0.0
         )
 
-    @error_handler("get_config", MCPError)
+    @async_error_handler("get_config")
     async def get_config(self, request: GetConfigRequest) -> GetConfigResponse:
         """Get current analyzer configuration settings."""
         errors = request.validate()
@@ -360,7 +387,7 @@ class MCPAnalyzerFacade:
             success=True, request_id=request.request_id, config_data={}
         )
 
-    @error_handler("update_config", MCPError)
+    @async_error_handler("update_config")
     async def update_config(self, request: UpdateConfigRequest) -> UpdateConfigResponse:
         """Update analyzer configuration settings."""
         start_time = time.time()
