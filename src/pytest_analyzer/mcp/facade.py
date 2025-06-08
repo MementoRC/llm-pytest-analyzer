@@ -172,10 +172,16 @@ class MCPAnalyzerFacade:
         self, request: RunAndAnalyzeRequest
     ) -> RunAndAnalyzeResponse:
         """Run pytest and analyze results in one operation."""
+        start_time = time.time()
+
         errors = request.validate()
         if errors:
+            execution_time_ms = max(1, int((time.time() - start_time) * 1000))
             return RunAndAnalyzeResponse(
-                success=False, request_id=request.request_id, warnings=errors
+                success=False,
+                request_id=request.request_id,
+                warnings=errors,
+                execution_time_ms=execution_time_ms,
             )
 
         results = self.analyzer.run_and_analyze(
@@ -186,12 +192,14 @@ class MCPAnalyzerFacade:
 
         suggestions = [self._transform_suggestion_to_mcp(s) for s in results]
 
+        execution_time_ms = max(1, int((time.time() - start_time) * 1000))
         return RunAndAnalyzeResponse(
             success=True,
             request_id=request.request_id,
             suggestions=suggestions,
             pytest_success=len(results) == 0,
             tests_run=len(results),  # This should come from actual test counts
+            execution_time_ms=execution_time_ms,
         )
 
     @error_handler("suggest_fixes", MCPError)
