@@ -143,12 +143,16 @@ class TestMCPAnalyzerFacade:
         assert response.rollback_available is False
         mcp_facade.analyzer.apply_suggestion.assert_called_once()
 
-    async def test_validate_suggestion_success(self, mcp_facade):
+    async def test_validate_suggestion_success(self, mcp_facade, tmp_path):
         """Test successful suggestion validation."""
+        # Create a real test file
+        test_file = tmp_path / "test.py"
+        test_file.write_text("print('hello world')")
+
         request = ValidateSuggestionRequest(
             tool_name="validate_suggestion",
             suggestion_id="test-id",
-            target_file="test.py",
+            target_file=str(test_file),
         )
 
         response = await mcp_facade.validate_suggestion(request)
