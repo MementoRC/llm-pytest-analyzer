@@ -284,17 +284,27 @@ class TestMCPAnalyzerFacade:
         """Test transformation of domain suggestion to MCP format."""
         mcp_suggestion = mcp_facade._transform_suggestion_to_mcp(sample_suggestion)
 
-        assert mcp_suggestion.id == str(sample_suggestion.id)
-        assert mcp_suggestion.suggestion_text == sample_suggestion.description
-        assert mcp_suggestion.confidence_score == sample_suggestion.confidence_score
+        # Handle legacy model attributes (test fixtures use legacy FixSuggestion)
+        expected_id = str(getattr(sample_suggestion, "id", "unknown"))
+        expected_text = getattr(sample_suggestion, "suggestion", "")
+        expected_confidence = float(getattr(sample_suggestion, "confidence", 0.0))
+
+        assert mcp_suggestion.id == expected_id
+        assert mcp_suggestion.suggestion_text == expected_text
+        assert mcp_suggestion.confidence_score == expected_confidence
 
     def test_transform_failure_to_mcp(self, mcp_facade, sample_failure):
         """Test transformation of domain failure to MCP format."""
         mcp_failure = mcp_facade._transform_failure_to_mcp(sample_failure)
 
-        assert mcp_failure.id == str(sample_failure.id)
-        assert mcp_failure.test_name == sample_failure.test_name
-        assert mcp_failure.failure_message == sample_failure.message
+        # Handle legacy model attributes (test fixtures use legacy PytestFailure)
+        expected_id = str(getattr(sample_failure, "id", "unknown"))
+        expected_test_name = getattr(sample_failure, "test_name", "")
+        expected_message = getattr(sample_failure, "error_message", "")
+
+        assert mcp_failure.id == expected_id
+        assert mcp_failure.test_name == expected_test_name
+        assert mcp_failure.failure_message == expected_message
 
     @pytest.mark.parametrize(
         "method_name",
@@ -310,11 +320,44 @@ class TestMCPAnalyzerFacade:
             "update_config",
         ],
     )
-    async def test_execution_time_tracking(self, mcp_facade, method_name):
+    async def test_execution_time_tracking(self, mcp_facade, method_name, tmp_path):
         """Test execution time tracking for all methods."""
         # Create minimal valid request for each method
         request_class = globals()[f"{method_name.title().replace('_', '')}Request"]
-        request = request_class(tool_name=method_name)
+
+        # Create request with required parameters based on method
+        if method_name == "analyze_pytest_output":
+            # Create a test file for analysis
+            test_file = tmp_path / "test_output.json"
+            test_file.write_text('{"test": "data"}')
+            request = request_class(tool_name=method_name, file_path=str(test_file))
+        elif method_name == "suggest_fixes":
+            request = request_class(tool_name=method_name, raw_output="test output")
+        elif method_name == "apply_suggestion":
+            request = request_class(
+                tool_name=method_name,
+                suggestion_id="test-id",
+                target_file="test.py",
+                dry_run=True,
+            )
+        elif method_name == "validate_suggestion":
+            # Create a test file for validation
+            test_file = tmp_path / "test.py"
+            test_file.write_text("print('hello')")
+            request = request_class(
+                tool_name=method_name,
+                suggestion_id="test-id",
+                target_file=str(test_file),
+            )
+        elif method_name == "run_and_analyze":
+            request = request_class(tool_name=method_name, test_pattern="test_*.py")
+        elif method_name == "update_config":
+            request = request_class(
+                tool_name=method_name, config_updates={"key": "value"}
+            )
+        else:
+            # For methods that only need tool_name
+            request = request_class(tool_name=method_name)
 
         # Execute
         method = getattr(mcp_facade, method_name)
