@@ -142,13 +142,14 @@ class MCPAnalyzerFacade:
         # Validate request
         errors = request.validate()
         if errors:
+            execution_time_ms = max(1, int((time.time() - start_time) * 1000))
             return AnalyzePytestOutputResponse(
                 success=False,
                 request_id=request.request_id,
                 failures=[],
                 suggestions=[],
                 parsing_errors=errors,
-                execution_time_ms=int((time.time() - start_time) * 1000),
+                execution_time_ms=execution_time_ms,
             )
 
         # Call core analyzer
@@ -157,12 +158,13 @@ class MCPAnalyzerFacade:
         # Transform results to MCP format
         suggestions = [self._transform_suggestion_to_mcp(s) for s in results]
 
+        execution_time_ms = max(1, int((time.time() - start_time) * 1000))
         return AnalyzePytestOutputResponse(
             success=True,
             request_id=request.request_id,
             suggestions=suggestions,
             failures=[],  # Populated from analysis if available
-            execution_time_ms=int((time.time() - start_time) * 1000),
+            execution_time_ms=execution_time_ms,
         )
 
     @error_handler("run_and_analyze", MCPError)
@@ -195,15 +197,22 @@ class MCPAnalyzerFacade:
     @error_handler("suggest_fixes", MCPError)
     async def suggest_fixes(self, request: SuggestFixesRequest) -> SuggestFixesResponse:
         """Generate fix suggestions from raw pytest output."""
+        start_time = time.time()
+
         errors = request.validate()
         if errors:
+            execution_time_ms = max(1, int((time.time() - start_time) * 1000))
             return SuggestFixesResponse(
-                success=False, request_id=request.request_id, parsing_warnings=errors
+                success=False,
+                request_id=request.request_id,
+                parsing_warnings=errors,
+                execution_time_ms=execution_time_ms,
             )
 
         suggestions = self.analyzer.suggest_fixes(request.raw_output)
         mcp_suggestions = [self._transform_suggestion_to_mcp(s) for s in suggestions]
 
+        execution_time_ms = max(1, int((time.time() - start_time) * 1000))
         return SuggestFixesResponse(
             success=True,
             request_id=request.request_id,
@@ -212,6 +221,7 @@ class MCPAnalyzerFacade:
             / len(mcp_suggestions)
             if mcp_suggestions
             else 0.0,
+            execution_time_ms=execution_time_ms,
         )
 
     @error_handler("apply_suggestion", MCPError)
@@ -219,14 +229,21 @@ class MCPAnalyzerFacade:
         self, request: ApplySuggestionRequest
     ) -> ApplySuggestionResponse:
         """Apply a fix suggestion to the target files."""
+        start_time = time.time()
+
         errors = request.validate()
         if errors:
+            execution_time_ms = max(1, int((time.time() - start_time) * 1000))
             return ApplySuggestionResponse(
-                success=False, request_id=request.request_id, warnings=errors
+                success=False,
+                request_id=request.request_id,
+                warnings=errors,
+                execution_time_ms=execution_time_ms,
             )
 
         result = self.analyzer.apply_suggestion(request.suggestion)
 
+        execution_time_ms = max(1, int((time.time() - start_time) * 1000))
         return ApplySuggestionResponse(
             success=result["success"],
             request_id=request.request_id,
@@ -235,6 +252,7 @@ class MCPAnalyzerFacade:
             changes_applied=result.get("applied_files", []),
             rollback_available=bool(result.get("rolled_back_files", [])),
             warnings=result.get("message", []) if not result["success"] else [],
+            execution_time_ms=execution_time_ms,
         )
 
     @error_handler("validate_suggestion", MCPError)
@@ -242,20 +260,28 @@ class MCPAnalyzerFacade:
         self, request: ValidateSuggestionRequest
     ) -> ValidateSuggestionResponse:
         """Validate a fix suggestion without applying changes."""
+        start_time = time.time()
+
         errors = request.validate()
         if errors:
+            execution_time_ms = max(1, int((time.time() - start_time) * 1000))
             return ValidateSuggestionResponse(
-                success=False, request_id=request.request_id, validation_errors=errors
+                success=False,
+                request_id=request.request_id,
+                validation_errors=errors,
+                execution_time_ms=execution_time_ms,
             )
 
         # This would need implementation in core analyzer
         # For now return a basic response
+        execution_time_ms = max(1, int((time.time() - start_time) * 1000))
         return ValidateSuggestionResponse(
             success=True,
             request_id=request.request_id,
             suggestion_id=request.suggestion_id,
             target_file=request.target_file,
             is_valid=True,
+            execution_time_ms=execution_time_ms,
         )
 
     @error_handler("get_failure_summary", MCPError)
@@ -306,13 +332,23 @@ class MCPAnalyzerFacade:
     @error_handler("update_config", MCPError)
     async def update_config(self, request: UpdateConfigRequest) -> UpdateConfigResponse:
         """Update analyzer configuration settings."""
+        start_time = time.time()
+
         errors = request.validate()
         if errors:
+            execution_time_ms = max(1, int((time.time() - start_time) * 1000))
             return UpdateConfigResponse(
-                success=False, request_id=request.request_id, validation_errors=errors
+                success=False,
+                request_id=request.request_id,
+                validation_errors=errors,
+                execution_time_ms=execution_time_ms,
             )
 
         # This would need implementation in core analyzer
+        execution_time_ms = max(1, int((time.time() - start_time) * 1000))
         return UpdateConfigResponse(
-            success=True, request_id=request.request_id, updated_fields=[]
+            success=True,
+            request_id=request.request_id,
+            updated_fields=[],
+            execution_time_ms=execution_time_ms,
         )
