@@ -70,6 +70,9 @@ scripts/prd.txt
 scripts/example_prd.txt
 scripts/task-*.json
 
+# Claude Code configuration - NEVER COMMIT
+.claude/
+
 # Added by Claude Task Master
 # Logs
 logs

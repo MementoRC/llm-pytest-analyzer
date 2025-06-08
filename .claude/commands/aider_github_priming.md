@@ -1,1 +1,0 @@
-/home/memento/.claude/commands/aider_github_priming.md
