@@ -6,6 +6,13 @@ Provides tool implementations following the MCP tools specification.
 from typing import Any
 
 from ...core.infrastructure.base_factory import BaseFactory
+from .analysis import (
+    RUN_AND_ANALYZE_TOOL_INFO,
+    SUGGEST_FIXES_TOOL_INFO,
+    run_and_analyze,
+    suggest_fixes,
+)
+from .information import GET_FAILURE_SUMMARY_TOOL_INFO, get_failure_summary
 
 
 class ToolFactory(BaseFactory):
@@ -28,4 +35,21 @@ class ToolFactory(BaseFactory):
         return tool_class(**kwargs)
 
 
-__all__ = ["ToolFactory"]
+# Available tools registry
+AVAILABLE_TOOLS = {
+    "suggest_fixes": SUGGEST_FIXES_TOOL_INFO,
+    "run_and_analyze": RUN_AND_ANALYZE_TOOL_INFO,
+    "get_failure_summary": GET_FAILURE_SUMMARY_TOOL_INFO,
+}
+
+
+__all__ = [
+    "ToolFactory",
+    "AVAILABLE_TOOLS",
+    "suggest_fixes",
+    "run_and_analyze",
+    "get_failure_summary",
+    "SUGGEST_FIXES_TOOL_INFO",
+    "RUN_AND_ANALYZE_TOOL_INFO",
+    "GET_FAILURE_SUMMARY_TOOL_INFO",
+]
