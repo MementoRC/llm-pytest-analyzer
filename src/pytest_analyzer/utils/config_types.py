@@ -3,7 +3,64 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+
+# --- Security Settings Dataclass ---
+from typing import Dict, List, Optional, Set
+
+
+@dataclass
+class SecuritySettings:
+    """Comprehensive security settings for the MCP server."""
+
+    # Input validation
+    path_allowlist: List[str] = field(default_factory=list)  # Allowed base paths
+    allowed_file_types: List[str] = field(
+        default_factory=lambda: [".py", ".txt", ".json", ".xml"]
+    )
+    max_file_size_mb: Optional[float] = 10.0  # Max file size in MB
+    enable_input_sanitization: bool = True
+
+    # File system access
+    restrict_to_project_dir: bool = True
+    enable_backup: bool = True  # Require backup/rollback for write ops
+
+    # Authentication (HTTP)
+    require_authentication: bool = False
+    auth_token: Optional[str] = None
+    require_client_certificate: bool = False
+    allowed_client_certs: List[str] = field(default_factory=list)
+    role_based_access: bool = False
+    allowed_roles: Set[str] = field(
+        default_factory=lambda: {"admin", "user", "readonly"}
+    )
+
+    # Rate limiting
+    max_requests_per_window: int = 100
+    rate_limit_window_seconds: int = 60
+    abuse_threshold: int = 200
+    abuse_ban_count: int = 3
+    max_resource_usage_mb: float = 100.0
+
+    # Misc
+    enable_resource_usage_monitoring: bool = True
+
+    def __post_init__(self):
+        if self.max_file_size_mb is not None and self.max_file_size_mb <= 0:
+            raise ValueError("max_file_size_mb must be positive")
+        if self.max_requests_per_window <= 0:
+            raise ValueError("max_requests_per_window must be positive")
+        if self.rate_limit_window_seconds <= 0:
+            raise ValueError("rate_limit_window_seconds must be positive")
+        if self.max_resource_usage_mb <= 0:
+            raise ValueError("max_resource_usage_mb must be positive")
+        if self.abuse_threshold < 0 or self.abuse_ban_count < 0:
+            raise ValueError("abuse_threshold and abuse_ban_count must be non-negative")
+        if self.allowed_file_types and not all(
+            t.startswith(".") for t in self.allowed_file_types
+        ):
+            raise ValueError(
+                "allowed_file_types must be a list of file extensions starting with '.'"
+            )
 
 
 @dataclass
@@ -16,8 +73,11 @@ class MCPSettings:
     http_port: int = 8000  # Port for HTTP transport
 
     # Security settings
-    enable_authentication: bool = False  # Whether to enable authentication
-    auth_token: Optional[str] = None  # Authentication token
+    security: SecuritySettings = field(default_factory=SecuritySettings)
+    enable_authentication: bool = (
+        False  # Deprecated, use security.require_authentication
+    )
+    auth_token: Optional[str] = None  # Deprecated, use security.auth_token
     max_request_size_mb: int = 10  # Maximum request size in MB
 
     # Tool settings
@@ -72,6 +132,12 @@ class MCPSettings:
         # Validate concurrency limits
         if self.max_concurrent_requests <= 0:
             raise ValueError("max_concurrent_requests must be positive")
+
+        # Backward compatibility: sync deprecated fields
+        if self.enable_authentication:
+            self.security.require_authentication = True
+        if self.auth_token:
+            self.security.auth_token = self.auth_token
 
 
 # --- Settings Dataclass Definition ---

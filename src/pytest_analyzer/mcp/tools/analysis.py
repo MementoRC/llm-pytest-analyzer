@@ -4,7 +4,7 @@ Provides MCP tool implementations for pytest output analysis and fix suggestions
 """
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from mcp.types import CallToolResult, TextContent
 
@@ -38,7 +38,27 @@ async def suggest_fixes(
     Raises:
         ValueError: If input validation fails or input is too large
     """
+    from ..server import PytestAnalyzerMCPServer, SecurityError
+
     try:
+        # Security: Validate and sanitize input
+        server: Optional[PytestAnalyzerMCPServer] = getattr(facade, "server", None)
+        if server and hasattr(server, "security_manager"):
+            try:
+                server.security_manager.validate_tool_input(
+                    "suggest_fixes", arguments, read_only=True
+                )
+            except SecurityError as sec_err:
+                return CallToolResult(
+                    content=[
+                        TextContent(
+                            type="text",
+                            text=f"Security error: {str(sec_err)}",
+                        )
+                    ],
+                    isError=True,
+                )
+
         # Validate input size early (1MB limit)
         raw_output = arguments.get("raw_output", "")
         if len(raw_output) > 1_000_000:  # 1MB limit
@@ -92,7 +112,8 @@ async def suggest_fixes(
         response: SuggestFixesResponse = await facade.suggest_fixes(request)
 
         # Add detected format to metadata
-        response.analysis_metadata["detected_format"] = detected_format
+        if hasattr(response, "analysis_metadata"):
+            response.analysis_metadata["detected_format"] = detected_format
 
         # Format response as text content
         if response.success:
@@ -275,7 +296,27 @@ async def run_and_analyze(
     Raises:
         ValueError: If input validation fails
     """
+    from ..server import PytestAnalyzerMCPServer, SecurityError
+
     try:
+        # Security: Validate and sanitize input
+        server: Optional[PytestAnalyzerMCPServer] = getattr(facade, "server", None)
+        if server and hasattr(server, "security_manager"):
+            try:
+                server.security_manager.validate_tool_input(
+                    "run_and_analyze", arguments, read_only=True
+                )
+            except SecurityError as sec_err:
+                return CallToolResult(
+                    content=[
+                        TextContent(
+                            type="text",
+                            text=f"Security error: {str(sec_err)}",
+                        )
+                    ],
+                    isError=True,
+                )
+
         # Create request from arguments
         request = RunAndAnalyzeRequest(
             tool_name="run_and_analyze",

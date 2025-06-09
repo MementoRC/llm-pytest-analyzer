@@ -14,6 +14,7 @@ from mcp.types import ResourceContents, Tool
 from ..core.cross_cutting.error_handling import error_context, error_handler
 from ..utils.settings import Settings
 from .resources import ResourceManager, SessionManager
+from .security import SecurityManager
 
 
 class PytestAnalyzerMCPServer:
@@ -76,6 +77,12 @@ class PytestAnalyzerMCPServer:
 
         self.mcp_settings = self.settings.mcp
         self.logger = logging.getLogger(self.__class__.__name__)
+
+        # Initialize security manager
+        self.security_manager = SecurityManager(
+            self.mcp_settings.security,
+            project_root=getattr(self.settings, "project_root", None),
+        )
 
         # Initialize MCP server with proper configuration
         self.mcp_server = Server(
