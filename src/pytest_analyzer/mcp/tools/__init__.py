@@ -12,7 +12,12 @@ from .analysis import (
     run_and_analyze,
     suggest_fixes,
 )
-from .information import GET_FAILURE_SUMMARY_TOOL_INFO, get_failure_summary
+from .information import (
+    GET_FAILURE_SUMMARY_TOOL_INFO,
+    GET_TEST_COVERAGE_TOOL_INFO,
+    get_failure_summary,
+    get_test_coverage,
+)
 
 
 class ToolFactory(BaseFactory):
@@ -40,6 +45,7 @@ AVAILABLE_TOOLS = {
     "suggest_fixes": SUGGEST_FIXES_TOOL_INFO,
     "run_and_analyze": RUN_AND_ANALYZE_TOOL_INFO,
     "get_failure_summary": GET_FAILURE_SUMMARY_TOOL_INFO,
+    "get_test_coverage": GET_TEST_COVERAGE_TOOL_INFO,
 }
 
 
@@ -49,7 +55,9 @@ __all__ = [
     "suggest_fixes",
     "run_and_analyze",
     "get_failure_summary",
+    "get_test_coverage",
     "SUGGEST_FIXES_TOOL_INFO",
     "RUN_AND_ANALYZE_TOOL_INFO",
     "GET_FAILURE_SUMMARY_TOOL_INFO",
+    "GET_TEST_COVERAGE_TOOL_INFO",
 ]
