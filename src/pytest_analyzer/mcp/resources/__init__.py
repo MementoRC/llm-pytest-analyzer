@@ -1,27 +1,26 @@
 """MCP resource handlers for pytest-analyzer.
 
-Provides resource management for MCP operations.
+Provides resource management for MCP operations including session management
+and resource handlers for test results, suggestions, and analysis history.
 """
 
-from abc import ABC, abstractmethod
-from typing import Any, Dict
+from .resource_handlers import (
+    BaseResourceHandler,
+    HistoryResourceHandler,
+    ResourceError,
+    ResourceManager,
+    SuggestionsResourceHandler,
+    TestResultsResourceHandler,
+)
+from .session_manager import AnalysisSession, SessionManager
 
-
-class ResourceHandler(ABC):
-    """Base class for MCP resource handlers."""
-
-    @abstractmethod
-    async def handle(self, resource_id: str, **kwargs) -> Dict[str, Any]:
-        """Handle resource request.
-
-        Args:
-            resource_id: Resource identifier
-            **kwargs: Additional parameters
-
-        Returns:
-            Resource response dictionary
-        """
-        pass
-
-
-__all__ = ["ResourceHandler"]
+__all__ = [
+    "AnalysisSession",
+    "SessionManager",
+    "ResourceError",
+    "BaseResourceHandler",
+    "TestResultsResourceHandler",
+    "SuggestionsResourceHandler",
+    "HistoryResourceHandler",
+    "ResourceManager",
+]

@@ -9,10 +9,11 @@ from typing import Any, Callable, Dict, Optional
 
 from mcp.server import InitializationOptions, Server
 from mcp.server.stdio import stdio_server
-from mcp.types import Tool
+from mcp.types import ResourceContents, Tool
 
 from ..core.cross_cutting.error_handling import error_context, error_handler
 from ..utils.settings import Settings
+from .resources import ResourceManager, SessionManager
 
 
 class PytestAnalyzerMCPServer:
@@ -89,13 +90,24 @@ class PytestAnalyzerMCPServer:
         self._registered_tools: Dict[str, Tool] = {}
         self._registered_resources: Dict[str, Any] = {}
 
-        # Setup signal handlers
-        self._setup_signal_handlers()
+        # Initialize resource management
+        self.session_manager = SessionManager(
+            ttl_seconds=self.mcp_settings.resource_cache_ttl_seconds,
+            max_sessions=100,
+        )
+        self.resource_manager = ResourceManager(self.session_manager)
 
+        # Log initialization first
         self.logger.info(
             f"Initialized MCP server with {self.mcp_settings.transport_type} transport "
             f"(host: {self.mcp_settings.http_host}, port: {self.mcp_settings.http_port})"
         )
+
+        # Setup signal handlers
+        self._setup_signal_handlers()
+
+        # Register MCP resource handlers
+        self._setup_resource_handlers()
 
     # Compatibility properties for tests
     @property
@@ -201,6 +213,85 @@ class PytestAnalyzerMCPServer:
         """Get all registered resources."""
         return self._registered_resources.copy()
 
+    def create_analysis_session(self, metadata: Optional[Dict[str, Any]] = None) -> str:
+        """Create a new analysis session.
+
+        Args:
+            metadata: Optional session metadata
+
+        Returns:
+            Session ID
+        """
+        return self.session_manager.create_session(metadata)
+
+    def store_test_results(self, session_id: str, results: list) -> bool:
+        """Store test results in a session.
+
+        Args:
+            session_id: Session identifier
+            results: List of test failure data
+
+        Returns:
+            True if stored successfully
+        """
+        # Convert results to PytestFailureData if needed
+        from .schemas import PytestFailureData
+
+        converted_results = []
+        for result in results:
+            if isinstance(result, dict):
+                # Convert dict to PytestFailureData
+                failure_data = PytestFailureData(
+                    id=result.get("id", "unknown"),
+                    test_name=result.get("test_name", ""),
+                    file_path=result.get("file_path", ""),
+                    failure_message=result.get("failure_message", ""),
+                    failure_type=result.get("failure_type", ""),
+                    line_number=result.get("line_number"),
+                    function_name=result.get("function_name", ""),
+                    class_name=result.get("class_name", ""),
+                    traceback=result.get("traceback", []),
+                )
+                converted_results.append(failure_data)
+            else:
+                converted_results.append(result)
+
+        return self.session_manager.store_test_results(session_id, converted_results)
+
+    def store_suggestions(self, session_id: str, suggestions: list) -> bool:
+        """Store fix suggestions in a session.
+
+        Args:
+            session_id: Session identifier
+            suggestions: List of fix suggestions
+
+        Returns:
+            True if stored successfully
+        """
+        # Convert suggestions to FixSuggestionData if needed
+        from .schemas import FixSuggestionData
+
+        converted_suggestions = []
+        for suggestion in suggestions:
+            if isinstance(suggestion, dict):
+                # Convert dict to FixSuggestionData
+                suggestion_data = FixSuggestionData(
+                    id=suggestion.get("id", "unknown"),
+                    failure_id=suggestion.get("failure_id", "unknown"),
+                    suggestion_text=suggestion.get("suggestion_text", ""),
+                    code_changes=suggestion.get("code_changes", []),
+                    confidence_score=suggestion.get("confidence_score", 0.0),
+                    explanation=suggestion.get("explanation", ""),
+                    alternative_approaches=suggestion.get("alternative_approaches", []),
+                    file_path=suggestion.get("file_path", ""),
+                    line_number=suggestion.get("line_number"),
+                )
+                converted_suggestions.append(suggestion_data)
+            else:
+                converted_suggestions.append(suggestion)
+
+        return self.session_manager.store_suggestions(session_id, converted_suggestions)
+
     @asynccontextmanager
     async def lifespan(self):
         """Async context manager for server lifespan."""
@@ -273,6 +364,47 @@ class PytestAnalyzerMCPServer:
         # HTTP transport implementation would go here
         # This is a placeholder for the HTTP transport setup
         raise NotImplementedError("HTTP transport not yet implemented")
+
+    def _setup_resource_handlers(self) -> None:
+        """Set up MCP resource handlers."""
+        try:
+            # Register list_resources handler
+            @self.mcp_server.list_resources()
+            async def handle_list_resources():
+                """Handle list resources request."""
+                try:
+                    resources = await self.resource_manager.list_resources()
+                    self.logger.debug(f"Listed {len(resources)} resources")
+                    return resources
+                except Exception as e:
+                    self.logger.error(f"Error listing resources: {e}")
+                    return []
+
+            # Register read_resource handler
+            @self.mcp_server.read_resource()
+            async def handle_read_resource(uri: str) -> ResourceContents:
+                """Handle read resource request."""
+                try:
+                    self.logger.debug(f"Reading resource: {uri}")
+                    contents = await self.resource_manager.read_resource(uri)
+                    self.logger.info(f"Successfully read resource: {uri}")
+                    return contents
+                except Exception as e:
+                    self.logger.error(f"Error reading resource {uri}: {e}")
+                    # Return error as text content
+                    from mcp.types import TextResourceContents
+
+                    return TextResourceContents(
+                        uri=uri,
+                        mimeType="text/plain",
+                        text=f"Error reading resource: {str(e)}",
+                    )
+
+            self.logger.info("Resource handlers registered successfully")
+
+        except Exception as e:
+            self.logger.error(f"Failed to setup resource handlers: {e}")
+            raise
 
     def _get_server_capabilities(self) -> Dict[str, Any]:
         """Get server capabilities."""
