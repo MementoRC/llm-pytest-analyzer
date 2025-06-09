@@ -191,7 +191,7 @@
         6,
         7
       ],
-      "status": "pending",
+      "status": "done",
       "subtasks": []
     },
     {
@@ -236,7 +236,7 @@
         3,
         6
       ],
-      "status": "pending",
+      "status": "done",
       "subtasks": []
     },
     {
@@ -250,7 +250,7 @@
         3,
         5
       ],
-      "status": "pending",
+      "status": "done",
       "subtasks": []
     },
     {
