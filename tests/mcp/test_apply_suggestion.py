@@ -280,7 +280,7 @@ class TestApplySuggestionTool:
         assert "❌ Failed to Apply Suggestion" in content
         assert "Syntax Errors:" in content
         assert "SyntaxError: invalid syntax at line 5" in content
-        assert "Rollback Possible: Yes" in content
+        assert "Rollback available" in content
 
 
 class TestApplySuggestionRequest:
@@ -292,6 +292,7 @@ class TestApplySuggestionRequest:
             tool_name="apply_suggestion",
             suggestion_id="test-suggestion",
             target_file="/path/to/file.py",
+            dry_run=True,  # Skip file existence check for unit test
         )
 
         errors = request.validate()

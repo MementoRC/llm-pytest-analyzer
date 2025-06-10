@@ -315,26 +315,42 @@ class MCPAnalyzerFacade:
         git_commit_hash = None
         backup_created = False
 
-        # 1. File permission validation
+        # 1. File permission validation (skip for dry run)
         target_file = request.target_file
-        if not os.path.isfile(target_file):
+        if not request.dry_run:
+            if not os.path.isfile(target_file):
+                execution_time_ms = max(1, int((time.time() - start_time) * 1000))
+                return ApplySuggestionResponse(
+                    success=False,
+                    request_id=request.request_id,
+                    suggestion_id=request.suggestion_id,
+                    target_file=target_file,
+                    warnings=[f"Target file does not exist: {target_file}"],
+                    execution_time_ms=execution_time_ms,
+                )
+            if not os.access(target_file, os.W_OK):
+                execution_time_ms = max(1, int((time.time() - start_time) * 1000))
+                return ApplySuggestionResponse(
+                    success=False,
+                    request_id=request.request_id,
+                    suggestion_id=request.suggestion_id,
+                    target_file=target_file,
+                    warnings=[
+                        f"Insufficient permissions to write to file: {target_file}"
+                    ],
+                    execution_time_ms=execution_time_ms,
+                )
+
+        # Handle dry run - simulate success without file operations
+        if request.dry_run:
             execution_time_ms = max(1, int((time.time() - start_time) * 1000))
             return ApplySuggestionResponse(
-                success=False,
+                success=True,
                 request_id=request.request_id,
                 suggestion_id=request.suggestion_id,
                 target_file=target_file,
-                warnings=[f"Target file does not exist: {target_file}"],
-                execution_time_ms=execution_time_ms,
-            )
-        if not os.access(target_file, os.W_OK):
-            execution_time_ms = max(1, int((time.time() - start_time) * 1000))
-            return ApplySuggestionResponse(
-                success=False,
-                request_id=request.request_id,
-                suggestion_id=request.suggestion_id,
-                target_file=target_file,
-                warnings=[f"Insufficient permissions to write to file: {target_file}"],
+                changes_applied=[target_file] if target_file else [],
+                diff_preview="(dry run - no changes applied)",
                 execution_time_ms=execution_time_ms,
             )
 

@@ -140,9 +140,12 @@ def _format_apply_suggestion_response(response: ApplySuggestionResponse) -> str:
             lines.append("❗ Syntax errors detected after applying changes")
         if response.can_rollback:
             lines.append("↩️  Rollback available")
+        if response.warnings:
+            lines.append("⚠️  Warnings:")
+            lines.extend([f"   • {w}" for w in response.warnings])
         if response.diff_preview:
             lines.append("")
-            lines.append("🔍 Diff Preview:")
+            lines.append("🔍 Changes Preview:")
             lines.append(response.diff_preview)
     else:
         if response.warnings:
