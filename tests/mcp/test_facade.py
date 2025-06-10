@@ -243,7 +243,16 @@ class TestMCPAnalyzerFacade:
 
         # Verify
         assert any("Test error" in record.message for record in caplog.records)
-        assert isinstance(response, MCPError)
+        if method_name == "apply_suggestion":
+            # apply_suggestion returns ApplySuggestionResponse with success=False
+            from pytest_analyzer.mcp.schemas.apply_suggestion import (
+                ApplySuggestionResponse,
+            )
+
+            assert isinstance(response, ApplySuggestionResponse)
+            assert response.success is False
+        else:
+            assert isinstance(response, MCPError)
 
     @pytest.mark.parametrize(
         "method_name,request_class",

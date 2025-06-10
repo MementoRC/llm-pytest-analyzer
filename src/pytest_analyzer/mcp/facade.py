@@ -282,7 +282,6 @@ class MCPAnalyzerFacade:
                 request_id=request.request_id,
             )
 
-    @async_error_handler("apply_suggestion")
     async def apply_suggestion(
         self, request: ApplySuggestionRequest
     ) -> ApplySuggestionResponse:
@@ -385,6 +384,7 @@ class MCPAnalyzerFacade:
             changes_applied = result.get("applied_files", [target_file])
             diff_preview = result.get("diff_preview", "")
         except Exception as e:
+            logger.error(f"Error in apply_suggestion: {e}")
             # Rollback on error
             try:
                 if backup_created:
@@ -566,13 +566,175 @@ class MCPAnalyzerFacade:
     @async_error_handler("get_config")
     async def get_config(self, request: GetConfigRequest) -> GetConfigResponse:
         """Get current analyzer configuration settings."""
+        from pytest_analyzer.utils.settings import load_settings
+
         errors = request.validate()
         if errors:
-            return GetConfigResponse(success=False, request_id=request.request_id)
+            return GetConfigResponse(
+                success=False, request_id=request.request_id, warnings=errors
+            )
 
-        # This would need implementation in core analyzer
+        # 1. Load settings
+        try:
+            settings = load_settings()
+        except Exception as e:
+            return GetConfigResponse(
+                success=False,
+                request_id=request.request_id,
+                warnings=[f"Failed to load settings: {e}"],
+            )
+
+        # 2. Helper: flatten dataclass to dict, recursively, with descriptions
+        def dataclass_to_dict(obj, section=None):
+            from dataclasses import fields, is_dataclass
+
+            result = {}
+            for f in fields(obj):
+                value = getattr(obj, f.name)
+                # Hide sensitive fields
+                if any(
+                    kw in f.name.lower()
+                    for kw in (
+                        "key",
+                        "token",
+                        "password",
+                        "secret",
+                        "api_key",
+                        "auth_token",
+                    )
+                ):
+                    if value is not None:
+                        value = "***"
+                # Recursively flatten dataclasses
+                if is_dataclass(value):
+                    value = dataclass_to_dict(value)
+                # Add description and allowed values if available
+                entry = {"value": value}
+                if f.metadata.get("description"):
+                    entry["description"] = f.metadata["description"]
+                # Add allowed values for enums or known fields
+                if section == "llm" and f.name == "llm_provider":
+                    entry["allowed_values"] = [
+                        "anthropic",
+                        "openai",
+                        "azure",
+                        "together",
+                        "ollama",
+                        "auto",
+                    ]
+                if section == "llm" and f.name == "llm_model":
+                    entry["description"] = (
+                        "Model to use (auto selects available models)"
+                    )
+                if section == "logging" and f.name == "log_level":
+                    entry["allowed_values"] = [
+                        "DEBUG",
+                        "INFO",
+                        "WARNING",
+                        "ERROR",
+                        "CRITICAL",
+                    ]
+                result[f.name] = entry
+            return result
+
+        # 3. Organize config by section
+        config_data = {}
+
+        # LLM section
+        config_data["llm"] = {
+            k: v
+            for k, v in dataclass_to_dict(settings, section="llm").items()
+            if k
+            in [
+                "use_llm",
+                "llm_timeout",
+                "llm_api_key",
+                "llm_model",
+                "llm_provider",
+                "use_fallback",
+                "auto_apply",
+                "anthropic_api_key",
+                "openai_api_key",
+                "azure_api_key",
+                "azure_endpoint",
+                "azure_api_version",
+                "together_api_key",
+                "ollama_host",
+                "ollama_port",
+            ]
+        }
+
+        # MCP section
+        config_data["mcp"] = dataclass_to_dict(settings.mcp)
+
+        # Analysis section
+        config_data["analysis"] = {
+            k: v
+            for k, v in dataclass_to_dict(settings, section="analysis").items()
+            if k
+            in [
+                "max_suggestions",
+                "max_suggestions_per_failure",
+                "min_confidence",
+                "parser_timeout",
+                "analyzer_timeout",
+                "max_failures",
+                "preferred_format",
+            ]
+        }
+
+        # Extraction section
+        config_data["extraction"] = {
+            k: v
+            for k, v in dataclass_to_dict(settings, section="extraction").items()
+            if k in ["pytest_timeout", "pytest_args"]
+        }
+
+        # Logging section
+        config_data["logging"] = {
+            k: v
+            for k, v in dataclass_to_dict(settings, section="logging").items()
+            if k in ["log_level", "debug"]
+        }
+
+        # Git section
+        config_data["git"] = {
+            k: v
+            for k, v in dataclass_to_dict(settings, section="git").items()
+            if k in ["check_git", "auto_init_git", "use_git_branches"]
+        }
+
+        # Remove sensitive values from all sections
+        sensitive_keys = {"api_key", "token", "password", "auth_token", "secret"}
+        for section in config_data:
+            for k, v in config_data[section].items():
+                if any(s in k.lower() for s in sensitive_keys):
+                    v["value"] = "***" if v["value"] not in (None, "") else v["value"]
+
+        # 4. Section filtering
+        if request.section:
+            filtered = {}
+            if request.section in config_data:
+                filtered[request.section] = config_data[request.section]
+            else:
+                return GetConfigResponse(
+                    success=False,
+                    request_id=request.request_id,
+                    warnings=[f"Section '{request.section}' not found."],
+                )
+            config_data = filtered
+
+        # 5. Include defaults if requested (already included)
+        # 6. Exclude sensitive if requested (already done above)
+
+        # 7. Compose response
         return GetConfigResponse(
-            success=True, request_id=request.request_id, config_data={}
+            success=True,
+            request_id=request.request_id,
+            config_data=config_data,
+            sections=list(config_data.keys()),
+            defaults_included=True,
+            sensitive_excluded=True,
         )
 
     @async_error_handler("update_config")
