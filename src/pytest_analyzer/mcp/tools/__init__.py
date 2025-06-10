@@ -12,6 +12,10 @@ from .analysis import (
     run_and_analyze,
     suggest_fixes,
 )
+from .configuration import (
+    UPDATE_CONFIG_TOOL_INFO,
+    update_config,
+)
 from .fixes import (
     APPLY_SUGGESTION_TOOL_INFO,
     VALIDATE_SUGGESTION_TOOL_INFO,
@@ -54,6 +58,7 @@ AVAILABLE_TOOLS = {
     "validate_suggestion": VALIDATE_SUGGESTION_TOOL_INFO,
     "get_failure_summary": GET_FAILURE_SUMMARY_TOOL_INFO,
     "get_test_coverage": GET_TEST_COVERAGE_TOOL_INFO,
+    "update_config": UPDATE_CONFIG_TOOL_INFO,
 }
 
 
@@ -66,10 +71,12 @@ __all__ = [
     "validate_suggestion",
     "get_failure_summary",
     "get_test_coverage",
+    "update_config",
     "SUGGEST_FIXES_TOOL_INFO",
     "RUN_AND_ANALYZE_TOOL_INFO",
     "APPLY_SUGGESTION_TOOL_INFO",
     "VALIDATE_SUGGESTION_TOOL_INFO",
     "GET_FAILURE_SUMMARY_TOOL_INFO",
     "GET_TEST_COVERAGE_TOOL_INFO",
+    "UPDATE_CONFIG_TOOL_INFO",
 ]
