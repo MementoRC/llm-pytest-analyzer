@@ -5,7 +5,7 @@ This module contains factory functions for creating instances of the analyzer se
 without using the DI container. These functions are primarily for backward compatibility.
 """
 
-from typing import Any
+from typing import Any, Optional
 
 from ..utils.path_resolver import PathResolver
 from ..utils.settings import Settings
@@ -15,7 +15,7 @@ from .llm.backward_compat import LLMService
 
 
 def create_analyzer_service(
-    settings: Settings = None, llm_client: Any = None
+    settings: Optional[Settings] = None, llm_client: Any = None
 ) -> DIPytestAnalyzerService:
     """
     Create an instance of the DI-based analyzer service.

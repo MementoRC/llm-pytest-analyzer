@@ -163,6 +163,15 @@ async def start_mcp_server(
                 settings=settings, host=host, port=port
             )
 
+        # Create core analyzer facade and then MCP wrapper
+        from ..core.analyzer_facade import PytestAnalyzerFacade
+        from ..mcp.facade import MCPAnalyzerFacade
+        from ..mcp.server_init import register_all_tools
+
+        core_facade = PytestAnalyzerFacade(settings=settings)
+        mcp_facade = MCPAnalyzerFacade(core_facade)
+        register_all_tools(server, mcp_facade)
+
         if not quiet:
             transport_info = transport_type.upper()
             if transport_type == "http":

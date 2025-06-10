@@ -115,6 +115,7 @@ class AnalyzerContext:
     failure_groups: Dict[str, List[PytestFailure]] = field(default_factory=dict)
     suggestions: List[FixSuggestion] = field(default_factory=list)
     application_results: List[FixApplicationResult] = field(default_factory=list)
+    target_files: List[str] = field(default_factory=list)
 
     # Error tracking
     error: Optional[Exception] = None
@@ -682,3 +683,55 @@ class AnalyzerStateMachine(BaseStateMachine[AnalyzerContext, AnalyzerEvent]):
             The exception that occurred, or None if no error
         """
         return self.context.error
+
+    def run(self, test_results_path: Optional[str] = None, apply_fixes: bool = False):
+        """
+        Run the complete analysis workflow.
+
+        Args:
+            test_results_path: Optional path to test results
+            apply_fixes: Whether to apply fixes automatically
+
+        Returns:
+            The results of the analysis workflow
+        """
+        try:
+            # Set the test results path if provided
+            if test_results_path:
+                self.context.output_path = test_results_path
+
+            # Initialize the state machine
+            self.setup()
+
+            # Trigger the workflow
+            self.trigger(AnalyzerEvent.INITIALIZE)
+            self.trigger(AnalyzerEvent.START_EXTRACTION)
+
+            if self.context.failures:
+                self.trigger(AnalyzerEvent.START_ANALYSIS)
+                self.trigger(AnalyzerEvent.START_SUGGESTIONS)
+
+                if apply_fixes and self.context.suggestions:
+                    self.trigger(AnalyzerEvent.START_APPLICATION)
+
+            self.trigger(AnalyzerEvent.COMPLETE)
+
+            return {
+                "failures": self.get_failures(),
+                "suggestions": self.get_suggestions(),
+                "application_results": self.get_application_results()
+                if apply_fixes
+                else [],
+                "completed": self.is_completed(),
+                "error": self.get_error(),
+            }
+
+        except Exception as e:
+            self.set_error(e, f"Error during analysis workflow: {str(e)}")
+            return {
+                "failures": [],
+                "suggestions": [],
+                "application_results": [],
+                "completed": False,
+                "error": e,
+            }
