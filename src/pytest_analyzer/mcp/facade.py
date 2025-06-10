@@ -907,25 +907,30 @@ class MCPAnalyzerFacade:
         import yaml
 
         if not config_file_path:
-            warnings.append("No config file path found; cannot persist changes.")
-            execution_time_ms = max(1, int((time.time() - start_time) * 1000))
-            return UpdateConfigResponse(
-                success=False,
-                request_id=request.request_id,
-                validation_errors=[
-                    "No config file path found; cannot persist changes."
-                ],
-                execution_time_ms=execution_time_ms,
-                backup_path=backup_path if backup_created else None,
-                warnings=warnings,
+            # Create a default config file in the current working directory
+            from pathlib import Path
+
+            config_file_path = Path.cwd() / "pytest-analyzer.yaml"
+            warnings.append(
+                f"No config file found; creating new config file at {config_file_path}"
             )
+            logger.info(f"Creating new configuration file at {config_file_path}")
+
+            # Update the manager's config file path for future operations
+            manager._config_file_path = config_file_path
 
         try:
-            # Only write the top-level keys that exist in the config file
-            with open(config_file_path, "r") as f:
-                file_config = yaml.safe_load(f) or {}
+            # Load existing config file or create empty dict if file doesn't exist
+            file_config = {}
+            if os.path.isfile(config_file_path):
+                with open(config_file_path, "r") as f:
+                    file_config = yaml.safe_load(f) or {}
+
+            # Update with new values
             for k in updates:
                 file_config[k] = new_config[k]
+
+            # Write the updated config
             with open(config_file_path, "w") as f:
                 yaml.safe_dump(
                     file_config, f, default_flow_style=False, sort_keys=False

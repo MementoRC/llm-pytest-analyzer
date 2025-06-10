@@ -190,7 +190,8 @@ class TestMCPAnalyzerFacade:
     async def test_update_config_success(self, mcp_facade):
         """Test successful config update."""
         request = UpdateConfigRequest(
-            tool_name="update_config", config_updates={"key": "value"}
+            tool_name="update_config",
+            config_updates={"pytest_timeout": 200, "max_suggestions": 5},
         )
 
         response = await mcp_facade.update_config(request)
@@ -280,7 +281,7 @@ class TestMCPAnalyzerFacade:
             )
         elif request_class == UpdateConfigRequest:
             request = request_class(
-                tool_name=method_name, config_updates={"key": "value"}
+                tool_name=method_name, config_updates={"pytest_timeout": 120}
             )
         else:
             request = request_class(tool_name=method_name)

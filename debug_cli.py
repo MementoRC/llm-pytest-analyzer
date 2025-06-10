@@ -4,14 +4,10 @@ from pytest_analyzer.cli.analyzer_cli import setup_parser
 
 parser = setup_parser()
 
-test_cases = [
-    ['test_path'],
-    ['analyze', 'test_path'],
-    ['mcp', 'start', '--stdio']
-]
+test_cases = [["test_path"], ["analyze", "test_path"], ["mcp", "start", "--stdio"]]
 
 for i, args in enumerate(test_cases):
-    print(f"\nTest case {i+1}: {args}")
+    print(f"\nTest case {i + 1}: {args}")
     try:
         parsed = parser.parse_args(args)
         print(f"SUCCESS: {parsed}")
