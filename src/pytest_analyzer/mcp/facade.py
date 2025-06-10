@@ -286,9 +286,14 @@ class MCPAnalyzerFacade:
     async def apply_suggestion(
         self, request: ApplySuggestionRequest
     ) -> ApplySuggestionResponse:
-        """Apply a fix suggestion to the target files."""
-        start_time = time.time()
+        """
+        Apply a fix suggestion to the target files, with backup, rollback, syntax validation, and optional Git integration.
+        """
+        import os
+        import shutil
+        import subprocess
 
+        start_time = time.time()
         errors = request.validate()
         if errors:
             execution_time_ms = max(1, int((time.time() - start_time) * 1000))
@@ -299,18 +304,185 @@ class MCPAnalyzerFacade:
                 execution_time_ms=execution_time_ms,
             )
 
-        result = self.analyzer.apply_suggestion(request.suggestion_id)
+        backup_path = None
+        changes_applied = []
+        syntax_valid = True
+        syntax_errors = []
+        rollback_available = False
+        diff_preview = ""
+        warnings = []
+        git_branch_created = False
+        git_commit_hash = None
+        backup_created = False
+
+        # 1. File permission validation
+        target_file = request.target_file
+        if not os.path.isfile(target_file):
+            execution_time_ms = max(1, int((time.time() - start_time) * 1000))
+            return ApplySuggestionResponse(
+                success=False,
+                request_id=request.request_id,
+                suggestion_id=request.suggestion_id,
+                target_file=target_file,
+                warnings=[f"Target file does not exist: {target_file}"],
+                execution_time_ms=execution_time_ms,
+            )
+        if not os.access(target_file, os.W_OK):
+            execution_time_ms = max(1, int((time.time() - start_time) * 1000))
+            return ApplySuggestionResponse(
+                success=False,
+                request_id=request.request_id,
+                suggestion_id=request.suggestion_id,
+                target_file=target_file,
+                warnings=[f"Insufficient permissions to write to file: {target_file}"],
+                execution_time_ms=execution_time_ms,
+            )
+
+        # 2. Backup creation
+        backup_path = target_file + request.backup_suffix
+        try:
+            shutil.copy2(target_file, backup_path)
+            backup_created = True
+        except Exception as e:
+            execution_time_ms = max(1, int((time.time() - start_time) * 1000))
+            return ApplySuggestionResponse(
+                success=False,
+                request_id=request.request_id,
+                suggestion_id=request.suggestion_id,
+                target_file=target_file,
+                warnings=[f"Failed to create backup: {str(e)}"],
+                execution_time_ms=execution_time_ms,
+            )
+
+        # 3. Apply suggestion (core logic)
+        try:
+            # The core analyzer should apply the suggestion and return a result dict
+            result = self.analyzer.apply_suggestion(
+                request.suggestion_id,
+                target_file=target_file,
+                dry_run=request.dry_run,
+            )
+            if not result.get("success", False):
+                raise Exception(
+                    result.get("message", "Unknown error during apply_suggestion")
+                )
+            changes_applied = result.get("applied_files", [target_file])
+            diff_preview = result.get("diff_preview", "")
+        except Exception as e:
+            # Rollback on error
+            try:
+                if backup_created:
+                    shutil.copy2(backup_path, target_file)
+                    rollback_available = True
+            except Exception as rollback_err:
+                warnings.append(f"Rollback failed: {str(rollback_err)}")
+            execution_time_ms = max(1, int((time.time() - start_time) * 1000))
+            return ApplySuggestionResponse(
+                success=False,
+                request_id=request.request_id,
+                suggestion_id=request.suggestion_id,
+                target_file=target_file,
+                backup_path=backup_path if backup_created else None,
+                changes_applied=[],
+                rollback_available=rollback_available,
+                warnings=[f"Failed to apply suggestion: {str(e)}"] + warnings,
+                execution_time_ms=execution_time_ms,
+            )
+
+        # 4. Syntax validation
+        if request.validate_syntax:
+            try:
+                with open(target_file, "r", encoding="utf-8") as f:
+                    code = f.read()
+                import ast
+
+                try:
+                    ast.parse(code, filename=target_file)
+                    syntax_valid = True
+                except SyntaxError as se:
+                    syntax_valid = False
+                    syntax_errors.append(f"{se.__class__.__name__}: {se}")
+            except Exception as e:
+                syntax_valid = False
+                syntax_errors.append(f"Failed to read or parse file: {str(e)}")
+
+        # 5. Git integration (optional, only if file is in a git repo)
+        git_branch = request.metadata.get("git_branch") if request.metadata else None
+        git_commit_message = (
+            request.metadata.get(
+                "git_commit_message", f"Apply suggestion {request.suggestion_id}"
+            )
+            if request.metadata
+            else None
+        )
+        git_commit_hash = None
+        if git_branch or git_commit_message:
+            try:
+                # Check if file is in a git repo
+                repo_dir = None
+                cur_dir = os.path.dirname(os.path.abspath(target_file))
+                while (
+                    cur_dir
+                    and cur_dir != "/"
+                    and not os.path.isdir(os.path.join(cur_dir, ".git"))
+                ):
+                    cur_dir = os.path.dirname(cur_dir)
+                if os.path.isdir(os.path.join(cur_dir, ".git")):
+                    repo_dir = cur_dir
+                if repo_dir:
+                    # Optionally create branch
+                    if git_branch:
+                        subprocess.run(
+                            ["git", "checkout", "-b", git_branch],
+                            cwd=repo_dir,
+                            check=True,
+                        )
+                        git_branch_created = True
+                    # Add and commit file
+                    subprocess.run(
+                        ["git", "add", target_file], cwd=repo_dir, check=True
+                    )
+                    commit_args = ["git", "commit", "-m", git_commit_message]
+                    subprocess.run(commit_args, cwd=repo_dir, check=True)
+                    # Get commit hash
+                    res = subprocess.run(
+                        ["git", "rev-parse", "HEAD"],
+                        cwd=repo_dir,
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    git_commit_hash = res.stdout.strip()
+            except Exception as e:
+                warnings.append(f"Git integration failed: {str(e)}")
+
+        # 6. Rollback support (if syntax invalid, restore backup)
+        if not syntax_valid and backup_created:
+            try:
+                shutil.copy2(backup_path, target_file)
+                rollback_available = True
+                warnings.append("Syntax validation failed, rolled back to backup.")
+            except Exception as e:
+                warnings.append(f"Rollback after syntax error failed: {str(e)}")
 
         execution_time_ms = max(1, int((time.time() - start_time) * 1000))
         return ApplySuggestionResponse(
-            success=result["success"],
+            success=syntax_valid,
             request_id=request.request_id,
             suggestion_id=request.suggestion_id,
-            target_file=request.target_file,
-            changes_applied=result.get("applied_files", []),
-            rollback_available=bool(result.get("rolled_back_files", [])),
-            warnings=result.get("message", []) if not result["success"] else [],
+            target_file=target_file,
+            backup_path=backup_path if backup_created else None,
+            changes_applied=changes_applied,
+            syntax_valid=syntax_valid,
+            syntax_errors=syntax_errors,
+            rollback_available=rollback_available,
+            diff_preview=diff_preview,
+            warnings=warnings,
             execution_time_ms=execution_time_ms,
+            metadata={
+                "git_branch_created": git_branch_created,
+                "git_commit_hash": git_commit_hash,
+            },
         )
 
     @async_error_handler("validate_suggestion")
