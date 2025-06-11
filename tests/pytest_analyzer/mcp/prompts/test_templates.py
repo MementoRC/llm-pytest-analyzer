@@ -377,8 +377,7 @@ class TestGlobalFunctions:
         assert "performance_test_diagnosis" in prompts
         assert "test_configuration_debug" in prompts
 
-    @pytest.mark.asyncio
-    async def test_handle_list_prompts(self):
+    def test_handle_list_prompts(self):
         """Test the handle_list_prompts function."""
         # Clear and reinitialize
         registry = get_prompt_registry()
@@ -386,7 +385,7 @@ class TestGlobalFunctions:
         registry._categories.clear()
         initialize_default_prompts()
 
-        result = await handle_list_prompts()
+        result = handle_list_prompts()
 
         assert isinstance(result, list)
         assert len(result) > 0
@@ -524,7 +523,7 @@ class TestIntegration:
         initialize_default_prompts()
 
         # Test list_prompts
-        prompts_list = await handle_list_prompts()
+        prompts_list = handle_list_prompts()
         assert len(prompts_list) > 0
 
         # Test get_prompt for each listed prompt
