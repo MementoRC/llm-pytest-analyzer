@@ -198,6 +198,7 @@ async def start_mcp_server(
 
         # Start server
         async with server.lifespan():
+            await server.start()
             if not quiet:
                 console.print(
                     "[bold green]MCP server started successfully![/bold green]"
