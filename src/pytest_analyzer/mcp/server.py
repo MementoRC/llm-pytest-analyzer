@@ -13,6 +13,12 @@ from mcp.types import ResourceContents, Tool
 
 from ..core.cross_cutting.error_handling import error_context, error_handler
 from ..utils.settings import Settings
+from .prompts.templates import (
+    get_prompt_registry,
+    handle_get_prompt,
+    handle_list_prompts,
+    initialize_default_prompts,
+)
 from .resources import ResourceManager, SessionManager
 from .security import SecurityManager
 
@@ -96,6 +102,7 @@ class PytestAnalyzerMCPServer:
         self._shutdown_event = asyncio.Event()
         self._registered_tools: Dict[str, Tool] = {}
         self._registered_resources: Dict[str, Any] = {}
+        self._registered_prompts: Dict[str, Any] = {}
 
         # Initialize resource management
         self.session_manager = SessionManager(
@@ -112,6 +119,9 @@ class PytestAnalyzerMCPServer:
 
         # Setup signal handlers
         self._setup_signal_handlers()
+
+        # Initialize prompts
+        self._setup_prompts()
 
         # Register MCP resource handlers
         self._setup_resource_handlers()
@@ -219,6 +229,10 @@ class PytestAnalyzerMCPServer:
     def get_registered_resources(self) -> Dict[str, Any]:
         """Get all registered resources."""
         return self._registered_resources.copy()
+
+    def get_registered_prompts(self) -> Dict[str, Any]:
+        """Get all registered prompts."""
+        return self._registered_prompts.copy()
 
     def create_analysis_session(self, metadata: Optional[Dict[str, Any]] = None) -> str:
         """Create a new analysis session.
@@ -372,6 +386,56 @@ class PytestAnalyzerMCPServer:
         # This is a placeholder for the HTTP transport setup
         raise NotImplementedError("HTTP transport not yet implemented")
 
+    def _setup_prompts(self) -> None:
+        """Set up MCP prompt system."""
+        try:
+            # Initialize default prompts
+            initialize_default_prompts()
+
+            # Register list_prompts handler
+            @self.mcp_server.list_prompts()
+            async def handle_list_prompts_request():
+                """Handle list prompts request."""
+                try:
+                    prompts = await handle_list_prompts()
+                    self.logger.debug(f"Listed {len(prompts)} prompts")
+                    return prompts
+                except Exception as e:
+                    self.logger.error(f"Error listing prompts: {e}")
+                    return []
+
+            # Register get_prompt handler
+            @self.mcp_server.get_prompt()
+            async def handle_get_prompt_request(
+                name: str, arguments: Optional[Dict[str, Any]] = None
+            ):
+                """Handle get prompt request."""
+                try:
+                    self.logger.debug(f"Getting prompt: {name}")
+                    result = await handle_get_prompt(name, arguments)
+
+                    if "error" in result:
+                        self.logger.warning(f"Prompt request failed: {result['error']}")
+                    else:
+                        self.logger.info(f"Successfully retrieved prompt: {name}")
+
+                    return result
+                except Exception as e:
+                    self.logger.error(f"Error getting prompt {name}: {e}")
+                    return {"error": f"Failed to retrieve prompt: {str(e)}"}
+
+            # Store reference to registered prompts
+            registry = get_prompt_registry()
+            self._registered_prompts = {name: True for name in registry.list_prompts()}
+
+            self.logger.info(
+                f"Prompt system initialized with {len(self._registered_prompts)} prompts"
+            )
+
+        except Exception as e:
+            self.logger.error(f"Failed to setup prompt system: {e}")
+            raise
+
     def _setup_resource_handlers(self) -> None:
         """Set up MCP resource handlers."""
         try:
@@ -420,6 +484,7 @@ class PytestAnalyzerMCPServer:
             "resources": {"subscribe": True, "listChanged": True}
             if self._registered_resources
             else None,
+            "prompts": {"listChanged": True} if self._registered_prompts else None,
         }
 
     async def stop(self) -> None:
@@ -448,9 +513,10 @@ class PytestAnalyzerMCPServer:
     async def _cleanup(self) -> None:
         """Cleanup server resources."""
         try:
-            # Clear registered tools and resources
+            # Clear registered tools, resources, and prompts
             self._registered_tools.clear()
             self._registered_resources.clear()
+            self._registered_prompts.clear()
 
             self.logger.info("Server cleanup completed")
 
@@ -480,7 +546,8 @@ class PytestAnalyzerMCPServer:
             f"port={self.port}, "
             f"running={self._running}, "
             f"tools={len(self._registered_tools)}, "
-            f"resources={len(self._registered_resources)}"
+            f"resources={len(self._registered_resources)}, "
+            f"prompts={len(self._registered_prompts)}"
             f")"
         )
 

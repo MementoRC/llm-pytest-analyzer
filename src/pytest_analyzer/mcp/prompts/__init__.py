@@ -1,27 +1,34 @@
 """MCP prompt templates for pytest-analyzer.
 
-Provides structured prompts for MCP interactions.
+Provides structured prompts for MCP interactions and debugging workflows.
 """
 
-from dataclasses import dataclass
+from .templates import (
+    CIFailureInvestigationPrompt,
+    FlakyTestDiagnosisPrompt,
+    MCPPromptTemplate,
+    PerformanceTestingPrompt,
+    PromptRegistry,
+    PytestDebugSessionPrompt,
+    TestConfigurationPrompt,
+    get_prompt_registry,
+    handle_get_prompt,
+    handle_list_prompts,
+    initialize_default_prompts,
+    register_custom_prompt,
+)
 
-
-@dataclass
-class MCPPromptTemplate:
-    """Base class for MCP prompt templates."""
-
-    template: str
-
-    def format(self, **kwargs) -> str:
-        """Format prompt template with parameters.
-
-        Args:
-            **kwargs: Template parameters
-
-        Returns:
-            Formatted prompt string
-        """
-        return self.template.format(**kwargs)
-
-
-__all__ = ["MCPPromptTemplate"]
+__all__ = [
+    "MCPPromptTemplate",
+    "PytestDebugSessionPrompt",
+    "CIFailureInvestigationPrompt",
+    "FlakyTestDiagnosisPrompt",
+    "PerformanceTestingPrompt",
+    "TestConfigurationPrompt",
+    "PromptRegistry",
+    "get_prompt_registry",
+    "initialize_default_prompts",
+    "handle_list_prompts",
+    "handle_get_prompt",
+    "register_custom_prompt",
+]
