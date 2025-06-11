@@ -382,7 +382,7 @@ def initialize_default_prompts() -> None:
 
 
 # MCP Protocol Integration Functions
-async def handle_list_prompts() -> List[Dict[str, Any]]:
+def handle_list_prompts() -> List[Dict[str, Any]]:
     """Handle MCP list_prompts request."""
     try:
         registry = get_prompt_registry()
@@ -395,7 +395,7 @@ async def handle_list_prompts() -> List[Dict[str, Any]]:
                     {
                         "name": prompt.name,
                         "description": prompt.description,
-                        "arguments": prompt.arguments or {},
+                        "arguments": prompt.arguments or [],
                     }
                 )
 

@@ -397,7 +397,7 @@ class PytestAnalyzerMCPServer:
             async def handle_list_prompts_request():
                 """Handle list prompts request."""
                 try:
-                    prompts = await handle_list_prompts()
+                    prompts = handle_list_prompts()
                     self.logger.debug(f"Listed {len(prompts)} prompts")
                     return prompts
                 except Exception as e:
