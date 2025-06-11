@@ -7,7 +7,7 @@ import sys
 from contextlib import asynccontextmanager
 from typing import Any, Callable, Dict, Optional
 
-from mcp.server import InitializationOptions, Server
+from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import ResourceContents, Tool
 
@@ -101,8 +101,10 @@ class PytestAnalyzerMCPServer:
         self._running = False
         self._shutdown_event = asyncio.Event()
         self._registered_tools: Dict[str, Tool] = {}
+        self._registered_handlers: Dict[str, Callable] = {}
         self._registered_resources: Dict[str, Any] = {}
         self._registered_prompts: Dict[str, Any] = {}
+        self._mcp_handlers_setup = False
 
         # Initialize resource management
         self.session_manager = SessionManager(
@@ -125,6 +127,9 @@ class PytestAnalyzerMCPServer:
 
         # Register MCP resource handlers
         self._setup_resource_handlers()
+
+        # Setup MCP tool handlers (once)
+        self._setup_mcp_handlers()
 
     # Compatibility properties for tests
     @property
@@ -182,11 +187,9 @@ class PytestAnalyzerMCPServer:
                 inputSchema=input_schema or {"type": "object", "properties": {}},
             )
 
-            # Register with MCP server
-            self.mcp_server.list_tools()(lambda: [tool])
-            self.mcp_server.call_tool()(handler)
-
+            # Store tool and handler for later registration
             self._registered_tools[name] = tool
+            self._registered_handlers[name] = handler
             self.logger.info(f"Registered tool: {name}")
 
     @error_handler("resource_registration", ValueError, reraise=True)
@@ -221,6 +224,59 @@ class PytestAnalyzerMCPServer:
 
             self._registered_resources[uri] = resource_info
             self.logger.info(f"Registered resource: {uri}")
+
+    def _setup_mcp_handlers(self) -> None:
+        """Register MCP tool handlers (list_tools, call_tool) once for all tools."""
+        if self._mcp_handlers_setup:
+            return
+        self._mcp_handlers_setup = True
+
+        @self.mcp_server.list_tools()
+        async def list_tools() -> list:
+            """Return all registered tools."""
+            self.logger.info("MCP: Listing all registered tools")
+            return list(self._registered_tools.values())
+
+        @self.mcp_server.call_tool()
+        async def call_tool(name: str, arguments: dict) -> Any:
+            """Route tool call to the correct handler."""
+            self.logger.info(f"MCP: call_tool invoked for '{name}'")
+            handler = self._registered_handlers.get(name)
+            if not handler:
+                self.logger.error(f"Unknown tool requested: {name}")
+                from mcp.types import TextContent
+
+                return [TextContent(type="text", text=f"Unknown tool: {name}")]
+            try:
+                # Handler may be async or sync
+                if asyncio.iscoroutinefunction(handler):
+                    result = await handler(arguments)
+                else:
+                    result = handler(arguments)
+                # Try to extract .content if present (CallToolResult pattern)
+                if hasattr(result, "content"):
+                    return result.content
+                elif isinstance(result, list):
+                    return result
+                elif isinstance(result, dict):
+                    import json
+
+                    from mcp.types import TextContent
+
+                    response_text = json.dumps(result, indent=2)
+                    return [TextContent(type="text", text=response_text)]
+                else:
+                    from mcp.types import TextContent
+
+                    response_text = str(result)
+                    return [TextContent(type="text", text=response_text)]
+            except Exception as e:
+                self.logger.error(f"Error executing tool '{name}': {e}", exc_info=True)
+                from mcp.types import TextContent
+
+                return [
+                    TextContent(type="text", text=f"Error executing tool {name}: {e}")
+                ]
 
     def get_registered_tools(self) -> Dict[str, Tool]:
         """Get all registered tools."""
@@ -362,15 +418,11 @@ class PytestAnalyzerMCPServer:
         self.logger.info("Starting STDIO transport")
 
         try:
+            # Use the same pattern as aider for Claude Code compatibility
+            options = self.mcp_server.create_initialization_options()
             async with stdio_server() as (read_stream, write_stream):
                 await self.mcp_server.run(
-                    read_stream,
-                    write_stream,
-                    InitializationOptions(
-                        server_name="pytest-analyzer",
-                        server_version="1.0.0",
-                        capabilities=self._get_server_capabilities(),
-                    ),
+                    read_stream, write_stream, options, raise_exceptions=True
                 )
         except Exception as e:
             self.logger.error(f"STDIO transport error: {e}")
