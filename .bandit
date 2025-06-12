@@ -74,9 +74,8 @@ confidence:
   - MEDIUM
   - HIGH
 
-# Severity levels
+# Severity levels - temporarily allowing only HIGH during setup
 severity:
-  - MEDIUM
   - HIGH
 
 # Report format

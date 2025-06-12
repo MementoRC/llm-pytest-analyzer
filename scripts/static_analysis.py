@@ -199,9 +199,7 @@ def run_dependency_security_check() -> Dict[str, Any]:
             safety_report["error"] = result.stderr
 
     # Console output for immediate feedback
-    run_command(
-        ["python", "-m", "safety", "check"], capture_output=False
-    )
+    run_command(["python", "-m", "safety", "check"], capture_output=False)
 
     return safety_report
 
