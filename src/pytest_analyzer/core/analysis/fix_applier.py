@@ -145,6 +145,62 @@ class FixApplier:
                 code_changes, tests_to_validate, target_files, use_verbose
             )
 
+    def apply_fix_suggestion(self, suggestion) -> FixApplicationResult:
+        """
+        Apply a specific fix suggestion.
+
+        Args:
+            suggestion: The fix suggestion to apply (should have code_changes attribute)
+
+        Returns:
+            FixApplicationResult indicating success or failure
+        """
+        # Extract code changes from the suggestion
+        if not hasattr(suggestion, "code_changes") or not suggestion.code_changes:
+            return FixApplicationResult(
+                success=False,
+                message="Cannot apply fix: No code changes provided in suggestion.",
+                applied_files=[],
+                rolled_back_files=[],
+            )
+
+        # Filter code_changes to include only file paths (not metadata)
+        code_changes_to_apply = {}
+        for key, value in suggestion.code_changes.items():
+            # Skip metadata keys like 'source' and 'fingerprint'
+            if not isinstance(key, str) or ("/" not in key and "\\" not in key):
+                continue
+            # Skip empty values
+            if not value:
+                continue
+            # Include valid file paths with content
+            code_changes_to_apply[key] = value
+
+        if not code_changes_to_apply:
+            return FixApplicationResult(
+                success=False,
+                message="Cannot apply fix: No valid file changes found in suggestion.",
+                applied_files=[],
+                rolled_back_files=[],
+            )
+
+        # Determine which tests to run for validation
+        tests_to_validate = []
+        if hasattr(suggestion, "validation_tests") and suggestion.validation_tests:
+            tests_to_validate = suggestion.validation_tests
+        elif (
+            hasattr(suggestion, "failure")
+            and hasattr(suggestion.failure, "test_name")
+            and suggestion.failure.test_name
+        ):
+            # Use the original failing test for validation
+            tests_to_validate = [suggestion.failure.test_name]
+
+        # Apply the fix using the existing apply_fix method
+        return self.apply_fix(
+            code_changes=code_changes_to_apply, tests_to_validate=tests_to_validate
+        )
+
     def _should_use_safe_mode(self, target_files: List[Path]) -> bool:
         """
         Determine whether to use safe mode or direct mode.
