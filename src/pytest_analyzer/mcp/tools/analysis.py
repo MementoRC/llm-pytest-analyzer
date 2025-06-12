@@ -38,7 +38,8 @@ async def suggest_fixes(
     Raises:
         ValueError: If input validation fails or input is too large
     """
-    from ..server import PytestAnalyzerMCPServer, SecurityError
+    from ..security import SecurityError
+    from ..server import PytestAnalyzerMCPServer
 
     try:
         # Security: Validate and sanitize input
@@ -296,7 +297,8 @@ async def run_and_analyze(
     Raises:
         ValueError: If input validation fails
     """
-    from ..server import PytestAnalyzerMCPServer, SecurityError
+    from ..security import SecurityError
+    from ..server import PytestAnalyzerMCPServer
 
     try:
         # Security: Validate and sanitize input

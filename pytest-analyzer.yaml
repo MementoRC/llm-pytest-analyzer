@@ -1,0 +1,2 @@
+pytest_timeout: 120
+max_suggestions: 5
