@@ -23,4 +23,3 @@ sort_by_size = true
 
 # Make whitelist for known false positives
 # (Will be populated as we identify legitimate unused code)
-
