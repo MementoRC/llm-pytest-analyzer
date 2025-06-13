@@ -92,18 +92,31 @@ class TestLLMService:
 
     def test_init_with_unsupported_generic_client(self, caplog):
         mock_client = MagicMock()  # A generic mock with no known methods
-        # Ensure it doesn't have 'generate' or 'completions'
-        if hasattr(mock_client, "generate"):
-            del mock_client.generate
-        if hasattr(mock_client, "completions"):
-            del mock_client.completions
-        mock_client.__class__.__module__ = "unknown"
+        # Remove 'generate' and 'completions' if present (robust for CI)
+        try:
+            delattr(mock_client, "generate")
+        except AttributeError:
+            pass
+        try:
+            delattr(mock_client, "completions")
+        except AttributeError:
+            pass
+        # Set module attribute robustly
+        try:
+            mock_client.__class__.__module__ = "unknown"
+        except Exception:
+            pass
 
         service = LLMService(llm_client=mock_client)
         assert service.llm_client == mock_client
         assert service._llm_request_func is None
-        assert "Provided LLM client type" in caplog.text
-        assert "is not explicitly supported" in caplog.text
+        # Use robust substring checks for CI log capture
+        assert any("Provided LLM client type" in msg for msg in caplog.messages), (
+            f"Expected log message not found in caplog: {caplog.messages}"
+        )
+        assert any("is not explicitly supported" in msg for msg in caplog.messages), (
+            f"Expected log message not found in caplog: {caplog.messages}"
+        )
 
     def test_init_with_timeout(self):
         service = LLMService(timeout_seconds=30)
@@ -128,7 +141,10 @@ class TestLLMService:
                 service = LLMService()
 
         assert service._llm_request_func is not None
-        assert "Using Anthropic client for LLM requests." in caplog.text
+        # Robust log assertion for CI
+        assert any(
+            "Using Anthropic client for LLM requests." in msg for msg in caplog.messages
+        ), f"Expected Anthropic log message not found in caplog: {caplog.messages}"
         # Test sending a prompt to ensure the mock client is used
         response = service.send_prompt("test anthropic auto")
         assert response == "Anthropic response"
@@ -150,7 +166,9 @@ class TestLLMService:
                 service = LLMService()
 
         assert service._llm_request_func is not None
-        assert "Using OpenAI client for LLM requests." in caplog.text
+        assert any(
+            "Using OpenAI client for LLM requests." in msg for msg in caplog.messages
+        ), f"Expected OpenAI log message not found in caplog: {caplog.messages}"
         response = service.send_prompt("test openai auto")
         assert response == "OpenAI response"
 
@@ -175,10 +193,12 @@ class TestLLMService:
                 # Create service but don't need to capture it
                 _ = LLMService()
 
-        assert "Using Anthropic client for LLM requests." in caplog.text
-        assert (
-            "Using OpenAI client" not in caplog.text
-        )  # Ensure it didn't also try OpenAI
+        assert any(
+            "Using Anthropic client for LLM requests." in msg for msg in caplog.messages
+        ), f"Expected Anthropic log message not found in caplog: {caplog.messages}"
+        assert not any("Using OpenAI client" in msg for msg in caplog.messages), (
+            f"Unexpected OpenAI log message found in caplog: {caplog.messages}"
+        )
 
     @patch("pytest_analyzer.core.llm.llm_service.Anthropic", None)
     @patch("pytest_analyzer.core.llm.llm_service.openai", None)
@@ -190,9 +210,16 @@ class TestLLMService:
         ):
             service = LLMService()
         assert service._llm_request_func is None
-        assert "No LLM client available or configured" in caplog.text
-        assert (
-            "No suitable language model clients found or auto-detected" in caplog.text
+        assert any(
+            "No LLM client available or configured" in msg for msg in caplog.messages
+        ), (
+            f"Expected 'No LLM client available or configured' log not found in caplog: {caplog.messages}"
+        )
+        assert any(
+            "No suitable language model clients found or auto-detected" in msg
+            for msg in caplog.messages
+        ), (
+            f"Expected 'No suitable language model clients found or auto-detected' log not found in caplog: {caplog.messages}"
         )
 
     def test_send_prompt_with_anthropic_client(self):
@@ -227,10 +254,10 @@ class TestLLMService:
                     service.send_prompt("test")
 
         assert "No LLM request function configured" in str(excinfo.value)
-        assert (
-            "LLMService cannot send prompt: No LLM request function configured."
-            in caplog.text
-        )
+        assert any(
+            "LLMService cannot send prompt: No LLM request function configured." in msg
+            for msg in caplog.messages
+        ), f"Expected error log not found in caplog: {caplog.messages}"
 
     def test_send_prompt_timeout(self, caplog):
         mock_client = MockAnthropicClient()
@@ -261,10 +288,11 @@ class TestLLMService:
         assert expected_timeout_message in str(
             excinfo.value
         )  # Check exception message from LLMServiceError
-        assert (
+        assert any(
             f"Failed to send prompt to language model: Timeout - {expected_timeout_message}"
-            in caplog.text
-        )
+            in msg
+            for msg in caplog.messages
+        ), f"Expected timeout log not found in caplog: {caplog.messages}"
 
     def test_send_prompt_timeout_using_resource_manager_exception(self, caplog):
         mock_client = MockAnthropicClient()
@@ -283,10 +311,11 @@ class TestLLMService:
                 service.send_prompt("test timeout direct")
 
         assert simulated_error_message in str(excinfo.value)
-        assert (
+        assert any(
             f"Failed to send prompt to language model: Timeout - {simulated_error_message}"
-            in caplog.text
-        )
+            in msg
+            for msg in caplog.messages
+        ), f"Expected timeout log not found in caplog: {caplog.messages}"
 
     def test_send_prompt_anthropic_api_error(self, caplog):
         mock_client = MockAnthropicClient()
@@ -301,14 +330,14 @@ class TestLLMService:
 
         assert "Anthropic API Error" in str(excinfo.value)
         # Check that error messages were logged
-        assert (
-            "Error making request with Anthropic API: Anthropic API Error"
-            in caplog.text
-        )
-        assert (
-            "Failed to send prompt to language model: Anthropic API Error"
-            in caplog.text
-        )
+        assert any(
+            "Error making request with Anthropic API: Anthropic API Error" in msg
+            for msg in caplog.messages
+        ), f"Expected Anthropic API error log not found in caplog: {caplog.messages}"
+        assert any(
+            "Failed to send prompt to language model: Anthropic API Error" in msg
+            for msg in caplog.messages
+        ), f"Expected Anthropic API error log not found in caplog: {caplog.messages}"
 
     def test_send_prompt_openai_api_error(self, caplog):
         mock_client = MockOpenAIClient()
@@ -323,10 +352,14 @@ class TestLLMService:
 
         assert "OpenAI API Error" in str(excinfo.value)
         # Check that error messages were logged
-        assert "Error making request with OpenAI API: OpenAI API Error" in caplog.text
-        assert (
-            "Failed to send prompt to language model: OpenAI API Error" in caplog.text
-        )
+        assert any(
+            "Error making request with OpenAI API: OpenAI API Error" in msg
+            for msg in caplog.messages
+        ), f"Expected OpenAI API error log not found in caplog: {caplog.messages}"
+        assert any(
+            "Failed to send prompt to language model: OpenAI API Error" in msg
+            for msg in caplog.messages
+        ), f"Expected OpenAI API error log not found in caplog: {caplog.messages}"
 
     def test_send_prompt_generic_client_error(self, caplog):
         mock_client = MockGenericClientWithGenerate()
@@ -340,10 +373,10 @@ class TestLLMService:
                 service.send_prompt("test generic error")
 
         assert "Generic Client Error" in str(excinfo.value)
-        assert (
-            "Failed to send prompt to language model: Generic Client Error"
-            in caplog.text
-        )
+        assert any(
+            "Failed to send prompt to language model: Generic Client Error" in msg
+            for msg in caplog.messages
+        ), f"Expected generic client error log not found in caplog: {caplog.messages}"
 
     def test_internal_request_with_anthropic_empty_response(self, caplog):
         mock_anthropic_client = (
@@ -423,13 +456,15 @@ class TestLLMService:
                 service = LLMService()  # Auto-detection
 
         # Check logs
-        assert (
-            "Failed to initialize Anthropic client: Anthropic init failed"
-            in caplog.text
-        )
+        assert any(
+            "Failed to initialize Anthropic client: Anthropic init failed" in msg
+            for msg in caplog.messages
+        ), f"Expected Anthropic init fail log not found in caplog: {caplog.messages}"
         # Should fall back to OpenAI if Anthropic init fails
         assert service._llm_request_func is not None
-        assert "Using OpenAI client for LLM requests." in caplog.text
+        assert any(
+            "Using OpenAI client for LLM requests." in msg for msg in caplog.messages
+        ), f"Expected OpenAI log message not found in caplog: {caplog.messages}"
 
     def test_auto_detect_openai_init_fails(self, caplog):
         # First test: When both are available, Anthropic is preferred
@@ -445,7 +480,9 @@ class TestLLMService:
                 service = LLMService()
 
         assert service._llm_request_func is not None
-        assert "Using Anthropic client for LLM requests." in caplog.text
+        assert any(
+            "Using Anthropic client for LLM requests." in msg for msg in caplog.messages
+        ), f"Expected Anthropic log message not found in caplog: {caplog.messages}"
 
         # Reset the log for the next test
         caplog.clear()
@@ -466,8 +503,12 @@ class TestLLMService:
                 service_openai_fails = LLMService()
 
         # Ensure the logs contain our messages
-        assert "Failed to initialize OpenAI client: OpenAI init failed" in caplog.text
+        assert any(
+            "Failed to initialize OpenAI client: OpenAI init failed" in msg
+            for msg in caplog.messages
+        ), f"Expected OpenAI init fail log not found in caplog: {caplog.messages}"
         assert service_openai_fails._llm_request_func is None
-        assert (
-            "No suitable language model clients found or auto-detected." in caplog.text
-        )
+        assert any(
+            "No suitable language model clients found or auto-detected." in msg
+            for msg in caplog.messages
+        ), f"Expected no suitable client log not found in caplog: {caplog.messages}"
