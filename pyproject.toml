@@ -39,18 +39,23 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "bandit[toml]>=1.7.5",
     "clang-format",
     "isort",
     "mkdocs",
     "mypy",
     "pre-commit",
     "pre-commit-hooks",
+    "pylint>=2.17.4",
     "pytest>=7.0.0",
     "pytest-asyncio",
     "pytest-cov",
     "pytest-json-report>=1.5.0",
+    "radon>=5.1.0",
     "ruff",
+    "safety>=2.3.0",
     "types-pyyaml",
+    "vulture>=2.7",
 ]
 
 test = [
@@ -136,5 +141,14 @@ test = { cmd = "pytest tests", depends-on = ["install-editable"] }
 test-cov = { cmd = "pytest --cov=src/pytest_analyzer --cov-report=term-missing --cov-report=xml tests", depends-on = ["install-editable"] }
 build = { cmd = "hatch build", depends-on = ["install-editable"] }
 clean = "rm -rf dist build .ruff_cache .mypy_cache .pytest_cache *.egg-info src/pytest_analyzer.egg-info"
-check-all = { depends-on = ["lint", "typecheck", "test"] }
+security-scan = { cmd = "bandit -r src/ -f json -o security-report.json", depends-on = ["install-editable"] }
+security-scan-console = { cmd = "bandit -r src/", depends-on = ["install-editable"] }
+complexity-check = { cmd = "radon cc src/ --min B", depends-on = ["install-editable"] }
+dead-code-check = { cmd = "vulture src/ --min-confidence 80", depends-on = ["install-editable"] }
+safety-check = { cmd = "safety check --json --output safety-report.json", depends-on = ["install-editable"] }
+safety-check-console = { cmd = "safety check", depends-on = ["install-editable"] }
+pylint-check = { cmd = "pylint src/pytest_analyzer --output-format=json --output=pylint-report.json", depends-on = ["install-editable"] }
+pylint-check-console = { cmd = "pylint src/pytest_analyzer", depends-on = ["install-editable"] }
+static-analysis = { depends-on = ["security-scan-console", "complexity-check", "dead-code-check", "safety-check-console", "pylint-check-console"] }
+check-all = { depends-on = ["lint", "typecheck", "test", "static-analysis"] }
 setup-pre-commit = "pre-commit install --install-hooks"

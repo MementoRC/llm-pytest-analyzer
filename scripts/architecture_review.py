@@ -50,12 +50,15 @@ RADON_MI_REPORT_FILE = ROOT_DIR / "radon_mi_report.json"
 TEMP_FILES = [PYDEPS_OUTPUT_FILE, RADON_CC_REPORT_FILE, RADON_MI_REPORT_FILE]
 
 # Thresholds for reporting
-MAINTAINABILITY_INDEX_THRESHOLD = 40  # Grade B or below (Radon: A=100-20, B=19-10, C=9-0)
+MAINTAINABILITY_INDEX_THRESHOLD = (
+    40  # Grade B or below (Radon: A=100-20, B=19-10, C=9-0)
+)
 CYCLOMATIC_COMPLEXITY_THRESHOLD = 10  # High complexity (Rank D)
 PROTOCOL_METHOD_THRESHOLD = 7  # For checking "fat" interfaces
 
 
 # --- Helper Functions ---
+
 
 def check_tool_installed(tool_name: str) -> bool:
     """Check if a command-line tool is installed and in the PATH."""
@@ -88,6 +91,7 @@ def run_command(command: str, cwd: Path) -> bool:
 
 # --- Manual Dependency Analysis (AST-based) ---
 
+
 class ImportVisitor(ast.NodeVisitor):
     """AST visitor to find all internal package imports."""
 
@@ -102,9 +106,10 @@ class ImportVisitor(ast.NodeVisitor):
             module_rel_path = module_rel_path.parent
         else:
             module_rel_path = module_rel_path.with_suffix("")
-        
-        self._current_module_str = f"{package_name}." + ".".join(module_rel_path.parts[1:])
 
+        self._current_module_str = f"{package_name}." + ".".join(
+            module_rel_path.parts[1:]
+        )
 
     def visit_Import(self, node: ast.Import):
         for alias in node.names:
@@ -116,8 +121,8 @@ class ImportVisitor(ast.NodeVisitor):
         if node.module and node.module.startswith(f"{self._package_name}."):
             self.imports.add(node.module)
         elif node.level > 0:  # Relative import
-            path_parts = self._current_module_str.split('.')
-            
+            path_parts = self._current_module_str.split(".")
+
             if self._module_path.name == "__init__.py":
                 base_path_parts = path_parts
             else:
@@ -127,12 +132,12 @@ class ImportVisitor(ast.NodeVisitor):
             if len(base_path_parts) < level - 1:
                 return
 
-            relative_base = base_path_parts[:len(base_path_parts) - (level - 1)]
-            
+            relative_base = base_path_parts[: len(base_path_parts) - (level - 1)]
+
             full_module_path_parts = relative_base
             if node.module:
-                full_module_path_parts.extend(node.module.split('.'))
-            
+                full_module_path_parts.extend(node.module.split("."))
+
             full_module_path = ".".join(full_module_path_parts)
             if full_module_path.startswith(self._package_name):
                 self.imports.add(full_module_path)
@@ -148,7 +153,7 @@ def analyze_dependencies_manually() -> Optional[Dict[str, Any]]:
     for py_file in py_files:
         module_rel_path = py_file.relative_to(SRC_DIR.parent)
         module_name = str(module_rel_path.with_suffix("").as_posix()).replace("/", ".")
-        
+
         module_info[module_name] = {"path": str(py_file), "fan_out": 0, "fan_in": 0}
 
         try:
@@ -156,28 +161,33 @@ def analyze_dependencies_manually() -> Optional[Dict[str, Any]]:
                 tree = ast.parse(f.read(), filename=str(py_file))
             visitor = ImportVisitor(py_file, SRC_DIR.parent, PACKAGE_NAME)
             visitor.visit(tree)
-            
+
             dependencies = sorted(list(visitor.imports))
             graph[module_name] = dependencies
             module_info[module_name]["fan_out"] = len(dependencies)
         except Exception as e:
-            print(f"Warning: Could not parse {py_file} for manual dependency analysis: {e}")
+            print(
+                f"Warning: Could not parse {py_file} for manual dependency analysis: {e}"
+            )
 
     for _, dependencies in graph.items():
         for dep in dependencies:
             if dep in module_info:
                 module_info[dep]["fan_in"] += 1
-    
+
     return {"graph": graph, "info": module_info, "source": "manual (AST)"}
 
 
 # --- Analysis Sections ---
 
+
 def analyze_dependencies() -> Optional[Dict[str, Any]]:
     """Generates and parses a dependency graph using pydeps or manual AST parsing."""
     print("1. Analyzing module dependencies...")
     if check_tool_installed("pydeps"):
-        print("   ...using pydeps for high-accuracy analysis (this may take a moment)...")
+        print(
+            "   ...using pydeps for high-accuracy analysis (this may take a moment)..."
+        )
         command = f"pydeps {SRC_DIR} --json --no-output > {PYDEPS_OUTPUT_FILE}"
         if run_command(command, ROOT_DIR):
             if PYDEPS_OUTPUT_FILE.exists() and PYDEPS_OUTPUT_FILE.stat().st_size > 0:
@@ -192,14 +202,18 @@ def analyze_dependencies() -> Optional[Dict[str, Any]]:
                             if not module_name.startswith(PACKAGE_NAME):
                                 continue
 
-                            module_info[module_name] = {"path": details.get("path"), "fan_out": 0, "fan_in": 0}
-                            
+                            module_info[module_name] = {
+                                "path": details.get("path"),
+                                "fan_out": 0,
+                                "fan_in": 0,
+                            }
+
                             dependencies = []
                             if details.get("imports"):
                                 for imp in details["imports"]:
                                     if imp.startswith(PACKAGE_NAME):
                                         dependencies.append(imp)
-                            
+
                             graph[module_name] = sorted(list(set(dependencies)))
                             module_info[module_name]["fan_out"] = len(dependencies)
 
@@ -207,13 +221,17 @@ def analyze_dependencies() -> Optional[Dict[str, Any]]:
                             for dep in dependencies:
                                 if dep in module_info:
                                     module_info[dep]["fan_in"] += 1
-                        
+
                         print("   ...pydeps analysis complete.")
                         return {"graph": graph, "info": module_info, "source": "pydeps"}
                     except json.JSONDecodeError:
-                        print("Warning: Failed to parse pydeps JSON output. Falling back to manual analysis.")
+                        print(
+                            "Warning: Failed to parse pydeps JSON output. Falling back to manual analysis."
+                        )
             else:
-                print("Warning: pydeps did not generate a valid output file. Falling back to manual analysis.")
+                print(
+                    "Warning: pydeps did not generate a valid output file. Falling back to manual analysis."
+                )
         else:
             print("Warning: pydeps command failed. Falling back to manual analysis.")
 
@@ -294,7 +312,11 @@ class ProtocolVisitor(ast.NodeVisitor):
                 break
 
         if is_protocol:
-            methods = [item.name for item in node.body if isinstance(item, ast.FunctionDef) and not item.name.startswith("_")]
+            methods = [
+                item.name
+                for item in node.body
+                if isinstance(item, ast.FunctionDef) and not item.name.startswith("_")
+            ]
             self.protocols[node.name] = {
                 "methods": methods,
                 "path": str(self._file_path.relative_to(ROOT_DIR)),
@@ -347,6 +369,7 @@ def analyze_maintainability() -> Optional[Dict[str, Any]]:
 
 # --- Report Generation ---
 
+
 def generate_report(
     dep_analysis: Optional[Dict[str, Any]],
     circular_deps: List[List[str]],
@@ -372,30 +395,40 @@ recommendations for improvement.
     if dep_analysis:
         info = dep_analysis["info"]
         num_modules = len(info)
-        report_parts.append(f"Analyzed **{num_modules}** modules inside `src/pytest_analyzer` using **{dep_analysis['source']}**.\n")
+        report_parts.append(
+            f"Analyzed **{num_modules}** modules inside `src/pytest_analyzer` using **{dep_analysis['source']}**.\n"
+        )
 
-        top_fan_out = sorted(info.items(), key=lambda item: item[1]["fan_out"], reverse=True)[:5]
+        top_fan_out = sorted(
+            info.items(), key=lambda item: item[1]["fan_out"], reverse=True
+        )[:5]
         report_parts.append("### Highest Fan-Out (Most Coupled Modules)\n")
         report_parts.append("| Module | Outgoing Dependencies |\n|---|---|\n")
         for name, data in top_fan_out:
             report_parts.append(f"| `{name}` | {data['fan_out']} |\n")
 
-        top_fan_in = sorted(info.items(), key=lambda item: item[1]["fan_in"], reverse=True)[:5]
+        top_fan_in = sorted(
+            info.items(), key=lambda item: item[1]["fan_in"], reverse=True
+        )[:5]
         report_parts.append("\n### Highest Fan-In (Most Depended-On Modules)\n")
         report_parts.append("| Module | Incoming Dependencies |\n|---|---|\n")
         for name, data in top_fan_in:
             report_parts.append(f"| `{name}` | {data['fan_in']} |\n")
-        
+
         # Layering violations
         violations = []
         for mod, deps in dep_analysis["graph"].items():
             if mod.startswith(f"{PACKAGE_NAME}.core"):
                 for dep in deps:
-                    if dep.startswith(f"{PACKAGE_NAME}.cli") or dep.startswith(f"{PACKAGE_NAME}.mcp"):
+                    if dep.startswith(f"{PACKAGE_NAME}.cli") or dep.startswith(
+                        f"{PACKAGE_NAME}.mcp"
+                    ):
                         violations.append(f"`{mod}` -> `{dep}`")
         if violations:
             report_parts.append("\n### Architectural Layering Violations\n")
-            report_parts.append("**WARNING**: Found dependencies from `core` layers to outer layers (`cli`, `mcp`). This violates the Dependency Rule and should be fixed.\n\n")
+            report_parts.append(
+                "**WARNING**: Found dependencies from `core` layers to outer layers (`cli`, `mcp`). This violates the Dependency Rule and should be fixed.\n\n"
+            )
             report_parts.append("\n".join(f"- {v}" for v in violations))
 
     else:
@@ -416,14 +449,20 @@ recommendations for improvement.
             "moving shared functionality to a new, lower-level module, or refactoring responsibilities.\n"
         )
     else:
-        report_parts.append("**SUCCESS: No circular dependencies found.** This is a sign of a healthy, layered architecture.\n")
+        report_parts.append(
+            "**SUCCESS: No circular dependencies found.** This is a sign of a healthy, layered architecture.\n"
+        )
 
     # --- Interface & Contract Review ---
     report_parts.append("\n## 4. Interface and Contract Review (SOLID Principles)\n")
     protocols = interface_analysis["protocols"]
-    report_parts.append(f"Found **{len(protocols)}** `Protocol` definitions, which supports the **Dependency Inversion Principle**.\n")
-    
-    fat_interfaces = [p for p, d in protocols.items() if len(d["methods"]) > PROTOCOL_METHOD_THRESHOLD]
+    report_parts.append(
+        f"Found **{len(protocols)}** `Protocol` definitions, which supports the **Dependency Inversion Principle**.\n"
+    )
+
+    fat_interfaces = [
+        p for p, d in protocols.items() if len(d["methods"]) > PROTOCOL_METHOD_THRESHOLD
+    ]
     if fat_interfaces:
         report_parts.append(
             f"\n**Potential Issue (Interface Segregation Principle)**: The following {len(fat_interfaces)} protocols have more than {PROTOCOL_METHOD_THRESHOLD} methods and could be considered 'fat' interfaces. Consider splitting them into smaller, more focused protocols.\n"
@@ -431,9 +470,13 @@ recommendations for improvement.
         report_parts.append("| Protocol | Method Count | Path |\n|---|---|---|\n")
         for name in fat_interfaces:
             data = protocols[name]
-            report_parts.append(f"| `{name}` | {len(data['methods'])} | `{data['path']}` |\n")
+            report_parts.append(
+                f"| `{name}` | {len(data['methods'])} | `{data['path']}` |\n"
+            )
     else:
-        report_parts.append("\nNo 'fat' interfaces detected. Protocols appear well-scoped, adhering to the **Interface Segregation Principle**.\n")
+        report_parts.append(
+            "\nNo 'fat' interfaces detected. Protocols appear well-scoped, adhering to the **Interface Segregation Principle**.\n"
+        )
 
     # --- Maintainability Metrics ---
     report_parts.append("\n## 5. Maintainability Metrics (Radon)\n")
@@ -445,15 +488,20 @@ recommendations for improvement.
         for path, blocks in cc_data.items():
             if isinstance(blocks, list):
                 for block in blocks:
-                    if block.get("rank") and block["complexity"] >= CYCLOMATIC_COMPLEXITY_THRESHOLD:
-                        complex_items.append({
-                            "path": path.replace(str(ROOT_DIR) + '/', ''),
-                            "name": block["name"],
-                            "type": block["type"],
-                            "complexity": block["complexity"],
-                            "rank": block["rank"],
-                        })
-        
+                    if (
+                        block.get("rank")
+                        and block["complexity"] >= CYCLOMATIC_COMPLEXITY_THRESHOLD
+                    ):
+                        complex_items.append(
+                            {
+                                "path": path.replace(str(ROOT_DIR) + "/", ""),
+                                "name": block["name"],
+                                "type": block["type"],
+                                "complexity": block["complexity"],
+                                "rank": block["rank"],
+                            }
+                        )
+
         low_mi_files = []
         total_mi = 0
         file_count = 0
@@ -462,30 +510,52 @@ recommendations for improvement.
                 total_mi += data["mi"]
                 file_count += 1
                 if data["mi"] < MAINTAINABILITY_INDEX_THRESHOLD:
-                     low_mi_files.append({
-                        "path": path.replace(str(ROOT_DIR) + '/', ''),
-                        "mi": data["mi"],
-                        "rank": data["rank"],
-                    })
-        
+                    low_mi_files.append(
+                        {
+                            "path": path.replace(str(ROOT_DIR) + "/", ""),
+                            "mi": data["mi"],
+                            "rank": data["rank"],
+                        }
+                    )
+
         avg_mi = total_mi / file_count if file_count > 0 else 0
-        report_parts.append(f"Overall average Maintainability Index (MI) is **{avg_mi:.2f}** (Grade: {mi_data.get('average', {}).get('rank', 'N/A')}).\n")
+        report_parts.append(
+            f"Overall average Maintainability Index (MI) is **{avg_mi:.2f}** (Grade: {mi_data.get('average', {}).get('rank', 'N/A')}).\n"
+        )
 
         if complex_items:
-            report_parts.append(f"\n**WARNING: Found {len(complex_items)} functions/methods with high Cyclomatic Complexity (>{CYCLOMATIC_COMPLEXITY_THRESHOLD}).** These are difficult to test and maintain.\n")
-            report_parts.append("| Path | Name | Type | Complexity | Rank |\n|---|---|---|---|---|\n")
-            for f in sorted(complex_items, key=lambda x: x['complexity'], reverse=True)[:10]:
-                report_parts.append(f"| `{f['path']}` | `{f['name']}` | {f['type']} | **{f['complexity']}** | {f['rank']} |\n")
+            report_parts.append(
+                f"\n**WARNING: Found {len(complex_items)} functions/methods with high Cyclomatic Complexity (>{CYCLOMATIC_COMPLEXITY_THRESHOLD}).** These are difficult to test and maintain.\n"
+            )
+            report_parts.append(
+                "| Path | Name | Type | Complexity | Rank |\n|---|---|---|---|---|\n"
+            )
+            for f in sorted(complex_items, key=lambda x: x["complexity"], reverse=True)[
+                :10
+            ]:
+                report_parts.append(
+                    f"| `{f['path']}` | `{f['name']}` | {f['type']} | **{f['complexity']}** | {f['rank']} |\n"
+                )
         else:
-            report_parts.append("\n**SUCCESS: No functions with high Cyclomatic Complexity found.**\n")
+            report_parts.append(
+                "\n**SUCCESS: No functions with high Cyclomatic Complexity found.**\n"
+            )
 
         if low_mi_files:
-            report_parts.append(f"\n**WARNING: Found {len(low_mi_files)} modules with low Maintainability Index (<{MAINTAINABILITY_INDEX_THRESHOLD}).** These modules may be hard to understand and modify.\n")
-            report_parts.append("| Path | Maintainability Index | Rank |\n|---|---|---|\n")
-            for f in sorted(low_mi_files, key=lambda x: x['mi']):
-                report_parts.append(f"| `{f['path']}` | **{f['mi']:.2f}** | {f['rank']} |\n")
+            report_parts.append(
+                f"\n**WARNING: Found {len(low_mi_files)} modules with low Maintainability Index (<{MAINTAINABILITY_INDEX_THRESHOLD}).** These modules may be hard to understand and modify.\n"
+            )
+            report_parts.append(
+                "| Path | Maintainability Index | Rank |\n|---|---|---|\n"
+            )
+            for f in sorted(low_mi_files, key=lambda x: x["mi"]):
+                report_parts.append(
+                    f"| `{f['path']}` | **{f['mi']:.2f}** | {f['rank']} |\n"
+                )
         else:
-            report_parts.append("\n**SUCCESS: All modules have a good Maintainability Index.**\n")
+            report_parts.append(
+                "\n**SUCCESS: All modules have a good Maintainability Index.**\n"
+            )
     else:
         report_parts.append("Maintainability analysis could not be performed.\n")
 
@@ -493,20 +563,32 @@ recommendations for improvement.
     report_parts.append("\n## 6. Summary of Recommendations\n")
     recs = []
     if circular_deps:
-        recs.append("1. **High Priority**: Refactor modules to break all identified circular dependencies. This is critical for a healthy architecture.")
+        recs.append(
+            "1. **High Priority**: Refactor modules to break all identified circular dependencies. This is critical for a healthy architecture."
+        )
     if maintainability_analysis and complex_items:
-        recs.append("2. **Medium Priority**: Refactor functions/methods with high cyclomatic complexity. Focus on the most complex items, like `cmd_analyze` and `apply_suggestion`, by extracting logic into smaller, single-responsibility helper functions or classes.")
+        recs.append(
+            "2. **Medium Priority**: Refactor functions/methods with high cyclomatic complexity. Focus on the most complex items, like `cmd_analyze` and `apply_suggestion`, by extracting logic into smaller, single-responsibility helper functions or classes."
+        )
     if maintainability_analysis and low_mi_files:
-        recs.append("3. **Medium Priority**: Review and refactor modules with a low maintainability index. Large modules like `analyzer_service.py` and `facade.py` are candidates for being split into smaller, more focused modules.")
+        recs.append(
+            "3. **Medium Priority**: Review and refactor modules with a low maintainability index. Large modules like `analyzer_service.py` and `facade.py` are candidates for being split into smaller, more focused modules."
+        )
     if dep_analysis and violations:
-        recs.append("4. **High Priority**: Fix architectural layering violations. The `core` should not depend on `cli` or `mcp`. Use dependency inversion to pass information outwards.")
+        recs.append(
+            "4. **High Priority**: Fix architectural layering violations. The `core` should not depend on `cli` or `mcp`. Use dependency inversion to pass information outwards."
+        )
     if fat_interfaces:
-        recs.append("5. **Low Priority**: Consider splitting large protocols into smaller, more specific ones to improve interface segregation.")
-    
+        recs.append(
+            "5. **Low Priority**: Consider splitting large protocols into smaller, more specific ones to improve interface segregation."
+        )
+
     if recs:
         report_parts.extend(recs)
     else:
-        report_parts.append("No critical issues found. The architecture appears to be in good health. Continue to monitor these metrics as the project evolves.")
+        report_parts.append(
+            "No critical issues found. The architecture appears to be in good health. Continue to monitor these metrics as the project evolves."
+        )
 
     print("   ...report generation complete.")
     return "\n".join(report_parts)
@@ -527,14 +609,14 @@ def cleanup():
 def main():
     """Main script execution."""
     print("Starting Pytest-Analyzer Architecture Review...")
-    
+
     # Run analyses
     dep_analysis = analyze_dependencies()
-    
+
     circular_deps = []
     if dep_analysis:
         circular_deps = find_circular_dependencies(dep_analysis["graph"])
-    
+
     interface_analysis = analyze_interfaces_and_contracts()
     maintainability_analysis = analyze_maintainability()
 
@@ -544,12 +626,12 @@ def main():
     )
     with open(REPORT_PATH, "w", encoding="utf-8") as f:
         f.write(report_content)
-    
+
     print(f"\nArchitecture review complete. Report saved to: {REPORT_PATH}")
 
     # Clean up
     cleanup()
-    
+
     # Exit with error code if critical issues found
     if circular_deps:
         print("\nCritical issue found: Circular dependencies detected.")
