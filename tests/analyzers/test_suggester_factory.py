@@ -77,9 +77,12 @@ class TestSuggesterFactory(unittest.TestCase):
 
         config = {"min_confidence": 0.8}
 
-        # Should raise ConfigurationError
-        with self.assertRaises(ConfigurationError):
+        # Should raise ConfigurationError with correct message and context
+        with self.assertRaises(ConfigurationError) as cm:
             create_llm_based_suggester(config)
+        exc = cm.exception
+        self.assertIn("LLM service is required for LLM-based suggester", str(exc))
+        self.assertIn("config", getattr(exc, "context", {}))
 
     def test_create_composite_suggester(self):
         """Test creating a composite suggester."""
@@ -142,9 +145,12 @@ class TestSuggesterFactory(unittest.TestCase):
 
         config = {"type": "invalid"}
 
-        # Should raise ConfigurationError
-        with self.assertRaises(ConfigurationError):
+        # Should raise ConfigurationError with correct message and context
+        with self.assertRaises(ConfigurationError) as cm:
             create_suggester(config)
+        exc = cm.exception
+        self.assertIn("Invalid suggester type", str(exc))
+        self.assertIn("suggester_type", getattr(exc, "context", {}))
 
     def test_create_composite_suggester_default_suggesters(self):
         """Test creating a composite suggester with default suggesters."""

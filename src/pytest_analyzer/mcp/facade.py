@@ -191,11 +191,31 @@ class MCPAnalyzerFacade:
                 f"Extraction error in analyze_pytest_output: {e}",
                 exc_info=True,
             )
-            raise AnalysisError(
-                f"Failed to analyze pytest output: {e}",
-                context={"file_path": request.file_path},
-                original_exception=e,
-            ) from e
+            return MCPError(
+                code="ANALYZE_PYTEST_OUTPUT_FAILED",
+                message=f"Failed to analyze pytest output: {e}",
+                request_id=request.request_id,
+            )
+        except AnalysisError as e:
+            logger.error(
+                f"Analysis error in analyze_pytest_output: {e}",
+                exc_info=True,
+            )
+            return MCPError(
+                code="ANALYZE_PYTEST_OUTPUT_FAILED",
+                message=str(e),
+                request_id=request.request_id,
+            )
+        except Exception as e:
+            logger.error(
+                f"Unexpected error in analyze_pytest_output: {e}",
+                exc_info=True,
+            )
+            return MCPError(
+                code="ANALYZE_PYTEST_OUTPUT_FAILED",
+                message=str(e),
+                request_id=request.request_id,
+            )
 
         # Transform results to MCP format
         suggestions = [self._transform_suggestion_to_mcp(s) for s in results]
@@ -236,11 +256,31 @@ class MCPAnalyzerFacade:
                 f"Extraction error in run_and_analyze: {e}",
                 exc_info=True,
             )
-            raise AnalysisError(
-                f"Failed to run and analyze: {e}",
-                context={"test_pattern": request.test_pattern},
-                original_exception=e,
-            ) from e
+            return MCPError(
+                code="RUN_AND_ANALYZE_FAILED",
+                message=f"Failed to run and analyze: {e}",
+                request_id=request.request_id,
+            )
+        except AnalysisError as e:
+            logger.error(
+                f"Analysis error in run_and_analyze: {e}",
+                exc_info=True,
+            )
+            return MCPError(
+                code="RUN_AND_ANALYZE_FAILED",
+                message=str(e),
+                request_id=request.request_id,
+            )
+        except Exception as e:
+            logger.error(
+                f"Unexpected error in run_and_analyze: {e}",
+                exc_info=True,
+            )
+            return MCPError(
+                code="RUN_AND_ANALYZE_FAILED",
+                message=str(e),
+                request_id=request.request_id,
+            )
 
         suggestions = [self._transform_suggestion_to_mcp(s) for s in results]
 
@@ -270,16 +310,26 @@ class MCPAnalyzerFacade:
 
         try:
             suggestions = self.analyzer.suggest_fixes(request.raw_output)
-        except Exception as e:
+        except LLMServiceError as e:
             logger.error(
                 f"LLM service error in suggest_fixes: {e}",
                 exc_info=True,
             )
-            raise LLMServiceError(
-                f"Failed to suggest fixes: {e}",
-                context={"raw_output": str(request.raw_output)[:100]},
-                original_exception=e,
-            ) from e
+            return MCPError(
+                code="SUGGEST_FIXES_FAILED",
+                message=str(e),
+                request_id=request.request_id,
+            )
+        except Exception as e:
+            logger.error(
+                f"Unexpected error in suggest_fixes: {e}",
+                exc_info=True,
+            )
+            return MCPError(
+                code="SUGGEST_FIXES_FAILED",
+                message=str(e),
+                request_id=request.request_id,
+            )
 
         mcp_suggestions = [self._transform_suggestion_to_mcp(s) for s in suggestions]
 
@@ -396,6 +446,27 @@ class MCPAnalyzerFacade:
                 )
             changes_applied = result.get("applied_files", [target_file])
             diff_preview = result.get("diff_preview", "")
+        except ExtractionError as e:
+            logger.error(f"Extraction error in apply_suggestion: {e}")
+            # Rollback on error
+            try:
+                if backup_created:
+                    shutil.copy2(backup_path, target_file)
+                    rollback_available = True
+            except Exception as rollback_err:
+                warnings.append(f"Rollback failed: {str(rollback_err)}")
+            execution_time_ms = max(1, int((time.time() - start_time) * 1000))
+            return ApplySuggestionResponse(
+                success=False,
+                request_id=request.request_id,
+                suggestion_id=request.suggestion_id,
+                target_file=target_file,
+                backup_path=backup_path if backup_created else None,
+                changes_applied=[],
+                rollback_available=rollback_available,
+                warnings=[f"Failed to apply suggestion: {str(e)}"] + warnings,
+                execution_time_ms=execution_time_ms,
+            )
         except Exception as e:
             logger.error(f"Error in apply_suggestion: {e}")
             # Rollback on error

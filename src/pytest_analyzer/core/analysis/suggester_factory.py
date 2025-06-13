@@ -103,7 +103,10 @@ def create_llm_based_suggester(
     llm_service_instance = llm_service or config.get("llm_service")
 
     if not llm_service_instance:
-        raise ValueError("LLM service is required for LLM-based suggester")
+        raise ConfigurationError(
+            message="LLM service is required for LLM-based suggester",
+            context={"config": config},
+        )
 
     # Use provided prompt builder or create a new one
     prompt_builder_instance = prompt_builder

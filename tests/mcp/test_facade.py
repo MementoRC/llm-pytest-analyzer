@@ -12,7 +12,6 @@ from pytest_analyzer.core.errors import (
     LLMServiceError,
 )
 from pytest_analyzer.mcp.facade import MCPAnalyzerFacade
-from pytest_analyzer.mcp.schemas import MCPError
 from pytest_analyzer.mcp.schemas.analyze_pytest_output import AnalyzePytestOutputRequest
 from pytest_analyzer.mcp.schemas.apply_suggestion import ApplySuggestionRequest
 from pytest_analyzer.mcp.schemas.get_config import GetConfigRequest
@@ -263,7 +262,12 @@ class TestMCPAnalyzerFacade:
             assert isinstance(response, ApplySuggestionResponse)
             assert response.success is False
         else:
-            assert isinstance(response, MCPError)
+            # MCP facade should catch and convert to MCPError, not re-raise
+            from pytest_analyzer.mcp.schemas import MCPError as MCPErrorType
+
+            assert isinstance(response, MCPErrorType)
+            assert response.code.endswith("_FAILED")
+            assert "Test error" in response.message
 
     @pytest.mark.parametrize(
         "method_name,request_class",
