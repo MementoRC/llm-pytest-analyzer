@@ -32,9 +32,11 @@ dependencies = [
     "anthropic",
     "mcp>=1.9.2",
     "openai",
+    "psutil",
     "pyyaml",
     "python-dotenv",
-    "rich>=12.0.0",
+    "rich>=12.0.0", # For CLI and TUI progress
+    "textual>=0.50.0", # For the TUI interface
 ]
 
 [project.optional-dependencies]
@@ -71,6 +73,7 @@ mcp = [
 
 [project.scripts]
 pytest-analyzer = "pytest_analyzer.cli.analyzer_cli:main"
+pytest-analyzer-tui = "pytest_analyzer.tui:main"
 
 [project.urls]
 Homepage = "https://github.com/yourusername/pytest_analyzer"

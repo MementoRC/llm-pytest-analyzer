@@ -1,0 +1,150 @@
+/* Basic App Styling for Pytest Analyzer TUI */
+
+Screen {
+    /* layout: vertical; */ /* Default for Screen */
+    background: $surface;
+    color: $text;
+}
+
+/* MainView specific styles (if MainView is the primary screen) */
+MainView {
+    layout: vertical; /* Header, Horizontal, Footer */
+}
+
+#main_horizontal_layout {
+    layout: horizontal;
+    height: 1fr; /* Fill available space */
+}
+
+.panel {
+    width: 1fr; /* Distribute space equally among panels */
+    height: 100%;
+    border: round $primary-lighten-2;
+    margin: 1;
+    padding: 0 1; /* Padding inside the border */
+}
+
+#left_panel {
+    /* Specific styles for left panel */
+}
+
+#center_panel {
+    /* Specific styles for center panel */
+    width: 2fr; /* Example: make center panel wider */
+}
+
+#right_panel {
+    /* Specific styles for right panel */
+}
+
+/* Placeholder styles */
+Placeholder {
+    width: 100%;
+    height: 100%;
+    content-align: center middle;
+}
+
+/* Status Bar style */
+#status_bar {
+    dock: bottom;
+    width: 100%;
+    height: auto;
+    min-height: 1;
+    padding: 0 1;
+    background: $primary-background;
+    color: $text;
+    content-align-vertical: middle; /* Center text vertically */
+}
+
+/* Header and Footer styles */
+Header {
+    background: $primary;
+    color: $text-primary; /* Text color that contrasts with primary */
+    dock: top;
+    height: auto;
+    min-height: 1; /* Ensure it's visible */
+}
+
+Footer {
+    background: $primary;
+    color: $text-primary;
+    dock: bottom;
+    height: auto;
+    min-height: 1; /* Ensure it's visible */
+}
+
+/* General Widget Styles */
+Button {
+    margin: 1 0; /* Add some vertical margin to buttons */
+    min-width: 10; /* Ensure buttons are not too small */
+}
+
+Input, TextArea {
+    border: round $primary-darken-1;
+    background: $primary-background-lighten-2;
+    margin-bottom: 1;
+}
+
+Input:focus, TextArea:focus {
+    border: round $secondary;
+}
+
+Label {
+    padding: 1 0;
+}
+
+/* DataTable styling */
+DataTable {
+    background: $surface;
+    border: round $primary-lighten-1;
+}
+
+DataTable:focus {
+    border: round $secondary;
+}
+
+DataTable .datatable--header {
+    background: $primary-darken-1;
+    color: $text-primary;
+    text-style: bold;
+}
+
+DataTable .datatable--cursor {
+    background: $secondary;
+    color: $text-secondary; /* Text color for selected row */
+}
+
+DataTable .datatable--hover {
+    background: $primary-lighten-2;
+}
+
+/* Log widget styling */
+Log {
+    background: $surface; /* A slightly different background for log areas */
+    border: solid $primary;
+    color: $text;
+}
+
+/* ProgressBar styling */
+ProgressBar {
+    tint: $success; /* Color of the progress bar itself */
+    background: $primary-background-darken-1; /* Background of the bar track */
+    margin: 1 0;
+}
+
+/* DirectoryTree styling */
+DirectoryTree {
+    border: solid $primary;
+    padding: 1;
+}
+
+DirectoryTree:focus {
+    border: solid $secondary;
+}
+
+/* Specific View Styles (using classes defined in Python or IDs) */
+/* Example:
+FileSelectionView {
+    border: heavy $secondary;
+}
+*/
