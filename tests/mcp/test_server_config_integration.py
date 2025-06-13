@@ -102,7 +102,14 @@ class TestMCPServerConfigIntegration:
         assert len(log_records) > 0
 
         # Should mention transport type, host, and port
-        init_message = log_records[0].message
-        assert "http transport" in init_message
-        assert re.search(r"\btest\.example\.com\b", init_message)
-        assert "8888" in init_message
+        found = False
+        for record in log_records:
+            init_message = record.message
+            if (
+                "http transport" in init_message
+                and re.search(r"\btest\.example\.com\b", init_message)
+                and "8888" in init_message
+            ):
+                found = True
+                break
+        assert found, "Expected config info not found in any log record"

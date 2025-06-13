@@ -93,8 +93,10 @@ class TestLLMService:
     def test_init_with_unsupported_generic_client(self, caplog):
         mock_client = MagicMock()  # A generic mock with no known methods
         # Ensure it doesn't have 'generate' or 'completions'
-        del mock_client.generate
-        del mock_client.completions
+        if hasattr(mock_client, "generate"):
+            del mock_client.generate
+        if hasattr(mock_client, "completions"):
+            del mock_client.completions
         mock_client.__class__.__module__ = "unknown"
 
         service = LLMService(llm_client=mock_client)
@@ -181,7 +183,12 @@ class TestLLMService:
     @patch("pytest_analyzer.core.llm.llm_service.Anthropic", None)
     @patch("pytest_analyzer.core.llm.llm_service.openai", None)
     def test_auto_detect_no_client_available(self, caplog):
-        service = LLMService()
+        import logging
+
+        with caplog.at_level(
+            logging.INFO, logger="pytest_analyzer.core.llm.llm_service"
+        ):
+            service = LLMService()
         assert service._llm_request_func is None
         assert "No LLM client available or configured" in caplog.text
         assert (

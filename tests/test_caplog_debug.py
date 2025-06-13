@@ -11,6 +11,7 @@ def test_caplog_structure(caplog):
     print(f"caplog.text = {repr(caplog.text)}")
     print(f"caplog.messages = {caplog.messages}")
     print(f"caplog.records = {caplog.records}")
+    assert caplog.records, "No log records captured"
     print(f"Type of first record: {type(caplog.records[0])}")
     print(f"First record: {caplog.records[0]}")
     print(f"First record message: {caplog.records[0].message}")

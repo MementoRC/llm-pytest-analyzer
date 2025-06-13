@@ -104,10 +104,15 @@ def configure_logging(
 
     # Create formatters
     if structured:
-        formatter = JsonFormatter()
+        console_formatter = JsonFormatter()
+        file_formatter = JsonFormatter()
     else:
-        formatter = logging.Formatter(
+        console_formatter = logging.Formatter(
             "%(asctime)s - %(name)s - [%(levelname)s] - %(message)s"
+        )
+        # File formatter includes filename and line number for debugging
+        file_formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - [%(levelname)s] - %(filename)s:%(lineno)d - %(message)s"
         )
 
     # Configure root logger
@@ -120,7 +125,7 @@ def configure_logging(
 
     # Add console handler
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
+    console_handler.setFormatter(console_formatter)
     console_handler.setLevel(log_level)
     root_logger.addHandler(console_handler)
 
@@ -130,13 +135,14 @@ def configure_logging(
         file_handler = RotatingFileHandler(
             log_file, maxBytes=10 * 1024 * 1024, backupCount=5
         )
-        file_handler.setFormatter(formatter)
+        file_handler.setFormatter(file_formatter)
         file_handler.setLevel(log_level)
         root_logger.addHandler(file_handler)
 
     # Configure library loggers to be less verbose
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("requests").setLevel(logging.WARNING)
 
     # Log configuration
     log_level_name = logging.getLevelName(log_level)
