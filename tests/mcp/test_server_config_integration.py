@@ -1,5 +1,6 @@
 """Tests for MCP server configuration integration."""
 
+import logging
 import re
 
 from pytest_analyzer.mcp.server import MCPServerFactory, PytestAnalyzerMCPServer
@@ -89,6 +90,9 @@ class TestMCPServerConfigIntegration:
             transport_type="http", http_host="test.example.com", http_port=8888
         )
         settings = Settings(mcp=custom_mcp)
+
+        # Ensure logger is set to NOTSET so caplog can capture all levels
+        caplog.set_level(logging.NOTSET, logger="PytestAnalyzerMCPServer")
 
         PytestAnalyzerMCPServer(settings=settings)
 

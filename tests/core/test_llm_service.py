@@ -107,6 +107,9 @@ class TestLLMService:
         except Exception:
             pass
 
+        # Ensure logger is set to NOTSET so caplog can capture all levels
+        caplog.set_level(logging.NOTSET, logger="pytest_analyzer.core.llm.llm_service")
+
         service = LLMService(llm_client=mock_client)
         assert service.llm_client == mock_client
         assert service._llm_request_func is None

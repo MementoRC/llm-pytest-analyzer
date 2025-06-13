@@ -77,7 +77,16 @@ class TestLoggingConfig:
 
             # Test logging to file
             test_message = "Test log message"
+            # Ensure root logger and file handler are set to NOTSET so all messages are captured
+            root_logger.setLevel(logging.NOTSET)
+            for h in root_logger.handlers:
+                h.setLevel(logging.NOTSET)
             logging.info(test_message)
+
+            # Flush all handlers to ensure log is written
+            for h in root_logger.handlers:
+                if hasattr(h, "flush"):
+                    h.flush()
 
             with open(log_file, "r") as f:
                 log_content = f.read()

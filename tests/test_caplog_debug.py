@@ -4,6 +4,10 @@ logger = logging.getLogger("test_logger")
 
 
 def test_caplog_structure(caplog):
+    # Ensure logger is set to NOTSET so caplog can capture all levels
+    logger.setLevel(logging.NOTSET)
+    caplog.set_level(logging.NOTSET)
+
     # Set up logger and log a message
     logger.error("Test error message")
 
