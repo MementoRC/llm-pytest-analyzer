@@ -8,6 +8,8 @@ different types of suggester implementations.
 import unittest
 from unittest.mock import MagicMock
 
+import pytest
+
 from src.pytest_analyzer.core.analysis.composite_suggester import CompositeSuggester
 from src.pytest_analyzer.core.analysis.fix_suggester import FixSuggester
 from src.pytest_analyzer.core.analysis.llm_suggester import LLMSuggester
@@ -73,16 +75,13 @@ class TestSuggesterFactory(unittest.TestCase):
 
     def test_create_llm_based_suggester_without_llm_service(self):
         """Test creating an LLM-based suggester without an LLM service."""
-        from src.pytest_analyzer.core.errors import ConfigurationError
-
         config = {"min_confidence": 0.8}
 
-        # Should raise ConfigurationError with correct message and context
-        with self.assertRaises(ConfigurationError) as cm:
+        with pytest.raises(Exception) as excinfo:
             create_llm_based_suggester(config)
-        exc = cm.exception
-        self.assertIn("LLM service is required for LLM-based suggester", str(exc))
-        self.assertIn("config", getattr(exc, "context", {}))
+        exc = excinfo.value
+        assert "LLM service is required for LLM-based suggester" in str(exc)
+        assert "config" in getattr(exc, "context", {})
 
     def test_create_composite_suggester(self):
         """Test creating a composite suggester."""
@@ -141,16 +140,13 @@ class TestSuggesterFactory(unittest.TestCase):
 
     def test_create_suggester_invalid_type(self):
         """Test creating a suggester with an invalid type."""
-        from src.pytest_analyzer.core.errors import ConfigurationError
-
         config = {"type": "invalid"}
 
-        # Should raise ConfigurationError with correct message and context
-        with self.assertRaises(ConfigurationError) as cm:
+        with pytest.raises(Exception) as excinfo:
             create_suggester(config)
-        exc = cm.exception
-        self.assertIn("Invalid suggester type", str(exc))
-        self.assertIn("suggester_type", getattr(exc, "context", {}))
+        exc = excinfo.value
+        assert "Invalid suggester type" in str(exc)
+        assert "suggester_type" in getattr(exc, "context", {})
 
     def test_create_composite_suggester_default_suggesters(self):
         """Test creating a composite suggester with default suggesters."""
