@@ -1,14 +1,12 @@
 import logging
 from pathlib import Path
-from typing import Optional, Union  # Added List and Dict
+from typing import Optional, Union
 
-# Import the Settings dataclass definition from the types module
+# Import the Settings model from the types module
 from .config_types import Settings
 
 # Import the manager and error classes from the configuration module
 from .configuration import ConfigurationError, ConfigurationManager
-
-# No longer need TYPE_CHECKING block for Settings
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +20,6 @@ def get_config_manager(
     config_file: Optional[Union[str, Path]] = None, force_reload: bool = False
 ) -> ConfigurationManager:
     """
-    Get the global ConfigurationManager instance, initializing if needed.
-
-    Args:
-        config_file: Optional path to a specific config file to use during initialization.
-        force_reload: If True, forces reloading the configuration.
-
     Get the global ConfigurationManager instance, initializing or reloading as needed.
 
     Args:
@@ -58,21 +50,16 @@ def get_config_manager(
         )
         # Pass the specific config file path during initialization
         _config_manager_instance = ConfigurationManager(
-            settings_cls=Settings,  # Settings is now imported from .config_types
+            settings_cls=Settings,
             config_file_path=config_file,
-            # env_prefix can be customized here if needed
         )
         try:
             # Load config immediately upon creation/reload
             _config_manager_instance.load_config(force_reload=force_reload)
         except ConfigurationError as e:
-            # Log the error; the manager might still be usable with defaults
-            # if get_settings() handles this gracefully (which it should).
             logger.error(f"Initial configuration loading failed: {e}")
-            # Do not re-raise here; let get_settings handle fallback if possible.
 
     elif config_file_specified_without_reload:
-        # Warn if called with a specific file but not reloading the existing instance
         current_config_path = getattr(
             _config_manager_instance, "_config_file_path", "N/A"
         )
@@ -82,7 +69,6 @@ def get_config_manager(
             f"using config file '{current_config_path}' or defaults."
         )
 
-    # Always return the current instance
     assert _config_manager_instance is not None
     return _config_manager_instance
 
@@ -93,16 +79,6 @@ def load_settings(
     debug: bool = False,  # Added for backward compatibility
 ) -> Settings:
     """
-    Load settings using the ConfigurationManager.
-
-    This function initializes and uses the ConfigurationManager to load settings
-    from defaults, config file (if found), and environment variables.
-
-    Args:
-        config_file: Optional path to a specific configuration file.
-        force_reload: If True, forces reloading the configuration from all sources.
-        debug: If True, enables debug logging (backward compatibility).
-
     Load settings using the singleton ConfigurationManager.
 
     This function retrieves the global ConfigurationManager instance (initializing
@@ -113,23 +89,22 @@ def load_settings(
         config_file: Optional path to a specific configuration file to use.
         force_reload: If True, forces reloading the configuration from all sources
                       before returning the settings object.
-        debug: If True, enables debug logging level (backward compatibility)
+        debug: If True, enables debug logging level (backward compatibility).
 
     Returns:
-        A populated Settings object. Falls back to defaults if loading fails
-        and default instantiation is possible.
+        A populated Settings object. Falls back to defaults if loading fails.
 
     Raises:
         ConfigurationError: If creating even a default Settings object fails.
     """
     manager = get_config_manager(config_file=config_file, force_reload=force_reload)
-    # get_settings now handles potential loading errors and fallbacks internally
 
-    # Handle debug parameter for backward compatibility
+    # Handle debug parameter for backward compatibility by passing a runtime override
+    overrides = {}
     if debug:
-        settings = manager.get_settings({"log_level": "DEBUG"})
-    else:
-        settings = manager.get_settings()
+        overrides["log_level"] = "DEBUG"
+
+    settings = manager.get_settings(overrides=overrides if overrides else None)
 
     return settings
 

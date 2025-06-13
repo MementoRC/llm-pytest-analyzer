@@ -1,23 +1,22 @@
-# This file defines the structure of configuration objects, like the Settings dataclass.
+# This file defines the structure of configuration objects using Pydantic.
 # It helps avoid circular dependencies by separating the type definition from its usage.
 
-from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Set
 
-# --- Security Settings Dataclass ---
-from typing import Dict, List, Optional, Set
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
-@dataclass
-class SecuritySettings:
+# --- Security Settings Model ---
+class SecuritySettings(BaseModel):
     """Comprehensive security settings for the MCP server."""
 
     # Input validation
-    path_allowlist: List[str] = field(default_factory=list)  # Allowed base paths
-    allowed_file_types: List[str] = field(
+    path_allowlist: List[str] = Field(default_factory=list)  # Allowed base paths
+    allowed_file_types: List[str] = Field(
         default_factory=lambda: [".py", ".txt", ".json", ".xml"]
     )
-    max_file_size_mb: Optional[float] = 10.0  # Max file size in MB
+    max_file_size_mb: Optional[float] = Field(default=10.0, gt=0)  # Max file size in MB
     enable_input_sanitization: bool = True
 
     # File system access
@@ -28,43 +27,34 @@ class SecuritySettings:
     require_authentication: bool = False
     auth_token: Optional[str] = None
     require_client_certificate: bool = False
-    allowed_client_certs: List[str] = field(default_factory=list)
+    allowed_client_certs: List[str] = Field(default_factory=list)
     role_based_access: bool = False
-    allowed_roles: Set[str] = field(
+    allowed_roles: Set[str] = Field(
         default_factory=lambda: {"admin", "user", "readonly"}
     )
 
     # Rate limiting
-    max_requests_per_window: int = 100
-    rate_limit_window_seconds: int = 60
-    abuse_threshold: int = 200
-    abuse_ban_count: int = 3
-    max_resource_usage_mb: float = 100.0
+    max_requests_per_window: int = Field(default=100, gt=0)
+    rate_limit_window_seconds: int = Field(default=60, gt=0)
+    abuse_threshold: int = Field(default=200, ge=0)
+    abuse_ban_count: int = Field(default=3, ge=0)
+    max_resource_usage_mb: float = Field(default=100.0, gt=0)
 
     # Misc
     enable_resource_usage_monitoring: bool = True
 
-    def __post_init__(self):
-        if self.max_file_size_mb is not None and self.max_file_size_mb <= 0:
-            raise ValueError("max_file_size_mb must be positive")
-        if self.max_requests_per_window <= 0:
-            raise ValueError("max_requests_per_window must be positive")
-        if self.rate_limit_window_seconds <= 0:
-            raise ValueError("rate_limit_window_seconds must be positive")
-        if self.max_resource_usage_mb <= 0:
-            raise ValueError("max_resource_usage_mb must be positive")
-        if self.abuse_threshold < 0 or self.abuse_ban_count < 0:
-            raise ValueError("abuse_threshold and abuse_ban_count must be non-negative")
-        if self.allowed_file_types and not all(
-            t.startswith(".") for t in self.allowed_file_types
-        ):
+    @field_validator("allowed_file_types")
+    @classmethod
+    def validate_file_types(cls, v: List[str]) -> List[str]:
+        """Validate that file types start with a dot."""
+        if v and not all(t.startswith(".") for t in v):
             raise ValueError(
                 "allowed_file_types must be a list of file extensions starting with '.'"
             )
+        return v
 
 
-@dataclass
-class MCPSettings:
+class MCPSettings(BaseModel):
     """Configuration settings for the MCP server."""
 
     # Transport settings
@@ -73,21 +63,25 @@ class MCPSettings:
     http_port: int = 8000  # Port for HTTP transport
 
     # Security settings
-    security: SecuritySettings = field(default_factory=SecuritySettings)
-    enable_authentication: bool = (
-        False  # Deprecated, use security.require_authentication
+    security: SecuritySettings = Field(default_factory=SecuritySettings)
+    enable_authentication: bool = Field(
+        default=False, deprecated="Use security.require_authentication"
     )
-    auth_token: Optional[str] = None  # Deprecated, use security.auth_token
-    max_request_size_mb: int = 10  # Maximum request size in MB
+    auth_token: Optional[str] = Field(
+        default=None, deprecated="Use security.auth_token"
+    )
+    max_request_size_mb: int = Field(default=10, gt=0)  # Maximum request size in MB
 
     # Tool settings
-    tool_timeout_seconds: int = 30  # Timeout for tool execution
-    max_concurrent_requests: int = 10  # Maximum concurrent tool requests
+    tool_timeout_seconds: int = Field(default=30, gt=0)  # Timeout for tool execution
+    max_concurrent_requests: int = Field(
+        default=10, gt=0
+    )  # Maximum concurrent tool requests
     enable_async_execution: bool = True  # Whether to enable async tool execution
 
     # Resource settings
     enable_resources: bool = True  # Whether to enable MCP resources
-    max_resource_size_mb: int = 50  # Maximum resource size in MB
+    max_resource_size_mb: int = Field(default=50, gt=0)  # Maximum resource size in MB
     resource_cache_ttl_seconds: int = 300  # Resource cache TTL
 
     # Logging and monitoring
@@ -96,59 +90,62 @@ class MCPSettings:
     enable_metrics: bool = True  # Whether to enable metrics collection
 
     # Server lifecycle settings
-    startup_timeout_seconds: int = 30  # Timeout for server startup
-    shutdown_timeout_seconds: int = 30  # Timeout for graceful shutdown
+    startup_timeout_seconds: int = Field(default=30, gt=0)  # Timeout for server startup
+    shutdown_timeout_seconds: int = Field(
+        default=30, gt=0
+    )  # Timeout for graceful shutdown
     heartbeat_interval_seconds: int = 60  # Heartbeat interval for health checks
 
-    def __post_init__(self):
-        """Validate MCP settings after initialization."""
-        # Validate transport type
-        if self.transport_type not in ["stdio", "http"]:
+    @field_validator("transport_type")
+    @classmethod
+    def validate_transport_type(cls, v: str) -> str:
+        """Validate transport type."""
+        if v not in ["stdio", "http"]:
             raise ValueError(
-                f"Invalid transport_type: '{self.transport_type}'. Must be 'stdio' or 'http'"
+                f"Invalid transport_type: '{v}'. Must be 'stdio' or 'http'"
             )
+        return v
 
-        # Validate timeouts are positive
-        if self.tool_timeout_seconds <= 0:
-            raise ValueError("tool_timeout_seconds must be positive")
-        if self.startup_timeout_seconds <= 0:
-            raise ValueError("startup_timeout_seconds must be positive")
-        if self.shutdown_timeout_seconds <= 0:
-            raise ValueError("shutdown_timeout_seconds must be positive")
-
-        # Validate port range for HTTP transport
+    @model_validator(mode="after")
+    def validate_http_settings(self) -> "MCPSettings":
+        """Validate HTTP-specific settings."""
         if self.transport_type == "http":
             if not (1 <= self.http_port <= 65535):
                 raise ValueError(
                     f"Invalid http_port: {self.http_port}. Must be between 1 and 65535"
                 )
+        return self
 
-        # Validate size limits
-        if self.max_request_size_mb <= 0:
-            raise ValueError("max_request_size_mb must be positive")
-        if self.max_resource_size_mb <= 0:
-            raise ValueError("max_resource_size_mb must be positive")
+    @model_validator(mode="before")
+    @classmethod
+    def handle_deprecated_auth(cls, data: Any) -> Any:
+        """Sync deprecated auth fields to the new security model for backward compatibility."""
+        if isinstance(data, dict):
+            # Ensure security object exists if we need to modify it
+            security_data = data.get("security", {})
+            modified = False
 
-        # Validate concurrency limits
-        if self.max_concurrent_requests <= 0:
-            raise ValueError("max_concurrent_requests must be positive")
+            if data.get("enable_authentication"):
+                security_data["require_authentication"] = True
+                modified = True
 
-        # Backward compatibility: sync deprecated fields
-        if self.enable_authentication:
-            self.security.require_authentication = True
-        if self.auth_token:
-            self.security.auth_token = self.auth_token
+            if data.get("auth_token"):
+                security_data["auth_token"] = data.get("auth_token")
+                modified = True
+
+            if modified:
+                data["security"] = security_data
+
+        return data
 
 
-# --- Settings Dataclass Definition ---
-# Moved here from settings.py
-@dataclass
-class Settings:
+# --- Main Settings Model ---
+class Settings(BaseModel):
     """Configuration settings for the pytest analyzer."""
 
     # Pytest execution settings
     pytest_timeout: int = 300  # Maximum time in seconds for pytest execution
-    pytest_args: List[str] = field(default_factory=list)  # Additional pytest arguments
+    pytest_args: List[str] = Field(default_factory=list)  # Additional pytest arguments
 
     # Resource limits
     max_memory_mb: int = 1024  # Memory limit in MB
@@ -189,8 +186,10 @@ class Settings:
     use_git_branches: bool = True  # Whether to create branches for fix suggestions
 
     # Path settings
-    project_root: Optional[Path] = None  # Root directory of the project
-    mock_directories: Dict[str, str] = field(
+    project_root: Path = Field(
+        default_factory=Path.cwd
+    )  # Root directory of the project
+    mock_directories: Dict[str, str] = Field(
         default_factory=dict
     )  # Absolute path mappings
 
@@ -207,29 +206,34 @@ class Settings:
     )
 
     # MCP Server settings
-    mcp: MCPSettings = field(default_factory=MCPSettings)  # MCP server configuration
+    mcp: MCPSettings = Field(default_factory=MCPSettings)  # MCP server configuration
 
     # Backward compatibility properties
     debug: bool = False  # Enable debug mode (backward compatibility)
 
-    def __post_init__(self):
-        # Convert project_root to Path if it's a string
-        if self.project_root and isinstance(self.project_root, str):
-            self.project_root = Path(self.project_root)
+    @field_validator("project_root", mode="before")
+    @classmethod
+    def ensure_project_root_is_path(cls, v: Any) -> Path:
+        """Ensure project_root is a Path object, defaulting to CWD if None."""
+        if v is None:
+            return Path.cwd()
+        return Path(v)
 
-        # Set default project root if not provided
-        if not self.project_root:
-            self.project_root = Path.cwd()
-
-        # Synchronize debug and log_level for backward compatibility
-        if self.debug and self.log_level != "DEBUG":
+    @model_validator(mode="after")
+    def sync_debug_and_log_level(self) -> "Settings":
+        """Synchronize debug flag and log_level for backward compatibility."""
+        if self.debug and self.log_level.upper() != "DEBUG":
             self.log_level = "DEBUG"
-        elif self.log_level == "DEBUG" and not self.debug:
+        elif self.log_level.upper() == "DEBUG" and not self.debug:
             self.debug = True
+        return self
 
-        # Validate and normalize environment_manager
-        if self.environment_manager is not None:
-            normalized_manager = self.environment_manager.lower()
+    @field_validator("environment_manager")
+    @classmethod
+    def validate_environment_manager(cls, v: Optional[str]) -> Optional[str]:
+        """Validate and normalize the environment_manager value."""
+        if v is not None:
+            normalized_manager = v.lower()
             VALID_MANAGERS = {
                 "pixi",
                 "poetry",
@@ -240,7 +244,8 @@ class Settings:
             }
             if normalized_manager not in VALID_MANAGERS:
                 raise ValueError(
-                    f"Invalid environment_manager: '{self.environment_manager}'. "
+                    f"Invalid environment_manager: '{v}'. "
                     f"Must be one of {VALID_MANAGERS} (case-insensitive), or None."
                 )
-            self.environment_manager = normalized_manager
+            return normalized_manager
+        return None

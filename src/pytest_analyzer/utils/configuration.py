@@ -1,10 +1,11 @@
+import json
 import logging
 import os
-from dataclasses import MISSING, fields, is_dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, Union
 
 import yaml
+from pydantic import BaseModel, ValidationError
 
 # Import Settings from the config_types module to avoid circular dependency
 from .config_types import Settings
@@ -22,14 +23,32 @@ class ConfigurationError(Exception):
     pass
 
 
+def _deep_merge(source: Dict[str, Any], destination: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Deeply merge two dictionaries. `source` is merged into `destination`.
+    """
+    for key, value in source.items():
+        if (
+            isinstance(value, dict)
+            and key in destination
+            and isinstance(destination[key], dict)
+        ):
+            destination[key] = _deep_merge(value, destination[key])
+        else:
+            destination[key] = value
+    return destination
+
+
 class ConfigurationManager:
     """
-    Manages loading configuration settings from multiple sources.
+    Manages loading configuration settings from multiple sources using Pydantic.
 
     Handles hierarchical loading:
-    1. Default values from the Settings dataclass.
-    2. Values from a YAML configuration file.
-    3. Values from environment variables.
+    1. Default values from the Pydantic Settings model.
+    2. Values from a base YAML configuration file (e.g., pytest-analyzer.yaml).
+    3. Values from a profile-specific YAML file (e.g., pytest-analyzer.dev.yaml).
+    4. Values from environment variables.
+    5. Runtime overrides.
     """
 
     DEFAULT_CONFIG_FILES = ["pytest-analyzer.yaml", "pytest-analyzer.yml"]
@@ -45,32 +64,28 @@ class ConfigurationManager:
         Initialize the ConfigurationManager.
 
         Args:
-            settings_cls: The dataclass type to use for settings structure and defaults.
+            settings_cls: The Pydantic BaseModel class for settings structure.
             config_file_path: Optional path to a specific configuration file.
-                               If None, searches for default files in CWD and project root.
-            env_prefix: Prefix for environment variables (e.g., "PYTEST_ANALYZER_").
+                               If None, searches for default files.
+            env_prefix: Prefix for environment variables.
         """
-        if not is_dataclass(settings_cls):
-            raise TypeError(f"{settings_cls.__name__} must be a dataclass.")
+        if not issubclass(settings_cls, BaseModel):
+            raise TypeError(f"{settings_cls.__name__} must be a Pydantic BaseModel.")
 
         self.settings_cls: Type[Settings] = settings_cls
         self.env_prefix: str = env_prefix
+        self.profile: Optional[str] = os.getenv(f"{self.env_prefix}PROFILE")
         self._config_file_path: Optional[Path] = self._resolve_config_file_path(
             config_file_path
         )
         self._config: Dict[str, Any] = {}
         self._loaded: bool = False
-        # Cache the created Settings instance
         self._settings_instance: Optional[Settings] = None
 
     def _resolve_config_file_path(
         self, specific_path: Optional[Union[str, Path]]
     ) -> Optional[Path]:
-        """
-        Find the configuration file path.
-        Searches in CWD and optionally the parent directories up to the root.
-        Does NOT rely on Settings.project_root default during search.
-        """
+        """Find the configuration file path."""
         search_paths: List[Path] = []
 
         if specific_path:
@@ -82,35 +97,25 @@ class ConfigurationManager:
                 logger.warning(
                     f"Specified configuration file not found: {specific_path}"
                 )
-                # Continue searching default locations even if specific path fails
-                # Or raise ConfigurationError here if specific path must exist?
-                # Let's allow fallback to defaults for now.
 
-        # Search in current working directory
         cwd = Path.cwd()
         search_paths.extend(cwd / name for name in self.DEFAULT_CONFIG_FILES)
 
-        # Search in parent directories up to the root (or home dir as a practical limit)
-        # This helps find config files in parent project directories
         current = cwd.parent
         home = Path.home()
         while current != current.parent and current != home:
             search_paths.extend(current / name for name in self.DEFAULT_CONFIG_FILES)
             current = current.parent
-        # Check home directory itself if not already checked
         if home != cwd and home != cwd.parent:
             search_paths.extend(home / name for name in self.DEFAULT_CONFIG_FILES)
 
         for path in search_paths:
-            # Use resolve() to handle potential symlinks and get absolute path
             try:
                 resolved_path = path.resolve()
                 if resolved_path.is_file():
                     logger.debug(f"Found configuration file: {resolved_path}")
                     return resolved_path
-            except (
-                OSError
-            ) as e:  # Handle potential permission errors etc. during resolve/is_file
+            except OSError as e:
                 logger.debug(f"Could not access potential config file {path}: {e}")
 
         logger.debug("No configuration file found in standard locations.")
@@ -121,210 +126,225 @@ class ConfigurationManager:
         if self._loaded and not force_reload:
             return
 
-        # Reset state for reload
         self._config = {}
         self._settings_instance = None
 
         try:
-            self._config = self._load_defaults()
-            self._config.update(self._load_from_file())
-            self._merge_env_config(self._load_from_env())
+            defaults = self._load_defaults()
+            file_config = self._load_from_file()
+            env_config = self._load_from_env()
+
+            # Merge with precedence: defaults < file < env
+            self._config = defaults
+            _deep_merge(file_config, self._config)
+            _deep_merge(env_config, self._config)
+
             self._loaded = True
             logger.debug("Configuration loaded successfully.")
         except Exception as e:
-            self._loaded = False  # Ensure loaded is false on error
+            self._loaded = False
             logger.error(f"Failed to load configuration: {e}")
-            # Propagate the error to the caller
             raise ConfigurationError("Configuration loading failed") from e
 
     def _load_defaults(self) -> Dict[str, Any]:
-        """Load default values from the Settings dataclass."""
-        defaults = {}
+        """Load default values from the Pydantic Settings model."""
         try:
-            # Instantiate to get defaults, handling potential __post_init__ errors
-            # We need an instance to correctly handle default_factory
-            default_instance = self.settings_cls()
-            for f in fields(self.settings_cls):
-                # Use getattr to respect potential default_factory logic and __post_init__
-                try:
-                    defaults[f.name] = getattr(default_instance, f.name)
-                except AttributeError:
-                    # Handle cases where __post_init__ might remove an attribute or fail
-                    if f.default is not MISSING:
-                        defaults[f.name] = f.default
-                    elif f.default_factory is not MISSING:
-                        defaults[f.name] = f.default_factory()
-                    else:
-                        # This case implies a required field with no default,
-                        # which should ideally be caught by dataclass itself,
-                        # but we log a warning just in case.
-                        logger.warning(
-                            f"Could not determine default value for required field '{f.name}'"
-                        )
-
-            logger.debug("Loaded defaults from Settings dataclass.")
+            defaults = self.settings_cls().model_dump()
+            logger.debug("Loaded defaults from Pydantic model.")
+            return defaults
         except Exception as e:
             logger.error(
-                f"Critical error initializing defaults for {self.settings_cls.__name__}: {e}"
+                f"Critical error getting defaults from {self.settings_cls.__name__}: {e}"
             )
-            # This is more critical, perhaps re-raise or return empty dict?
-            # Returning empty allows fallback but might hide issues. Let's raise.
             raise ConfigurationError(
                 f"Could not initialize default settings: {e}"
             ) from e
-        return defaults
 
-    def _load_from_file(self) -> Dict[str, Any]:
-        """Load configuration from the YAML file."""
-        if not self._config_file_path:
-            return {}
-
+    def _load_single_yaml_file(self, file_path: Path) -> Dict[str, Any]:
+        """Load configuration from a single YAML file."""
         try:
-            with open(self._config_file_path, "r") as f:
+            with open(file_path, "r") as f:
                 file_config = yaml.safe_load(f)
                 if file_config and isinstance(file_config, dict):
-                    logger.info(
-                        f"Loaded configuration from file: {self._config_file_path}"
-                    )
-                    # Filter only keys relevant to Settings
-                    valid_keys = {f.name for f in fields(self.settings_cls)}
-                    filtered_config = {
-                        k: v for k, v in file_config.items() if k in valid_keys
-                    }
-                    return filtered_config
+                    logger.info(f"Loaded configuration from file: {file_path}")
+                    return file_config
                 elif file_config is not None:
                     logger.warning(
-                        f"Configuration file {self._config_file_path} does not contain a dictionary."
+                        f"Configuration file {file_path} does not contain a dictionary."
                     )
-                    return {}
-                else:
-                    # File is empty
-                    return {}
+                return {}
         except FileNotFoundError:
-            # This case should ideally be handled by _resolve_config_file_path, but check again.
-            logger.debug(f"Configuration file not found: {self._config_file_path}")
-            return {}
+            logger.debug(f"Configuration file not found: {file_path}")
         except yaml.YAMLError as e:
-            logger.error(
-                f"Error parsing YAML configuration file {self._config_file_path}: {e}"
-            )
-            raise ConfigurationError(
-                f"Invalid YAML format in {self._config_file_path}"
-            ) from e
+            logger.error(f"Error parsing YAML configuration file {file_path}: {e}")
+            raise ConfigurationError(f"Invalid YAML format in {file_path}") from e
         except Exception as e:
-            logger.error(
-                f"Error reading configuration file {self._config_file_path}: {e}"
+            logger.error(f"Error reading configuration file {file_path}: {e}")
+            raise ConfigurationError(f"Could not read file {file_path}") from e
+        return {}
+
+    def _load_from_file(self) -> Dict[str, Any]:
+        """Load configuration from base and profile-specific YAML files."""
+        config = {}
+        if self._config_file_path:
+            config = self._load_single_yaml_file(self._config_file_path)
+
+        if self.profile and self._config_file_path:
+            profile_path = self._config_file_path.with_name(
+                f"{self._config_file_path.stem}.{self.profile}{self._config_file_path.suffix}"
             )
-            raise ConfigurationError(
-                f"Could not read configuration file {self._config_file_path}"
-            ) from e
+            if profile_path.is_file():
+                profile_config = self._load_single_yaml_file(profile_path)
+                _deep_merge(profile_config, config)
+            else:
+                logger.debug(f"Profile config file not found: {profile_path}")
+
+        return config
 
     def _load_from_env(self) -> Dict[str, Any]:
         """Load configuration from environment variables."""
-        env_config = {}
-        valid_fields = {f.name: f for f in fields(self.settings_cls)}
+        env_config: Dict[str, Any] = {}
+        model_fields = self.settings_cls.model_fields
 
         for env_var, value in os.environ.items():
-            if env_var.startswith(self.env_prefix):
-                # Convert PYTEST_ANALYZER_SETTING_NAME to setting_name
-                setting_name = env_var[len(self.env_prefix) :].lower()
+            if not env_var.startswith(self.env_prefix):
+                continue
 
-                # Handle nested MCP settings (PYTEST_ANALYZER_MCP_TRANSPORT_TYPE)
-                if setting_name.startswith("mcp_"):
-                    self._handle_nested_mcp_env(
-                        env_config, setting_name, value, env_var
+            key_str = env_var[len(self.env_prefix) :].lower()
+            parts = key_str.split("_")
+            top_level_key = parts[0]
+
+            field_info = model_fields.get(top_level_key)
+            is_nested = (
+                field_info
+                and (
+                    (
+                        isinstance(
+                            getattr(field_info.annotation, "__origin__", None),
+                            type(Union),
+                        )  # Handles Optional[BaseModel]
+                        and any(
+                            isinstance(arg, type) and issubclass(arg, BaseModel)
+                            for arg in getattr(field_info.annotation, "__args__", [])
+                        )
                     )
-                elif setting_name in valid_fields:
-                    field_info = valid_fields[setting_name]
-                    try:
-                        typed_value = self._convert_type(value, field_info.type)
-                        env_config[setting_name] = typed_value
-                        logger.debug(
-                            f"Loaded '{setting_name}' from environment variable '{env_var}'."
-                        )
-                    except (ValueError, TypeError) as e:
-                        logger.warning(
-                            f"Could not convert environment variable {env_var} "
-                            f"value '{value}' to type {field_info.type}: {e}"
-                        )
-                # else:
-                # Optional: Log ignored env vars
-                # logger.debug(f"Ignoring environment variable '{env_var}' as it doesn't match a setting.")
-
-        return env_config
-
-    def _handle_nested_mcp_env(
-        self, env_config: Dict[str, Any], setting_name: str, value: str, env_var: str
-    ) -> None:
-        """Handle nested MCP environment variables."""
-        # Extract MCP field name (mcp_transport_type -> transport_type)
-        mcp_field_name = setting_name[4:]  # Remove "mcp_" prefix
-
-        # Import MCPSettings dynamically to avoid circular imports
-        from .config_types import MCPSettings
-
-        mcp_fields = {f.name: f for f in fields(MCPSettings)}
-
-        if mcp_field_name in mcp_fields:
-            field_info = mcp_fields[mcp_field_name]
-            try:
-                typed_value = self._convert_type(value, field_info.type)
-
-                # Ensure env_config has an mcp dict
-                if "mcp" not in env_config:
-                    env_config["mcp"] = {}
-
-                env_config["mcp"][mcp_field_name] = typed_value
-                logger.debug(
-                    f"Loaded MCP setting '{mcp_field_name}' from environment variable '{env_var}'."
+                    or (
+                        isinstance(field_info.annotation, type)
+                        and issubclass(field_info.annotation, BaseModel)
+                    )
                 )
-            except (ValueError, TypeError) as e:
-                logger.warning(
-                    f"Could not convert MCP environment variable {env_var} "
-                    f"value '{value}' to type {field_info.type}: {e}"
-                )
-        else:
-            logger.debug(f"Ignoring unknown MCP environment variable '{env_var}'.")
+                and len(parts) > 1
+            )
 
-    def _merge_env_config(self, env_config: Dict[str, Any]) -> None:
-        """Merge environment configuration into main config, handling nested structures."""
-        for key, value in env_config.items():
-            if key == "mcp" and isinstance(value, dict):
-                # Merge MCP settings rather than replacing them
-                if "mcp" not in self._config:
-                    self._config["mcp"] = {}
-                if isinstance(self._config["mcp"], dict):
-                    self._config["mcp"].update(value)
+            if is_nested:
+                # Extract the nested model class from the annotation
+                if isinstance(
+                    getattr(field_info.annotation, "__origin__", None), type(Union)
+                ):
+                    # Handle Optional[BaseModel] case
+                    nested_model_cls = next(
+                        (
+                            arg
+                            for arg in getattr(field_info.annotation, "__args__", [])
+                            if isinstance(arg, type) and issubclass(arg, BaseModel)
+                        ),
+                        None,
+                    )
+                elif isinstance(field_info.annotation, type) and issubclass(
+                    field_info.annotation, BaseModel
+                ):
+                    # Handle direct BaseModel case
+                    nested_model_cls = field_info.annotation
                 else:
-                    self._config["mcp"] = value
-            else:
-                # For non-nested settings, simple replacement
-                self._config[key] = value
+                    nested_model_cls = None
 
-    def _prepare_config_for_instantiation(
-        self, config: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Prepare configuration dict for Settings instantiation, handling nested MCPSettings."""
-        config_copy = config.copy()
+                if nested_model_cls and len(parts) >= 2:
+                    # Try to match field names by rebuilding from parts
+                    # This handles cases like mcp_transport_type -> transport_type
+                    remaining_parts = parts[1:]  # Everything after the top-level key
 
-        # Handle MCP settings if present
-        if "mcp" in config_copy and isinstance(config_copy["mcp"], dict):
-            # Import MCPSettings dynamically to avoid circular imports
-            from .config_types import MCPSettings
+                    # First, try to find a direct field match by joining all remaining parts
+                    candidate_field = "_".join(remaining_parts)
+                    if candidate_field in nested_model_cls.model_fields:
+                        # Direct match: mcp_transport_type -> transport_type
+                        target_type = nested_model_cls.model_fields[
+                            candidate_field
+                        ].annotation
+                        try:
+                            typed_value = self._convert_type(value, target_type)
+                            env_config.setdefault(top_level_key, {})[
+                                candidate_field
+                            ] = typed_value
+                            logger.debug(
+                                f"Loaded nested env var '{env_var}' as '{top_level_key}.{candidate_field}'."
+                            )
+                            continue
+                        except (ValueError, TypeError) as e:
+                            logger.warning(f"Could not convert env var {env_var}: {e}")
+                            continue
 
-            try:
-                # Create MCPSettings instance from the mcp dict
-                mcp_config = config_copy["mcp"]
-                config_copy["mcp"] = MCPSettings(**mcp_config)
-                logger.debug("Created MCPSettings instance from configuration.")
-            except Exception as e:
-                logger.warning(
-                    f"Failed to create MCPSettings from config: {e}. Using defaults."
-                )
-                # Fall back to default MCPSettings instance
-                config_copy["mcp"] = MCPSettings()
+                    # If no direct match, try nested approach (e.g., mcp_security_require_authentication)
+                    if len(remaining_parts) >= 2:
+                        second_level_key = remaining_parts[0]
+                        third_level_parts = remaining_parts[1:]
 
-        return config_copy
+                        second_level_field = nested_model_cls.model_fields.get(
+                            second_level_key
+                        )
+                        if second_level_field:
+                            # Get the nested model class for the second level
+                            second_nested_cls = None
+                            annotation = second_level_field.annotation
+                            if isinstance(
+                                getattr(annotation, "__origin__", None), type(Union)
+                            ):
+                                second_nested_cls = next(
+                                    (
+                                        arg
+                                        for arg in getattr(annotation, "__args__", [])
+                                        if isinstance(arg, type)
+                                        and issubclass(arg, BaseModel)
+                                    ),
+                                    None,
+                                )
+                            elif isinstance(annotation, type) and issubclass(
+                                annotation, BaseModel
+                            ):
+                                second_nested_cls = annotation
+
+                            if second_nested_cls:
+                                third_level_key = "_".join(third_level_parts)
+                                if third_level_key in second_nested_cls.model_fields:
+                                    target_type = second_nested_cls.model_fields[
+                                        third_level_key
+                                    ].annotation
+                                    try:
+                                        typed_value = self._convert_type(
+                                            value, target_type
+                                        )
+                                        env_config.setdefault(
+                                            top_level_key, {}
+                                        ).setdefault(second_level_key, {})[
+                                            third_level_key
+                                        ] = typed_value
+                                        logger.debug(
+                                            f"Loaded nested env var '{env_var}' as '{top_level_key}.{second_level_key}.{third_level_key}'."
+                                        )
+                                        continue
+                                    except (ValueError, TypeError) as e:
+                                        logger.warning(
+                                            f"Could not convert env var {env_var}: {e}"
+                                        )
+                                        continue
+            elif key_str in model_fields:
+                target_type = model_fields[key_str].annotation
+                try:
+                    typed_value = self._convert_type(value, target_type)
+                    env_config[key_str] = typed_value
+                    logger.debug(f"Loaded env var '{env_var}' as '{key_str}'.")
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Could not convert env var {env_var}: {e}")
+        return env_config
 
     def _convert_type(self, value: str, target_type: Any) -> Any:
         """Convert string value to the target type."""
@@ -332,7 +352,6 @@ class ConfigurationManager:
         args = getattr(target_type, "__args__", [])
 
         if target_type is bool:
-            # Handle boolean conversion robustly
             return value.lower() in ("true", "1", "yes", "y", "on")
         elif target_type is int:
             return int(value)
@@ -343,12 +362,9 @@ class ConfigurationManager:
         elif target_type is str:
             return value
         elif origin_type is Union and type(None) in args:
-            # Handle Optional[T] - try converting to the non-None type
-            non_none_type = next(t for t in args if t is not type(None))
+            non_none_type = next((t for t in args if t is not type(None)), str)
             return self._convert_type(value, non_none_type)
         elif origin_type is list or target_type is List:
-            # Basic list support: comma-separated strings
-            # Assumes list of strings if no specific type arg, otherwise tries to convert elements
             element_type = args[0] if args else str
             return [
                 self._convert_type(item.strip(), element_type)
@@ -356,8 +372,6 @@ class ConfigurationManager:
                 if item.strip()
             ]
         elif origin_type is dict or target_type is Dict:
-            # Basic dict support: expects 'key1=value1,key2=value2'
-            # Assumes Dict[str, str] if no specific type args
             key_type = args[0] if args else str
             value_type = args[1] if len(args) > 1 else str
             result_dict = {}
@@ -369,79 +383,79 @@ class ConfigurationManager:
                     )
             return result_dict
 
-        # Fallback or raise error for unsupported types
         try:
-            # Attempt direct conversion for simple types not explicitly handled
             return target_type(value)
         except (ValueError, TypeError):
             raise TypeError(
-                f"Unsupported type conversion for {target_type} from environment variable string."
+                f"Unsupported type conversion for {target_type} from string."
             )
 
-    def get_settings(self) -> Settings:
+    def get_settings(self, overrides: Optional[Dict[str, Any]] = None) -> Settings:
         """
-        Return the final configuration merged from all sources as a Settings object.
+        Return the final configuration as a validated Pydantic Settings object.
+
+        Args:
+            overrides: A dictionary of settings to apply on top of all other sources.
 
         Returns:
             An instance of the settings_cls populated with the merged configuration.
 
         Raises:
-            ConfigurationError: If configuration hasn't been loaded or fails validation.
+            ConfigurationError: If configuration fails validation and fallback fails.
         """
-        if self._settings_instance is None:
-            if not self._loaded:
-                try:
-                    self.load_config()
-                except ConfigurationError:
-                    # If loading fails, create a default instance as fallback
-                    logger.warning(
-                        "Configuration loading failed. Returning default settings instance."
-                    )
-                    try:
-                        self._settings_instance = self.settings_cls()
-                        return self._settings_instance
-                    except Exception as e_default:
-                        # If even default instantiation fails, re-raise critical error
-                        logger.critical(
-                            f"Failed to create even default Settings object: {e_default}"
-                        )
-                        raise ConfigurationError(
-                            "Could not create default settings instance"
-                        ) from e_default
+        if overrides is None and self._settings_instance is not None:
+            return self._settings_instance
 
+        if not self._loaded:
             try:
-                # Handle nested MCP settings before creating Settings instance
-                config_for_instantiation = self._prepare_config_for_instantiation(
-                    self._config
-                )
-
-                # Use dictionary unpacking to instantiate the dataclass
-                # Dataclass validation happens implicitly here
-                self._settings_instance = self.settings_cls(**config_for_instantiation)
-                logger.debug("Created settings instance from loaded configuration.")
-            except TypeError as e:
-                # Catches errors if required fields are missing or types are wrong
-                logger.error(
-                    f"Failed to create Settings object from final configuration: {e}"
-                )
+                self.load_config()
+            except ConfigurationError:
                 logger.warning(
-                    "Attempting to return default settings instance due to validation error."
+                    "Configuration loading failed. Attempting to use defaults."
                 )
-                try:
-                    # Fallback to default instance on validation error
-                    self._settings_instance = self.settings_cls()
-                except Exception as e_default:
-                    logger.critical(
-                        f"Failed to create fallback default Settings object: {e_default}"
-                    )
-                    raise ConfigurationError(
-                        f"Configuration validation failed and fallback failed: {e}"
-                    ) from e
-            except Exception as e:  # Catch other potential errors during instantiation
-                logger.error(f"Unexpected error creating Settings object: {e}")
+                self._config = self._load_defaults()
+
+        final_config = self._config.copy()
+        if overrides:
+            final_config = _deep_merge(overrides, final_config)
+
+        try:
+            instance = self.settings_cls.model_validate(final_config)
+            if overrides is None:
+                self._settings_instance = instance
+            logger.debug("Created settings instance from loaded configuration.")
+            return instance
+        except ValidationError as e:
+            logger.error(f"Failed to validate final configuration: {e}")
+            logger.warning(
+                "Attempting to return default settings instance due to validation error."
+            )
+            try:
+                default_instance = self.settings_cls()
+                if overrides is None:
+                    self._settings_instance = default_instance
+                return default_instance
+            except Exception as e_default:
+                logger.critical(
+                    f"Failed to create fallback default Settings object: {e_default}"
+                )
                 raise ConfigurationError(
-                    f"Failed to create settings instance: {e}"
+                    f"Configuration validation failed and fallback failed: {e}"
                 ) from e
 
-        # Return the cached Settings instance
-        return self._settings_instance  # type: ignore[return-value]
+    def export_schema_json(self, path: Union[str, Path], indent: int = 2) -> None:
+        """
+        Export the Pydantic model schema to a JSON file.
+
+        Args:
+            path: The file path to save the schema to.
+            indent: The JSON indentation level.
+        """
+        schema = self.settings_cls.model_json_schema()
+        try:
+            with open(path, "w") as f:
+                json.dump(schema, f, indent=indent)
+            logger.info(f"Configuration schema exported successfully to {path}")
+        except IOError as e:
+            logger.error(f"Failed to write schema to {path}: {e}")
+            raise ConfigurationError(f"Could not write schema file: {e}") from e

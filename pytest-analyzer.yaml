@@ -1,2 +1,64 @@
+# --- Pytest Execution Settings ---
+# Maximum time in seconds for a single pytest execution run.
 pytest_timeout: 120
+
+# Additional arguments to pass to pytest.
+# Example: pytest_args: ["-n", "auto", "--cov=src"]
+pytest_args: []
+
+
+# --- Analysis and Suggestion Settings ---
+# Maximum number of test failures to process in a single run.
+max_failures: 100
+
+# Maximum number of fix suggestions to provide overall.
 max_suggestions: 5
+
+# Maximum number of fix suggestions to provide for a single failure.
+max_suggestions_per_failure: 3
+
+# Minimum confidence score (0.0 to 1.0) for a suggestion to be shown.
+min_confidence: 0.5
+
+
+# --- LLM (Large Language Model) Settings ---
+# Whether to use LLM-based analysis for generating fix suggestions.
+use_llm: true
+
+# The model to use for analysis. "auto" selects the best available.
+# Examples: "gpt-4-turbo", "claude-3-opus-20240229"
+llm_model: "auto"
+
+# --- Environment Manager ---
+# Specify the environment manager to use. If commented out or set to null,
+# the tool will attempt to auto-detect it.
+# Valid options: "pixi", "poetry", "hatch", "uv", "pipenv", "pip+venv"
+# environment_manager: null
+
+
+# --- MCP (Machine-to-Machine Communication Protocol) Server Settings ---
+# This section configures the optional MCP server for remote tool interaction.
+mcp:
+  # Transport protocol for the server. Can be "stdio" or "http".
+  transport_type: "stdio"
+
+  # --- HTTP Transport Settings (only used if transport_type is "http") ---
+  http_host: "127.0.0.1"
+  http_port: 8000
+
+  # --- Tool Execution Settings ---
+  # Timeout in seconds for any tool command executed via MCP.
+  tool_timeout_seconds: 30
+
+  # --- Security Settings for the MCP Server ---
+  security:
+    # If true, the server will require an authentication token for HTTP transport.
+    require_authentication: false
+
+    # A list of base directory paths that the tool is allowed to access.
+    # If empty, access is not restricted by this setting (but might be by others).
+    # Example: path_allowlist: ["/home/user/my_project"]
+    path_allowlist: []
+
+    # If true, file system access is strictly limited to the project's root directory.
+    restrict_to_project_dir: true
