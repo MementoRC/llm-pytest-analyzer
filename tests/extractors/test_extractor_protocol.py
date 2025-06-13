@@ -153,6 +153,7 @@ def test_json_extract_from_dict(sample_json_data):
 
 def test_json_extract_nonexistent_file():
     """Test extracting from a nonexistent file raises ExtractionError."""
+
     with tempfile.TemporaryDirectory() as temp_dir:
         nonexistent_path = Path(temp_dir) / "nonexistent.json"
 

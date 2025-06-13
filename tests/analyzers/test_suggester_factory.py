@@ -73,10 +73,12 @@ class TestSuggesterFactory(unittest.TestCase):
 
     def test_create_llm_based_suggester_without_llm_service(self):
         """Test creating an LLM-based suggester without an LLM service."""
+        from src.pytest_analyzer.core.errors import ConfigurationError
+
         config = {"min_confidence": 0.8}
 
-        # Should raise ValueError
-        with self.assertRaises(ValueError):
+        # Should raise ConfigurationError
+        with self.assertRaises(ConfigurationError):
             create_llm_based_suggester(config)
 
     def test_create_composite_suggester(self):
@@ -136,10 +138,12 @@ class TestSuggesterFactory(unittest.TestCase):
 
     def test_create_suggester_invalid_type(self):
         """Test creating a suggester with an invalid type."""
+        from src.pytest_analyzer.core.errors import ConfigurationError
+
         config = {"type": "invalid"}
 
-        # Should raise ValueError
-        with self.assertRaises(ValueError):
+        # Should raise ConfigurationError
+        with self.assertRaises(ConfigurationError):
             create_suggester(config)
 
     def test_create_composite_suggester_default_suggesters(self):

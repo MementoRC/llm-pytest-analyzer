@@ -6,7 +6,11 @@ from unittest.mock import MagicMock
 import pytest
 
 from pytest_analyzer.core.analyzer_facade import PytestAnalyzerFacade
-from pytest_analyzer.core.interfaces.errors import BaseError
+from pytest_analyzer.core.errors import (
+    AnalysisError,
+    ExtractionError,
+    LLMServiceError,
+)
 from pytest_analyzer.mcp.facade import MCPAnalyzerFacade
 from pytest_analyzer.mcp.schemas import MCPError
 from pytest_analyzer.mcp.schemas.analyze_pytest_output import AnalyzePytestOutputRequest
@@ -200,22 +204,28 @@ class TestMCPAnalyzerFacade:
         assert isinstance(response.updated_fields, list)
 
     @pytest.mark.parametrize(
-        "method_name,request_class",
+        "method_name,request_class,expected_exception",
         [
-            ("analyze_pytest_output", AnalyzePytestOutputRequest),
-            ("run_and_analyze", RunAndAnalyzeRequest),
-            ("suggest_fixes", SuggestFixesRequest),
-            ("apply_suggestion", ApplySuggestionRequest),
+            ("analyze_pytest_output", AnalyzePytestOutputRequest, AnalysisError),
+            ("run_and_analyze", RunAndAnalyzeRequest, AnalysisError),
+            ("suggest_fixes", SuggestFixesRequest, LLMServiceError),
+            ("apply_suggestion", ApplySuggestionRequest, ExtractionError),
         ],
     )
     async def test_error_handling_analyzer_methods(
-        self, mcp_facade, method_name, request_class, caplog, tmp_path
+        self,
+        mcp_facade,
+        method_name,
+        request_class,
+        expected_exception,
+        caplog,
+        tmp_path,
     ):
         """Test error handling for methods that call the underlying analyzer."""
         # Setup
         caplog.set_level(logging.ERROR)
         mock_method = getattr(mcp_facade.analyzer, method_name)
-        mock_method.side_effect = BaseError("Test error")
+        mock_method.side_effect = expected_exception("Test error")
 
         # Create minimal valid request based on class requirements
         if request_class == ApplySuggestionRequest:

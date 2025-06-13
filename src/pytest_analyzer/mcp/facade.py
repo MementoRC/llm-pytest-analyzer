@@ -11,6 +11,11 @@ import time
 from typing import Any, Callable, TypeVar
 
 from pytest_analyzer.core.analyzer_facade import PytestAnalyzerFacade
+from pytest_analyzer.core.errors import (
+    AnalysisError,
+    ExtractionError,
+    LLMServiceError,
+)
 
 from .schemas import FixSuggestionData, MCPError, PytestFailureData
 from .schemas.analyze_pytest_output import (
@@ -165,41 +170,44 @@ class MCPAnalyzerFacade:
         """Analyze pytest output file and generate fix suggestions."""
         start_time = time.time()
 
-        try:
-            # Validate request
-            errors = request.validate()
-            if errors:
-                execution_time_ms = max(1, int((time.time() - start_time) * 1000))
-                return AnalyzePytestOutputResponse(
-                    success=False,
-                    request_id=request.request_id,
-                    failures=[],
-                    suggestions=[],
-                    parsing_errors=errors,
-                    execution_time_ms=execution_time_ms,
-                )
-
-            # Call core analyzer
-            results = self.analyzer.analyze_pytest_output(request.file_path)
-
-            # Transform results to MCP format
-            suggestions = [self._transform_suggestion_to_mcp(s) for s in results]
-
+        # Validate request
+        errors = request.validate()
+        if errors:
             execution_time_ms = max(1, int((time.time() - start_time) * 1000))
             return AnalyzePytestOutputResponse(
-                success=True,
+                success=False,
                 request_id=request.request_id,
-                suggestions=suggestions,
-                failures=[],  # Populated from analysis if available
+                failures=[],
+                suggestions=[],
+                parsing_errors=errors,
                 execution_time_ms=execution_time_ms,
             )
-        except Exception as e:
-            logger.error(f"Error in analyze_pytest_output: {e}")
-            return MCPError(
-                code="ANALYSIS_FAILED",
-                message=str(e),
-                request_id=request.request_id,
+
+        # Call core analyzer
+        try:
+            results = self.analyzer.analyze_pytest_output(request.file_path)
+        except ExtractionError as e:
+            logger.error(
+                f"Extraction error in analyze_pytest_output: {e}",
+                exc_info=True,
             )
+            raise AnalysisError(
+                f"Failed to analyze pytest output: {e}",
+                context={"file_path": request.file_path},
+                original_exception=e,
+            ) from e
+
+        # Transform results to MCP format
+        suggestions = [self._transform_suggestion_to_mcp(s) for s in results]
+
+        execution_time_ms = max(1, int((time.time() - start_time) * 1000))
+        return AnalyzePytestOutputResponse(
+            success=True,
+            request_id=request.request_id,
+            suggestions=suggestions,
+            failures=[],  # Populated from analysis if available
+            execution_time_ms=execution_time_ms,
+        )
 
     async def run_and_analyze(
         self, request: RunAndAnalyzeRequest
@@ -207,80 +215,85 @@ class MCPAnalyzerFacade:
         """Run pytest and analyze results in one operation."""
         start_time = time.time()
 
-        try:
-            errors = request.validate()
-            if errors:
-                execution_time_ms = max(1, int((time.time() - start_time) * 1000))
-                return RunAndAnalyzeResponse(
-                    success=False,
-                    request_id=request.request_id,
-                    warnings=errors,
-                    execution_time_ms=execution_time_ms,
-                )
+        errors = request.validate()
+        if errors:
+            execution_time_ms = max(1, int((time.time() - start_time) * 1000))
+            return RunAndAnalyzeResponse(
+                success=False,
+                request_id=request.request_id,
+                warnings=errors,
+                execution_time_ms=execution_time_ms,
+            )
 
+        try:
             results = self.analyzer.run_and_analyze(
                 test_path=request.test_pattern,
                 pytest_args=request.pytest_args,
                 quiet=not request.capture_output,
             )
-
-            suggestions = [self._transform_suggestion_to_mcp(s) for s in results]
-
-            execution_time_ms = max(1, int((time.time() - start_time) * 1000))
-            return RunAndAnalyzeResponse(
-                success=True,
-                request_id=request.request_id,
-                suggestions=suggestions,
-                pytest_success=len(results) == 0,
-                tests_run=len(results),  # This should come from actual test counts
-                execution_time_ms=execution_time_ms,
+        except ExtractionError as e:
+            logger.error(
+                f"Extraction error in run_and_analyze: {e}",
+                exc_info=True,
             )
-        except Exception as e:
-            logger.error(f"Error in run_and_analyze: {e}")
-            return MCPError(
-                code="RUN_ANALYZE_FAILED",
-                message=str(e),
-                request_id=request.request_id,
-            )
+            raise AnalysisError(
+                f"Failed to run and analyze: {e}",
+                context={"test_pattern": request.test_pattern},
+                original_exception=e,
+            ) from e
+
+        suggestions = [self._transform_suggestion_to_mcp(s) for s in results]
+
+        execution_time_ms = max(1, int((time.time() - start_time) * 1000))
+        return RunAndAnalyzeResponse(
+            success=True,
+            request_id=request.request_id,
+            suggestions=suggestions,
+            pytest_success=len(results) == 0,
+            tests_run=len(results),  # This should come from actual test counts
+            execution_time_ms=execution_time_ms,
+        )
 
     async def suggest_fixes(self, request: SuggestFixesRequest) -> SuggestFixesResponse:
         """Generate fix suggestions from raw pytest output."""
         start_time = time.time()
 
-        try:
-            errors = request.validate()
-            if errors:
-                execution_time_ms = max(1, int((time.time() - start_time) * 1000))
-                return SuggestFixesResponse(
-                    success=False,
-                    request_id=request.request_id,
-                    parsing_warnings=errors,
-                    execution_time_ms=execution_time_ms,
-                )
-
-            suggestions = self.analyzer.suggest_fixes(request.raw_output)
-            mcp_suggestions = [
-                self._transform_suggestion_to_mcp(s) for s in suggestions
-            ]
-
+        errors = request.validate()
+        if errors:
             execution_time_ms = max(1, int((time.time() - start_time) * 1000))
             return SuggestFixesResponse(
-                success=True,
+                success=False,
                 request_id=request.request_id,
-                suggestions=mcp_suggestions,
-                confidence_score=sum(s.confidence_score for s in mcp_suggestions)
-                / len(mcp_suggestions)
-                if mcp_suggestions
-                else 0.0,
+                parsing_warnings=errors,
                 execution_time_ms=execution_time_ms,
             )
+
+        try:
+            suggestions = self.analyzer.suggest_fixes(request.raw_output)
         except Exception as e:
-            logger.error(f"Error in suggest_fixes: {e}")
-            return MCPError(
-                code="SUGGEST_FIXES_FAILED",
-                message=str(e),
-                request_id=request.request_id,
+            logger.error(
+                f"LLM service error in suggest_fixes: {e}",
+                exc_info=True,
             )
+            raise LLMServiceError(
+                f"Failed to suggest fixes: {e}",
+                context={"raw_output": str(request.raw_output)[:100]},
+                original_exception=e,
+            ) from e
+
+        mcp_suggestions = [self._transform_suggestion_to_mcp(s) for s in suggestions]
+
+        execution_time_ms = max(1, int((time.time() - start_time) * 1000))
+        return SuggestFixesResponse(
+            success=True,
+            request_id=request.request_id,
+            suggestions=mcp_suggestions,
+            confidence_score=sum(s.confidence_score for s in mcp_suggestions)
+            / len(mcp_suggestions)
+            if mcp_suggestions
+            else 0.0,
+            execution_time_ms=execution_time_ms,
+        )
 
     async def apply_suggestion(
         self, request: ApplySuggestionRequest
