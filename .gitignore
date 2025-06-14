@@ -96,3 +96,7 @@ node_modules/
 # Task files
 tasks.json
 tasks/
+
+# Analysis reports and temporary files
+analysis_reports/
+*.yaml.bak

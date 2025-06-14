@@ -1,0 +1,37 @@
+{
+  "timestamp": "20250612_175818",
+  "bandit_security": {
+    "total_issues": 76,
+    "severity_breakdown": {
+      "HIGH": 0,
+      "MEDIUM": 3,
+      "LOW": 73
+    }
+  },
+  "radon_complexity": {
+    "files_analyzed": 50,
+    "high_complexity_functions": 15
+  },
+  "vulture_dead_code": {
+    "unused_items": 7
+  },
+  "pylint_quality": {
+    "total_issues": 2857,
+    "rating": "8.75/10"
+  },
+  "summary": {
+    "total_issues": 98,
+    "security_issues": 76,
+    "complexity_issues": 15,
+    "dead_code_items": 7,
+    "pylint_issues": 2857,
+    "overall_risk_level": "HIGH",
+    "recommendations": [
+      "Address 3 medium-severity security issues",
+      "Review 73 low-severity security findings",
+      "Consider refactoring 15 high-complexity functions",
+      "Remove 7 potentially unused code items",
+      "Address high-priority items from 2857 code quality issues"
+    ]
+  }
+}
