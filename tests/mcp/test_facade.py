@@ -194,7 +194,10 @@ class TestMCPAnalyzerFacade:
         """Test successful config update."""
         request = UpdateConfigRequest(
             tool_name="update_config",
-            config_updates={"pytest_timeout": 200, "max_suggestions": 5},
+            config_updates={
+                "pytest_timeout": 180,
+                "max_suggestions": 8,
+            },  # Use unique values
         )
 
         response = await mcp_facade.update_config(request)
@@ -223,7 +226,7 @@ class TestMCPAnalyzerFacade:
         request = UpdateConfigRequest(
             tool_name="update_config",
             section="nonexistent",
-            config_updates={"key": "value"},
+            config_updates={"test_key": "test_value"},
         )
         response = await mcp_facade.update_config(request)
         assert response.success is False
@@ -242,25 +245,29 @@ class TestMCPAnalyzerFacade:
         """Test successful config update with validate_only=True."""
         request = UpdateConfigRequest(
             tool_name="update_config",
-            config_updates={"pytest_timeout": 200},
+            config_updates={
+                "pytest_timeout": 250
+            },  # Use unique value to ensure change detection
             validate_only=True,
         )
         response = await mcp_facade.update_config(request)
         assert response.success is True
         assert response.updated_fields == ["pytest_timeout"]
-        assert response.applied_changes == {"pytest_timeout": 200}
+        assert response.applied_changes == {"pytest_timeout": 250}
 
     async def test_update_config_success_with_section(self, mcp_facade):
         """Test successful config update with a specific section."""
         request = UpdateConfigRequest(
             tool_name="update_config",
             section="llm",
-            config_updates={"llm_timeout": 120},
+            config_updates={
+                "llm_timeout": 600
+            },  # Use unique value to ensure change detection
         )
         response = await mcp_facade.update_config(request)
         assert response.success is True
         assert "llm_timeout" in response.updated_fields
-        assert response.applied_changes == {"llm_timeout": 120}
+        assert response.applied_changes == {"llm_timeout": 600}
 
     @pytest.mark.parametrize(
         "method_name,request_class,expected_exception",
@@ -355,7 +362,8 @@ class TestMCPAnalyzerFacade:
             )
         elif request_class == UpdateConfigRequest:
             request = request_class(
-                tool_name=method_name, config_updates={"pytest_timeout": 120}
+                tool_name=method_name,
+                config_updates={"pytest_timeout": 150},  # Use unique value
             )
         else:
             request = request_class(tool_name=method_name)
@@ -440,7 +448,8 @@ class TestMCPAnalyzerFacade:
             request = request_class(tool_name=method_name, test_pattern="test_*.py")
         elif method_name == "update_config":
             request = request_class(
-                tool_name=method_name, config_updates={"key": "value"}
+                tool_name=method_name,
+                config_updates={"test_key": "test_value"},  # Use unique key-value
             )
         else:
             # For methods that only need tool_name
