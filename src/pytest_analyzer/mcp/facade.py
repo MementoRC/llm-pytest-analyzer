@@ -832,9 +832,10 @@ class MCPAnalyzerFacade:
             for k, v in config_data[section].items():
                 if isinstance(v, dict) and "value" in v:
                     if any(s in k.lower() for s in sensitive_keys):
-                        v["value"] = (
-                            "***" if v["value"] not in (None, "") else v["value"]
-                        )
+                        if v["value"] is None:
+                            v["value"] = "***"
+                        elif v["value"] != "":
+                            v["value"] = "***"
 
         # 4. Section filtering
         if request.section:
@@ -931,9 +932,7 @@ class MCPAnalyzerFacade:
         updates = request.config_updates
         if request.section:
             if request.section not in config_dict:
-                validation_errors.append(
-                    f"Section '{request.section}' not found in configuration."
-                )
+                validation_errors.append(f"Section '{request.section}' not found.")
                 execution_time_ms = max(1, int((time.time() - start_time) * 1000))
                 return UpdateConfigResponse(
                     success=False,
