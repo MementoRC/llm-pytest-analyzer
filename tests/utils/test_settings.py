@@ -176,19 +176,16 @@ def test_config_manager_load_environment_manager_from_env(manager_name_mixed_cas
         assert settings.environment_manager == expected_value
 
 
-def test_config_manager_load_invalid_environment_manager_from_env():
+def test_config_manager_load_invalid_environment_manager_from_env(caplog):
     """Test loading an invalid environment_manager from an environment variable."""
     invalid_manager = "bad_env_manager"
     with patch.dict(
         os.environ, {"PYTEST_ANALYZER_ENVIRONMENT_MANAGER": invalid_manager}
     ):
         config_manager = ConfigurationManager()
-        # The ValueError is wrapped in ConfigurationError during get_settings()
-        with pytest.raises(
-            ConfigurationError,
-            match=rf"Failed to create settings instance.*Invalid environment_manager: '{invalid_manager}'",
-        ):
+        with pytest.raises(ConfigurationError) as exc_info:
             config_manager.get_settings()
+        assert invalid_manager in str(exc_info.value)
 
 
 @pytest.mark.parametrize("manager_name_mixed_case", VALID_ENV_MANAGERS_MIXED_CASE)

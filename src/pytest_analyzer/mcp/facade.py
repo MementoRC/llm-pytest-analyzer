@@ -668,16 +668,31 @@ class MCPAnalyzerFacade:
                 warnings=[f"Failed to load settings: {e}"],
             )
 
-        # 2. Helper: flatten dataclass to dict, recursively, with descriptions
-        def dataclass_to_dict(obj, section=None):
-            from dataclasses import fields, is_dataclass
+        from dataclasses import fields, is_dataclass
+        from typing import Any, Dict
+
+        from pydantic import BaseModel
+
+        def model_to_dict(obj: Any, section: str = None) -> Dict[str, Any]:
+            """
+            Convert a Pydantic model or dataclass to a dictionary, including descriptions and masking sensitive fields.
+            """
+            if isinstance(obj, BaseModel):
+                data = obj.model_dump()
+                model_fields = obj.model_fields
+            elif is_dataclass(obj):
+                data = {field.name: getattr(obj, field.name) for field in fields(obj)}
+                model_fields = {f.name: f for f in fields(obj)}
+            else:
+                raise TypeError(
+                    "Object must be a Pydantic BaseModel or a dataclass instance."
+                )
 
             result = {}
-            for f in fields(obj):
-                value = getattr(obj, f.name)
-                # Hide sensitive fields
+            for key, value in data.items():
+                # Mask sensitive fields
                 if any(
-                    kw in f.name.lower()
+                    kw in key.lower()
                     for kw in (
                         "key",
                         "token",
@@ -689,15 +704,26 @@ class MCPAnalyzerFacade:
                 ):
                     if value is not None:
                         value = "***"
-                # Recursively flatten dataclasses
-                if is_dataclass(value):
-                    value = dataclass_to_dict(value)
+
                 # Add description and allowed values if available
                 entry = {"value": value}
-                if f.metadata.get("description"):
-                    entry["description"] = f.metadata["description"]
+                field_info = model_fields.get(key)
+                if field_info:
+                    description = None
+                    if hasattr(field_info, "description") and field_info.description:
+                        description = field_info.description
+                    elif (
+                        hasattr(field_info, "metadata")
+                        and isinstance(field_info.metadata, dict)
+                        and field_info.metadata.get("description")
+                    ):
+                        description = field_info.metadata["description"]
+
+                    if description:
+                        entry["description"] = description
+
                 # Add allowed values for enums or known fields
-                if section == "llm" and f.name == "llm_provider":
+                if section == "llm" and key == "llm_provider":
                     entry["allowed_values"] = [
                         "anthropic",
                         "openai",
@@ -706,11 +732,11 @@ class MCPAnalyzerFacade:
                         "ollama",
                         "auto",
                     ]
-                if section == "llm" and f.name == "llm_model":
+                if section == "llm" and key == "llm_model":
                     entry["description"] = (
                         "Model to use (auto selects available models)"
                     )
-                if section == "logging" and f.name == "log_level":
+                if section == "logging" and key == "log_level":
                     entry["allowed_values"] = [
                         "DEBUG",
                         "INFO",
@@ -718,18 +744,25 @@ class MCPAnalyzerFacade:
                         "ERROR",
                         "CRITICAL",
                     ]
-                result[f.name] = entry
+
+                result[key] = entry
             return result
 
         # 3. Organize config by section
         config_data = {}
 
+        def process_section(section_name, attributes):
+            section_data = {
+                k: v
+                for k, v in model_to_dict(settings, section_name).items()
+                if k in attributes
+            }
+            return section_data
+
         # LLM section
-        config_data["llm"] = {
-            k: v
-            for k, v in dataclass_to_dict(settings, section="llm").items()
-            if k
-            in [
+        config_data["llm"] = process_section(
+            "llm",
+            [
                 "use_llm",
                 "llm_timeout",
                 "llm_api_key",
@@ -745,18 +778,16 @@ class MCPAnalyzerFacade:
                 "together_api_key",
                 "ollama_host",
                 "ollama_port",
-            ]
-        }
+            ],
+        )
 
         # MCP section
-        config_data["mcp"] = dataclass_to_dict(settings.mcp)
+        config_data["mcp"] = model_to_dict(settings.mcp)
 
         # Analysis section
-        config_data["analysis"] = {
-            k: v
-            for k, v in dataclass_to_dict(settings, section="analysis").items()
-            if k
-            in [
+        config_data["analysis"] = process_section(
+            "analysis",
+            [
                 "max_suggestions",
                 "max_suggestions_per_failure",
                 "min_confidence",
@@ -764,36 +795,46 @@ class MCPAnalyzerFacade:
                 "analyzer_timeout",
                 "max_failures",
                 "preferred_format",
-            ]
-        }
+            ],
+        )
 
         # Extraction section
-        config_data["extraction"] = {
-            k: v
-            for k, v in dataclass_to_dict(settings, section="extraction").items()
-            if k in ["pytest_timeout", "pytest_args"]
-        }
+        config_data["extraction"] = process_section(
+            "extraction",
+            [
+                "pytest_timeout",
+                "pytest_args",
+            ],
+        )
 
         # Logging section
-        config_data["logging"] = {
-            k: v
-            for k, v in dataclass_to_dict(settings, section="logging").items()
-            if k in ["log_level", "debug"]
-        }
+        config_data["logging"] = process_section(
+            "logging",
+            [
+                "log_level",
+                "debug",
+            ],
+        )
 
         # Git section
-        config_data["git"] = {
-            k: v
-            for k, v in dataclass_to_dict(settings, section="git").items()
-            if k in ["check_git", "auto_init_git", "use_git_branches"]
-        }
+        config_data["git"] = process_section(
+            "git",
+            [
+                "check_git",
+                "auto_init_git",
+                "use_git_branches",
+            ],
+        )
 
         # Remove sensitive values from all sections
         sensitive_keys = {"api_key", "token", "password", "auth_token", "secret"}
         for section in config_data:
             for k, v in config_data[section].items():
-                if any(s in k.lower() for s in sensitive_keys):
-                    v["value"] = "***" if v["value"] not in (None, "") else v["value"]
+                if isinstance(v, dict) and "value" in v:
+                    if any(s in k.lower() for s in sensitive_keys):
+                        v["value"] = (
+                            "***" if v["value"] not in (None, "") else v["value"]
+                        )
 
         # 4. Section filtering
         if request.section:
@@ -808,10 +849,7 @@ class MCPAnalyzerFacade:
                 )
             config_data = filtered
 
-        # 5. Include defaults if requested (already included)
-        # 6. Exclude sensitive if requested (already done above)
-
-        # 7. Compose response
+        # 5. Compose response
         return GetConfigResponse(
             success=True,
             request_id=request.request_id,
@@ -866,7 +904,6 @@ class MCPAnalyzerFacade:
 
         # 2. Load current config as dict
         current_settings = manager.get_settings()
-        from dataclasses import asdict
 
         def deep_update(d, u, strategy="merge"):
             """Recursively update dict d with u using merge/replace/append."""
@@ -887,7 +924,7 @@ class MCPAnalyzerFacade:
                     d[k] = v
             return d
 
-        config_dict = asdict(current_settings)
+        config_dict = current_settings.model_dump()
         original_config = copy.deepcopy(config_dict)
 
         # 3. Section filtering
@@ -988,12 +1025,12 @@ class MCPAnalyzerFacade:
             )
 
         # 7. Write new config to file (YAML)
+        from pathlib import Path
+
         import yaml
 
         if not config_file_path:
             # Create a default config file in the current working directory
-            from pathlib import Path
-
             config_file_path = Path.cwd() / "pytest-analyzer.yaml"
             warnings.append(
                 f"No config file found; creating new config file at {config_file_path}"
@@ -1010,9 +1047,32 @@ class MCPAnalyzerFacade:
                 with open(config_file_path, "r") as f:
                     file_config = yaml.safe_load(f) or {}
 
-            # Update with new values
-            for k in updates:
-                file_config[k] = new_config[k]
+            # Organize updates by section
+            organized_updates = {}
+            for full_key, value in updates.items():
+                # Split the key into section and field
+                parts = full_key.split(".")
+                if len(parts) > 1:
+                    section = parts[0]
+                    field = ".".join(parts[1:])  # Handles nested sections
+                else:
+                    # Handle updates without explicit section (top-level)
+                    section = "top_level"  # Use a temporary section name
+                    field = full_key
+
+                if section not in organized_updates:
+                    organized_updates[section] = {}
+                organized_updates[section][field] = value
+
+            # Update with new values, handling sections
+            for section, section_updates in organized_updates.items():
+                if section == "top_level":
+                    # Apply top-level updates directly
+                    file_config.update(section_updates)
+                else:
+                    if section not in file_config:
+                        file_config[section] = {}
+                    file_config[section].update(section_updates)
 
             # Write the updated config
             with open(config_file_path, "w") as f:
@@ -1020,7 +1080,7 @@ class MCPAnalyzerFacade:
                     file_config, f, default_flow_style=False, sort_keys=False
                 )
         except Exception as e:
-            validation_errors.append(f"Failed to write config file: {e}")
+            validation_errors.append(f"Failed to write config file: {str(e)}")
             execution_time_ms = max(1, int((time.time() - start_time) * 1000))
             return UpdateConfigResponse(
                 success=False,

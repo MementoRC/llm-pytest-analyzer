@@ -202,6 +202,66 @@ class TestMCPAnalyzerFacade:
         assert response.success is True
         assert isinstance(response.updated_fields, list)
 
+    async def test_get_config_section_not_found(self, mcp_facade):
+        """Test get_config with a section that does not exist."""
+        request = GetConfigRequest(tool_name="get_config", section="nonexistent")
+        response = await mcp_facade.get_config(request)
+        assert response.success is False
+        assert "Section 'nonexistent' not found." in response.warnings[0]
+
+    async def test_get_config_sensitive_data_masked(self, mcp_facade):
+        """Test that sensitive data is masked in get_config response."""
+        request = GetConfigRequest(tool_name="get_config")
+        response = await mcp_facade.get_config(request)
+        assert response.success is True
+        assert "llm" in response.config_data
+        if "llm_api_key" in response.config_data["llm"]:
+            assert response.config_data["llm"]["llm_api_key"]["value"] == "***"
+
+    async def test_update_config_section_not_found(self, mcp_facade):
+        """Test update_config with a section that does not exist."""
+        request = UpdateConfigRequest(
+            tool_name="update_config",
+            section="nonexistent",
+            config_updates={"key": "value"},
+        )
+        response = await mcp_facade.update_config(request)
+        assert response.success is False
+        assert "Section 'nonexistent' not found" in response.validation_errors[0]
+
+    async def test_update_config_validation_error(self, mcp_facade):
+        """Test update_config with invalid config updates."""
+        request = UpdateConfigRequest(
+            tool_name="update_config", config_updates={"pytest_timeout": "invalid"}
+        )
+        response = await mcp_facade.update_config(request)
+        assert response.success is False
+        assert len(response.validation_errors) > 0
+
+    async def test_update_config_success_validate_only(self, mcp_facade):
+        """Test successful config update with validate_only=True."""
+        request = UpdateConfigRequest(
+            tool_name="update_config",
+            config_updates={"pytest_timeout": 200},
+            validate_only=True,
+        )
+        response = await mcp_facade.update_config(request)
+        assert response.success is True
+        assert response.updated_fields == ["pytest_timeout"]
+        assert response.applied_changes == {}
+
+    async def test_update_config_success_with_section(self, mcp_facade):
+        """Test successful config update with a specific section."""
+        request = UpdateConfigRequest(
+            tool_name="update_config",
+            section="llm",
+            config_updates={"llm_timeout": 120},
+        )
+        response = await mcp_facade.update_config(request)
+        assert response.success is True
+        assert "llm_timeout" in response.updated_fields
+        assert response.applied_changes == {"llm_timeout": 120}
+
     @pytest.mark.parametrize(
         "method_name,request_class,expected_exception",
         [

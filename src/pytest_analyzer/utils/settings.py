@@ -104,7 +104,7 @@ def load_settings(
     if debug:
         overrides["log_level"] = "DEBUG"
 
-    settings = manager.get_settings(overrides=overrides if overrides else None)
+    settings = manager.get_settings(overrides=overrides or None)
 
     return settings
 
