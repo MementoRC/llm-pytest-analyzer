@@ -4,7 +4,13 @@
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 
 # --- Security Settings Model ---
@@ -184,8 +190,22 @@ class Settings(BaseModel):
     max_suggestions_per_failure: int = 3  # Maximum suggestions per failure
     min_confidence: float = 0.5  # Minimum confidence for suggestions
 
-    # LLM settings
-    llm: LLMSettings = Field(default_factory=LLMSettings)
+    # LLM settings (top-level for backward compatibility)
+    use_llm: bool = True  # Whether to use LLM-based suggestions
+    llm_timeout: int = 60  # Timeout for LLM requests in seconds
+    llm_api_key: Optional[str] = None  # API key for LLM service
+    llm_model: str = "auto"  # Model to use (auto selects available models)
+    llm_provider: str = "auto"  # Provider to use (anthropic, openai, azure, etc.)
+    use_fallback: bool = True  # Whether to try fallback providers if primary fails
+    auto_apply: bool = False  # Whether to automatically apply suggested fixes
+    anthropic_api_key: Optional[str] = None  # Anthropic API key
+    openai_api_key: Optional[str] = None  # OpenAI API key
+    azure_api_key: Optional[str] = None  # Azure OpenAI API key
+    azure_endpoint: Optional[str] = None  # Azure OpenAI endpoint
+    azure_api_version: str = "2023-05-15"  # Azure OpenAI API version
+    together_api_key: Optional[str] = None  # Together.ai API key
+    ollama_host: str = "localhost"  # Ollama host
+    ollama_port: int = 11434  # Ollama port
 
     # Git integration settings
     check_git: bool = True  # Whether to check for Git compatibility
@@ -217,6 +237,28 @@ class Settings(BaseModel):
 
     # Backward compatibility properties
     debug: bool = False  # Enable debug mode (backward compatibility)
+
+    @computed_field
+    @property
+    def llm(self) -> LLMSettings:
+        """Return an LLMSettings instance from top-level settings for section-based access."""
+        return LLMSettings(
+            use_llm=self.use_llm,
+            llm_timeout=self.llm_timeout,
+            llm_api_key=self.llm_api_key,
+            llm_model=self.llm_model,
+            llm_provider=self.llm_provider,
+            use_fallback=self.use_fallback,
+            auto_apply=self.auto_apply,
+            anthropic_api_key=self.anthropic_api_key,
+            openai_api_key=self.openai_api_key,
+            azure_api_key=self.azure_api_key,
+            azure_endpoint=self.azure_endpoint,
+            azure_api_version=self.azure_api_version,
+            together_api_key=self.together_api_key,
+            ollama_host=self.ollama_host,
+            ollama_port=self.ollama_port,
+        )
 
     @field_validator("project_root", mode="before")
     @classmethod
