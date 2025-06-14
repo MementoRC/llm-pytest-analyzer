@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from pytest_analyzer.utils.configuration import ConfigurationError, ConfigurationManager
+from pytest_analyzer.utils.configuration import ConfigurationManager
 from pytest_analyzer.utils.settings import Settings, load_settings
 
 
@@ -172,20 +172,24 @@ def test_config_manager_load_environment_manager_from_env(manager_name_mixed_cas
     expected_value = manager_name_mixed_case.lower()
     with patch.dict(os.environ, {"PYTEST_ANALYZER_ENVIRONMENT_MANAGER": env_var_value}):
         config_manager = ConfigurationManager()
+        config_manager.load_config(force_reload=True)
         settings = config_manager.get_settings()
         assert settings.environment_manager == expected_value
 
 
 def test_config_manager_load_invalid_environment_manager_from_env(caplog):
-    """Test loading an invalid environment_manager from an environment variable."""
+    """Test loading an invalid environment_manager from an environment variable falls back to default."""
     invalid_manager = "bad_env_manager"
     with patch.dict(
         os.environ, {"PYTEST_ANALYZER_ENVIRONMENT_MANAGER": invalid_manager}
     ):
         config_manager = ConfigurationManager()
-        with pytest.raises(ConfigurationError) as exc_info:
-            config_manager.get_settings()
-        assert invalid_manager in str(exc_info.value)
+        config_manager.load_config(force_reload=True)
+        # Should not raise, but log an error and fall back to defaults
+        settings = config_manager.get_settings()
+        assert "Failed to validate final configuration" in caplog.text
+        # The setting should have its default value
+        assert settings.environment_manager is None
 
 
 @pytest.mark.parametrize("manager_name_mixed_case", VALID_ENV_MANAGERS_MIXED_CASE)
@@ -200,23 +204,25 @@ def test_config_manager_load_environment_manager_from_yaml(
     config_file.write_text(config_content)
 
     config_manager = ConfigurationManager(config_file_path=config_file)
+    config_manager.load_config(force_reload=True)
     settings = config_manager.get_settings()
     assert settings.environment_manager == expected_value
 
 
-def test_config_manager_load_invalid_environment_manager_from_yaml(tmp_path):
-    """Test loading an invalid environment_manager from a YAML file."""
+def test_config_manager_load_invalid_environment_manager_from_yaml(tmp_path, caplog):
+    """Test loading an invalid environment_manager from a YAML file falls back to default."""
     invalid_manager = "bad_yaml_manager"
     config_content = f"environment_manager: {invalid_manager}\n"
     config_file = tmp_path / "test_invalid_config.yaml"
     config_file.write_text(config_content)
 
     config_manager = ConfigurationManager(config_file_path=config_file)
-    with pytest.raises(
-        ConfigurationError,
-        match=rf"Failed to create settings instance.*Invalid environment_manager: '{invalid_manager}'",
-    ):
-        config_manager.get_settings()
+    config_manager.load_config(force_reload=True)
+    # Should not raise, but log an error and fall back to defaults
+    settings = config_manager.get_settings()
+    assert "Failed to validate final configuration" in caplog.text
+    # The setting should have its default value
+    assert settings.environment_manager is None
 
 
 def test_config_manager_precedence_env_over_yaml_environment_manager(tmp_path):
@@ -230,6 +236,7 @@ def test_config_manager_precedence_env_over_yaml_environment_manager(tmp_path):
 
     with patch.dict(os.environ, {"PYTEST_ANALYZER_ENVIRONMENT_MANAGER": env_manager}):
         config_manager = ConfigurationManager(config_file_path=config_file)
+        config_manager.load_config(force_reload=True)
         settings = config_manager.get_settings()
         assert settings.environment_manager == env_manager.lower()
 
@@ -250,6 +257,7 @@ def test_config_manager_precedence_env_over_yaml_mixed_case_environment_manager(
         os.environ, {"PYTEST_ANALYZER_ENVIRONMENT_MANAGER": env_manager_mixed_case}
     ):
         config_manager = ConfigurationManager(config_file_path=config_file)
+        config_manager.load_config(force_reload=True)
         settings = config_manager.get_settings()
         assert settings.environment_manager == expected_env_manager
 
@@ -264,5 +272,6 @@ def test_config_manager_default_environment_manager_if_not_set():
         # To be absolutely sure no default file is picked up, we can mock _resolve_config_file_path
         # or ensure the test runs in an environment where no default config file exists.
         # For simplicity, assuming no default config file with this setting is present.
+        config_manager.load_config(force_reload=True)
         settings = config_manager.get_settings()
         assert settings.environment_manager is None

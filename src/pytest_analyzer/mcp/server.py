@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, Optional
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import ResourceContents, Tool
+from pydantic import ValidationError
 
 from ..core.cross_cutting.error_handling import error_context, error_handler
 from ..utils.settings import Settings
@@ -51,7 +52,7 @@ class PytestAnalyzerMCPServer:
         if transport_type is not None or host is not None or port is not None:
             from ..utils.config_types import MCPSettings
 
-            mcp_config = {**self.settings.mcp.__dict__}
+            mcp_config = self.settings.mcp.model_dump()
             if transport_type is not None:
                 mcp_config["transport_type"] = transport_type
             if host is not None:
@@ -63,21 +64,11 @@ class PytestAnalyzerMCPServer:
             # Validation will occur at start() time
             try:
                 self.settings.mcp = MCPSettings(**mcp_config)
-            except ValueError as e:
+            except ValidationError as e:
                 if "Invalid transport_type" in str(e):
-                    # Create without validation for testing - bypass __post_init__
-                    import dataclasses
-
-                    mcp_obj = object.__new__(MCPSettings)
-                    for field in dataclasses.fields(MCPSettings):
-                        setattr(
-                            mcp_obj,
-                            field.name,
-                            mcp_config.get(
-                                field.name, getattr(self.settings.mcp, field.name)
-                            ),
-                        )
-                    self.settings.mcp = mcp_obj
+                    # For testing, allow creating a server with an invalid transport type.
+                    # The error will be raised when `start()` is called.
+                    self.settings.mcp = MCPSettings.model_construct(**mcp_config)
                 else:
                     raise
 

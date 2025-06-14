@@ -139,6 +139,29 @@ class MCPSettings(BaseModel):
         return data
 
 
+# --- LLM Settings Model ---
+class LLMSettings(BaseModel):
+    """Configuration settings for LLM-based suggestions."""
+
+    use_llm: bool = True  # Whether to use LLM-based suggestions
+    llm_timeout: int = 60  # Timeout for LLM requests in seconds
+    llm_api_key: Optional[str] = None  # API key for LLM service
+    llm_model: str = "auto"  # Model to use (auto selects available models)
+    llm_provider: str = "auto"  # Provider to use (anthropic, openai, azure, etc.)
+    use_fallback: bool = True  # Whether to try fallback providers if primary fails
+    auto_apply: bool = False  # Whether to automatically apply suggested fixes
+
+    # Provider-specific settings
+    anthropic_api_key: Optional[str] = None  # Anthropic API key
+    openai_api_key: Optional[str] = None  # OpenAI API key
+    azure_api_key: Optional[str] = None  # Azure OpenAI API key
+    azure_endpoint: Optional[str] = None  # Azure OpenAI endpoint
+    azure_api_version: str = "2023-05-15"  # Azure OpenAI API version
+    together_api_key: Optional[str] = None  # Together.ai API key
+    ollama_host: str = "localhost"  # Ollama host
+    ollama_port: int = 11434  # Ollama port
+
+
 # --- Main Settings Model ---
 class Settings(BaseModel):
     """Configuration settings for the pytest analyzer."""
@@ -162,23 +185,7 @@ class Settings(BaseModel):
     min_confidence: float = 0.5  # Minimum confidence for suggestions
 
     # LLM settings
-    use_llm: bool = True  # Whether to use LLM-based suggestions
-    llm_timeout: int = 60  # Timeout for LLM requests in seconds
-    llm_api_key: Optional[str] = None  # API key for LLM service
-    llm_model: str = "auto"  # Model to use (auto selects available models)
-    llm_provider: str = "auto"  # Provider to use (anthropic, openai, azure, etc.)
-    use_fallback: bool = True  # Whether to try fallback providers if primary fails
-    auto_apply: bool = False  # Whether to automatically apply suggested fixes
-
-    # Provider-specific settings
-    anthropic_api_key: Optional[str] = None  # Anthropic API key
-    openai_api_key: Optional[str] = None  # OpenAI API key
-    azure_api_key: Optional[str] = None  # Azure OpenAI API key
-    azure_endpoint: Optional[str] = None  # Azure OpenAI endpoint
-    azure_api_version: str = "2023-05-15"  # Azure OpenAI API version
-    together_api_key: Optional[str] = None  # Together.ai API key
-    ollama_host: str = "localhost"  # Ollama host
-    ollama_port: int = 11434  # Ollama port
+    llm: LLMSettings = Field(default_factory=LLMSettings)
 
     # Git integration settings
     check_git: bool = True  # Whether to check for Git compatibility

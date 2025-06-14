@@ -885,8 +885,6 @@ class MCPAnalyzerFacade:
         backup_path = None
         backup_created = False
         warnings = []
-        updated_fields = []
-        applied_changes = {}
         validation_errors = []
 
         # 1. Create backup if requested and config file exists
@@ -928,8 +926,8 @@ class MCPAnalyzerFacade:
         config_dict = current_settings.model_dump()
         original_config = copy.deepcopy(config_dict)
 
-        # 3. Section filtering
-        updates = request.config_updates
+        # 3. Prepare updates
+        updates_to_merge = request.config_updates
         if request.section:
             if request.section not in config_dict:
                 validation_errors.append(f"Section '{request.section}' not found.")
@@ -940,30 +938,17 @@ class MCPAnalyzerFacade:
                     validation_errors=validation_errors,
                     execution_time_ms=execution_time_ms,
                 )
-            # Only update the specified section
-            section_updates = updates.get(request.section, {})
-            if not section_updates:
-                validation_errors.append(
-                    f"No updates provided for section '{request.section}'."
-                )
-                execution_time_ms = max(1, int((time.time() - start_time) * 1000))
-                return UpdateConfigResponse(
-                    success=False,
-                    request_id=request.request_id,
-                    validation_errors=validation_errors,
-                    execution_time_ms=execution_time_ms,
-                )
-            updates = {request.section: section_updates}
+            updates_to_merge = {request.section: request.config_updates}
 
         # 4. Merge/replace/append strategy
         merge_strategy = request.merge_strategy or "merge"
         new_config = copy.deepcopy(config_dict)
         try:
             if merge_strategy == "replace":
-                for k, v in updates.items():
+                for k, v in updates_to_merge.items():
                     new_config[k] = v
             elif merge_strategy == "append":
-                for k, v in updates.items():
+                for k, v in updates_to_merge.items():
                     if isinstance(new_config.get(k), list) and isinstance(v, list):
                         new_config[k] = new_config[k] + v
                     elif isinstance(new_config.get(k), dict) and isinstance(v, dict):
@@ -977,7 +962,7 @@ class MCPAnalyzerFacade:
                     else:
                         new_config[k] = v
             else:  # merge (default)
-                deep_update(new_config, updates, strategy="merge")
+                deep_update(new_config, updates_to_merge, strategy="merge")
         except Exception as e:
             validation_errors.append(f"Failed to apply updates: {e}")
             execution_time_ms = max(1, int((time.time() - start_time) * 1000))
@@ -1004,18 +989,31 @@ class MCPAnalyzerFacade:
                 backup_path=backup_path if backup_created else None,
             )
 
+        # Compute updated fields and applied changes based on the request
+        updated_fields = []
+        applied_changes = {}
+        for key, value in request.config_updates.items():
+            old_value_dict = original_config
+            new_value_dict = new_config
+            if request.section:
+                old_value_dict = original_config.get(request.section, {})
+                new_value_dict = new_config.get(request.section, {})
+
+            old_value = old_value_dict.get(key)
+            new_value = new_value_dict.get(key)
+
+            if old_value != new_value:
+                updated_fields.append(key)
+                applied_changes[key] = new_value
+
         # 6. If validate_only, do not write changes
         if request.validate_only:
-            # Compute updated fields
-            for k in updates:
-                if config_dict.get(k) != new_config.get(k):
-                    updated_fields.append(k)
             execution_time_ms = max(1, int((time.time() - start_time) * 1000))
             return UpdateConfigResponse(
                 success=True,
                 request_id=request.request_id,
                 updated_fields=updated_fields,
-                applied_changes=updates,
+                applied_changes=applied_changes,
                 validation_errors=[],
                 execution_time_ms=execution_time_ms,
                 backup_path=backup_path if backup_created else None,
@@ -1046,32 +1044,14 @@ class MCPAnalyzerFacade:
                 with open(config_file_path, "r") as f:
                     file_config = yaml.safe_load(f) or {}
 
-            # Organize updates by section
-            organized_updates = {}
-            for full_key, value in updates.items():
-                # Split the key into section and field
-                parts = full_key.split(".")
-                if len(parts) > 1:
-                    section = parts[0]
-                    field = ".".join(parts[1:])  # Handles nested sections
-                else:
-                    # Handle updates without explicit section (top-level)
-                    section = "top_level"  # Use a temporary section name
-                    field = full_key
-
-                if section not in organized_updates:
-                    organized_updates[section] = {}
-                organized_updates[section][field] = value
-
-            # Update with new values, handling sections
-            for section, section_updates in organized_updates.items():
-                if section == "top_level":
-                    # Apply top-level updates directly
-                    file_config.update(section_updates)
-                else:
-                    if section not in file_config:
-                        file_config[section] = {}
-                    file_config[section].update(section_updates)
+            # Apply updates to the file config structure
+            updates_for_file = request.config_updates
+            if request.section:
+                if request.section not in file_config:
+                    file_config[request.section] = {}
+                file_config[request.section].update(updates_for_file)
+            else:
+                file_config.update(updates_for_file)
 
             # Write the updated config
             with open(config_file_path, "w") as f:
@@ -1095,12 +1075,6 @@ class MCPAnalyzerFacade:
             get_config_manager(force_reload=True)
         except Exception as e:
             warnings.append(f"Failed to reload configuration: {e}")
-
-        # 9. Compute updated fields
-        for k in updates:
-            if original_config.get(k) != new_config.get(k):
-                updated_fields.append(k)
-                applied_changes[k] = new_config[k]
 
         execution_time_ms = max(1, int((time.time() - start_time) * 1000))
         return UpdateConfigResponse(

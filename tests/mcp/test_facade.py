@@ -248,7 +248,7 @@ class TestMCPAnalyzerFacade:
         response = await mcp_facade.update_config(request)
         assert response.success is True
         assert response.updated_fields == ["pytest_timeout"]
-        assert response.applied_changes == {}
+        assert response.applied_changes == {"pytest_timeout": 200}
 
     async def test_update_config_success_with_section(self, mcp_facade):
         """Test successful config update with a specific section."""

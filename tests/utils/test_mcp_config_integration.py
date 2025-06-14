@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from pytest_analyzer.utils.config_types import MCPSettings, Settings
 from pytest_analyzer.utils.configuration import ConfigurationManager
@@ -48,22 +49,18 @@ class TestMCPSettings:
         assert mcp_http.transport_type == "http"
 
         # Test invalid transport type
-        with pytest.raises(ValueError, match="Invalid transport_type"):
+        with pytest.raises(ValidationError, match="Invalid transport_type"):
             MCPSettings(transport_type="invalid")
 
     def test_mcp_settings_timeout_validation(self):
         """Test timeout validation."""
-        with pytest.raises(ValueError, match="tool_timeout_seconds must be positive"):
+        with pytest.raises(ValidationError, match="Input should be greater than 0"):
             MCPSettings(tool_timeout_seconds=0)
 
-        with pytest.raises(
-            ValueError, match="startup_timeout_seconds must be positive"
-        ):
+        with pytest.raises(ValidationError, match="Input should be greater than 0"):
             MCPSettings(startup_timeout_seconds=-1)
 
-        with pytest.raises(
-            ValueError, match="shutdown_timeout_seconds must be positive"
-        ):
+        with pytest.raises(ValidationError, match="Input should be greater than 0"):
             MCPSettings(shutdown_timeout_seconds=0)
 
     def test_mcp_settings_port_validation(self):
@@ -73,25 +70,23 @@ class TestMCPSettings:
         assert mcp.http_port == 8080
 
         # Invalid ports for HTTP transport
-        with pytest.raises(ValueError, match="Invalid http_port"):
+        with pytest.raises(ValidationError, match="Invalid http_port"):
             MCPSettings(transport_type="http", http_port=0)
 
-        with pytest.raises(ValueError, match="Invalid http_port"):
+        with pytest.raises(ValidationError, match="Invalid http_port"):
             MCPSettings(transport_type="http", http_port=70000)
 
     def test_mcp_settings_size_validation(self):
         """Test size limit validation."""
-        with pytest.raises(ValueError, match="max_request_size_mb must be positive"):
+        with pytest.raises(ValidationError, match="Input should be greater than 0"):
             MCPSettings(max_request_size_mb=0)
 
-        with pytest.raises(ValueError, match="max_resource_size_mb must be positive"):
+        with pytest.raises(ValidationError, match="Input should be greater than 0"):
             MCPSettings(max_resource_size_mb=-1)
 
     def test_mcp_settings_concurrency_validation(self):
         """Test concurrency validation."""
-        with pytest.raises(
-            ValueError, match="max_concurrent_requests must be positive"
-        ):
+        with pytest.raises(ValidationError, match="Input should be greater than 0"):
             MCPSettings(max_concurrent_requests=0)
 
 
