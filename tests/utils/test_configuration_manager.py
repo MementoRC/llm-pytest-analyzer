@@ -455,15 +455,28 @@ llm_model: gpt-4
 
     def test_get_settings_default(self):
         """Test getting settings with defaults."""
-        # Use a non-existent config file path to ensure we get pure defaults
+        # Use a non-existent config file path and disable dotenv to ensure we get pure defaults
         manager = ConfigurationManager(
-            settings_cls=Settings, config_file_path="/nonexistent/path/config.yaml"
+            settings_cls=Settings,
+            config_file_path="/nonexistent/path/config.yaml",
+            load_dotenv_flag=False,
         )
-        settings = manager.get_settings()
+        # Move to a temporary directory to avoid finding pytest-analyzer.yaml
+        import tempfile
 
-        assert isinstance(settings, Settings)
-        assert settings.pytest_timeout == 300
-        assert settings.llm_model == "auto"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            original_cwd = Path.cwd()
+            try:
+                os.chdir(temp_dir)
+                # Force reload to pick up new working directory
+                manager.reload()
+                settings = manager.get_settings()
+
+                assert isinstance(settings, Settings)
+                assert settings.pytest_timeout == 300  # Default value
+                assert settings.llm_model == "auto"
+            finally:
+                os.chdir(original_cwd)
 
     def test_get_settings_with_overrides(self):
         """Test getting settings with runtime overrides."""
@@ -518,7 +531,7 @@ llm_model: gpt-4
                 schema = json.load(read_f)
 
             assert isinstance(schema, dict)
-            assert schema["type"] == "object"
+            assert schema.get("type") == "object"
             assert "properties" in schema
             assert "pytest_timeout" in schema["properties"]
             assert "mcp" in schema["properties"]
@@ -531,7 +544,7 @@ llm_model: gpt-4
         manager = ConfigurationManager(settings_cls=Settings)
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            manager.export_schema_json(f.name, indent=4)
+            manager.export_schema_json(f.name, indent=4, doc=True)
 
             # Read back the file content to check indentation
             with open(f.name, "r") as read_f:
@@ -539,6 +552,7 @@ llm_model: gpt-4
 
             # Check that content is properly indented (contains multiple spaces)
             assert "    " in content  # 4-space indentation
+            assert "$description" in content
 
             # Cleanup
             os.unlink(f.name)
@@ -604,6 +618,8 @@ mcp:
                 manager = ConfigurationManager(
                     settings_cls=Settings, config_file_path=base_f.name
                 )
+                # Test reload mechanism
+                manager.reload()
                 settings = manager.get_settings()
 
                 # Test precedence: env > profile > base > defaults
@@ -631,7 +647,7 @@ mcp:
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             # Export schema
-            manager.export_schema_json(f.name)
+            manager.export_schema_json(f.name, doc=True)
 
             # Read schema
             with open(f.name, "r") as read_f:
@@ -659,6 +675,8 @@ mcp:
                 or "definitions" in schema
                 or "properties" in mcp_schema
             )
+            # Check doc string present
+            assert "$description" in schema
 
             # Cleanup
             os.unlink(f.name)
@@ -677,7 +695,11 @@ mcp:
             )
 
             # Should not raise an error, but use defaults
-            settings = manager.get_settings()
+            try:
+                settings = manager.get_settings()
+            except Exception as e:
+                # If fallback fails, this is a test failure
+                assert False, f"Fallback to defaults failed: {e}"
             assert isinstance(settings, Settings)
             assert settings.pytest_timeout == 300  # Default value
 
@@ -685,37 +707,104 @@ mcp:
             os.unlink(f.name)
 
     def test_runtime_configuration_updates(self):
-        """Test runtime configuration updates with overrides."""
-        # Use a non-existent config file path to ensure we get pure defaults
+        """Test runtime configuration updates with overrides and reload."""
+        # Use a non-existent config file path and disable dotenv to ensure we get pure defaults
         manager = ConfigurationManager(
-            settings_cls=Settings, config_file_path="/nonexistent/path/config.yaml"
+            settings_cls=Settings,
+            config_file_path="/nonexistent/path/config.yaml",
+            load_dotenv_flag=False,
         )
 
-        # Get initial settings
-        initial_settings = manager.get_settings()
-        assert initial_settings.pytest_timeout == 300
-        assert initial_settings.debug is False
+        # Move to a temporary directory to avoid finding pytest-analyzer.yaml
+        import tempfile
 
-        # Apply runtime overrides
-        runtime_overrides = {
-            "pytest_timeout": 900,
-            "debug": True,
-            "mcp": {
-                "transport_type": "http",
-                "security": {"require_authentication": True},
-            },
-        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            original_cwd = Path.cwd()
+            try:
+                os.chdir(temp_dir)
+                # Force reload to pick up new working directory
+                manager.reload()
 
-        updated_settings = manager.get_settings(overrides=runtime_overrides)
+                # Get initial settings
+                initial_settings = manager.get_settings()
+                assert initial_settings.pytest_timeout == 300  # Default value
+                assert initial_settings.debug is False
 
-        # Verify overrides are applied
-        assert updated_settings.pytest_timeout == 900
-        assert updated_settings.debug is True
-        assert updated_settings.log_level == "DEBUG"
-        assert updated_settings.mcp.transport_type == "http"
-        assert updated_settings.mcp.security.require_authentication is True
+                # Apply runtime overrides
+                runtime_overrides = {
+                    "pytest_timeout": 900,
+                    "debug": True,
+                    "mcp": {
+                        "transport_type": "http",
+                        "security": {"require_authentication": True},
+                    },
+                }
 
-        # Verify original cached settings are unchanged
-        original_cached = manager.get_settings()
-        assert original_cached.pytest_timeout == 300
-        assert original_cached.debug is False
+                updated_settings = manager.get_settings(overrides=runtime_overrides)
+
+                # Verify overrides are applied
+                assert updated_settings.pytest_timeout == 900
+                assert updated_settings.debug is True
+                assert updated_settings.log_level == "DEBUG"
+                assert updated_settings.mcp.transport_type == "http"
+                assert updated_settings.mcp.security.require_authentication is True
+
+                # Test reload mechanism resets to config/defaults
+                manager.reload()
+                reloaded_settings = manager.get_settings()
+                assert reloaded_settings.pytest_timeout == 300  # Back to default
+                assert reloaded_settings.debug is False
+
+                # Verify original cached settings are unchanged
+                original_cached = manager.get_settings()
+                assert original_cached.pytest_timeout == 300
+                assert original_cached.debug is False
+            finally:
+                os.chdir(original_cwd)
+
+    def test_dotenv_loading(self, tmp_path, monkeypatch):
+        """Test that .env file is loaded and environment variables are set."""
+        dotenv_content = (
+            "PYTEST_ANALYZER_PYTEST_TIMEOUT=777\nPYTEST_ANALYZER_DEBUG=true\n"
+        )
+        dotenv_file = tmp_path / ".env"
+        dotenv_file.write_text(dotenv_content)
+
+        # Unset env vars to ensure .env is used
+        monkeypatch.delenv("PYTEST_ANALYZER_PYTEST_TIMEOUT", raising=False)
+        monkeypatch.delenv("PYTEST_ANALYZER_DEBUG", raising=False)
+
+        manager = ConfigurationManager(settings_cls=Settings, dotenv_path=dotenv_file)
+        manager.reload()
+        settings = manager.get_settings()
+        assert settings.pytest_timeout == 777
+        assert settings.debug is True
+
+    def test_dotenv_priority_over_defaults(self, tmp_path, monkeypatch):
+        """Test that .env values override defaults but not explicit env vars."""
+        dotenv_content = "PYTEST_ANALYZER_PYTEST_TIMEOUT=888\n"
+        dotenv_file = tmp_path / ".env"
+        dotenv_file.write_text(dotenv_content)
+
+        # Set env var to override .env
+        monkeypatch.setenv("PYTEST_ANALYZER_PYTEST_TIMEOUT", "999")
+
+        manager = ConfigurationManager(settings_cls=Settings, dotenv_path=dotenv_file)
+        manager.reload()
+        settings = manager.get_settings()
+        # Environment variable should take precedence over .env
+        assert settings.pytest_timeout == 999
+
+        # Remove env var and reload, .env should now take effect
+        monkeypatch.delenv("PYTEST_ANALYZER_PYTEST_TIMEOUT", raising=False)
+        manager.reload()
+        settings = manager.get_settings()
+        assert settings.pytest_timeout == 888
+
+    def test_reload_resets_settings_instance(self):
+        """Test that reload resets the cached settings instance."""
+        manager = ConfigurationManager(settings_cls=Settings)
+        s1 = manager.get_settings()
+        manager.reload()
+        s2 = manager.get_settings()
+        assert s1 is not s2

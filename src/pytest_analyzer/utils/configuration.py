@@ -5,6 +5,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, Union
 
 import yaml
+
+# Add dotenv support
+from dotenv import load_dotenv
 from pydantic import BaseModel, ValidationError
 
 # Import Settings from the config_types module to avoid circular dependency
@@ -47,8 +50,10 @@ class ConfigurationManager:
     1. Default values from the Pydantic Settings model.
     2. Values from a base YAML configuration file (e.g., pytest-analyzer.yaml).
     3. Values from a profile-specific YAML file (e.g., pytest-analyzer.dev.yaml).
-    4. Values from environment variables.
+    4. Values from environment variables (including .env file).
     5. Runtime overrides.
+
+    Supports runtime reload and schema documentation generation.
     """
 
     DEFAULT_CONFIG_FILES = ["pytest-analyzer.yaml", "pytest-analyzer.yml"]
@@ -59,6 +64,8 @@ class ConfigurationManager:
         settings_cls: Type[Settings] = Settings,
         config_file_path: Optional[Union[str, Path]] = None,
         env_prefix: str = ENV_PREFIX,
+        dotenv_path: Optional[Union[str, Path]] = None,
+        load_dotenv_flag: bool = True,
     ):
         """
         Initialize the ConfigurationManager.
@@ -68,19 +75,69 @@ class ConfigurationManager:
             config_file_path: Optional path to a specific configuration file.
                                If None, searches for default files.
             env_prefix: Prefix for environment variables.
+            dotenv_path: Optional path to a .env file to load.
+            load_dotenv_flag: If True, load .env file on initialization.
         """
         if not issubclass(settings_cls, BaseModel):
             raise TypeError(f"{settings_cls.__name__} must be a Pydantic BaseModel.")
 
         self.settings_cls: Type[Settings] = settings_cls
         self.env_prefix: str = env_prefix
+        self.dotenv_path: Optional[Union[str, Path]] = dotenv_path
+        self._dotenv_loaded: bool = False
         self.profile: Optional[str] = os.getenv(f"{self.env_prefix}PROFILE")
+        self._original_config_file_path = (
+            config_file_path  # Store original path for reload
+        )
         self._config_file_path: Optional[Path] = self._resolve_config_file_path(
             config_file_path
         )
         self._config: Dict[str, Any] = {}
         self._loaded: bool = False
         self._settings_instance: Optional[Settings] = None
+
+        if load_dotenv_flag:
+            self._load_dotenv()
+
+    def _load_dotenv(self) -> None:
+        """
+        Load environment variables from a .env file using python-dotenv.
+        Only loads once per instance unless explicitly reloaded.
+        """
+        if self._dotenv_loaded:
+            return
+        dotenv_path = self.dotenv_path
+        if dotenv_path is None:
+            # Search for .env in CWD, parent, and home
+            search_paths = [
+                Path.cwd() / ".env",
+                Path.cwd().parent / ".env",
+                Path.home() / ".env",
+            ]
+            for path in search_paths:
+                if path.is_file():
+                    dotenv_path = path
+                    break
+        if dotenv_path and Path(dotenv_path).is_file():
+            load_dotenv(dotenv_path, override=False)
+            logger.info(f"Loaded environment variables from .env file: {dotenv_path}")
+            self._dotenv_loaded = True
+        else:
+            logger.debug("No .env file found to load.")
+
+    def reload(self, force: bool = True) -> None:
+        """
+        Reload the configuration from all sources, including .env file.
+        This allows runtime updates to configuration.
+        """
+        self._dotenv_loaded = False
+        self._settings_instance = None
+        # Re-resolve config file path in case working directory changed
+        self._config_file_path = self._resolve_config_file_path(
+            self._original_config_file_path
+        )
+        self._load_dotenv()
+        self.load_config(force_reload=force)
 
     def _resolve_config_file_path(
         self, specific_path: Optional[Union[str, Path]]
@@ -443,15 +500,24 @@ class ConfigurationManager:
                     f"Configuration validation failed and fallback failed: {e}"
                 ) from e
 
-    def export_schema_json(self, path: Union[str, Path], indent: int = 2) -> None:
+    def export_schema_json(
+        self, path: Union[str, Path], indent: int = 2, doc: bool = False
+    ) -> None:
         """
         Export the Pydantic model schema to a JSON file.
 
         Args:
             path: The file path to save the schema to.
             indent: The JSON indentation level.
+            doc: If True, include a top-level description/documentation.
         """
         schema = self.settings_cls.model_json_schema()
+        if doc:
+            schema["$description"] = (
+                "This schema describes the configuration for pytest-analyzer. "
+                "It is generated from the Pydantic Settings model. "
+                "See https://docs.pydantic.dev/latest/usage/schema/ for details."
+            )
         try:
             with open(path, "w") as f:
                 json.dump(schema, f, indent=indent)
