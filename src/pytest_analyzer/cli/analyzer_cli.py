@@ -15,7 +15,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any
 
 from rich.console import Console
 from rich.syntax import Syntax
@@ -281,7 +281,7 @@ def setup_analyze_parser(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def configure_settings(args) -> Settings:
+def configure_settings(args: argparse.Namespace) -> Settings:
     """Configure settings based on command-line arguments."""
     # Load base settings from config file if provided
     settings = load_settings(args.config_file) if args.config_file else Settings()
@@ -327,7 +327,7 @@ def configure_settings(args) -> Settings:
         settings.preferred_format = "plugin"
 
     # Pytest arguments
-    pytest_args = []
+    pytest_args: list[str] = []
     if args.coverage:
         pytest_args.append("--cov")
     if args.pytest_args:
@@ -339,7 +339,9 @@ def configure_settings(args) -> Settings:
     return settings
 
 
-def display_suggestions(suggestions: List[FixSuggestion], args):
+def display_suggestions(
+    suggestions: list[FixSuggestion], args: argparse.Namespace
+) -> None:
     """
     Display the fix suggestions in the console with different verbosity levels.
 
@@ -354,7 +356,7 @@ def display_suggestions(suggestions: List[FixSuggestion], args):
         return
 
     # Filter suggestions based on confidence and source
-    filtered_suggestions = []
+    filtered_suggestions: list[tuple[FixSuggestion, str]] = []
     for suggestion in suggestions:
         source = (
             "LLM"
@@ -394,7 +396,7 @@ def display_suggestions(suggestions: List[FixSuggestion], args):
 
     # Group suggestions by fingerprint (when possible) for display organization
     # Organize suggestions by fingerprint for grouped display
-    suggestions_by_fingerprint: Dict[str, List[Tuple[FixSuggestion, str]]] = {}
+    suggestions_by_fingerprint: dict[str, list[tuple[FixSuggestion, str]]] = {}
     for suggestion, source in filtered_suggestions:
         fingerprint = (
             suggestion.failure.group_fingerprint
@@ -597,6 +599,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
             logging.getLogger("httpx").setLevel(logging.WARNING)
             logging.getLogger("pytest_analyzer").setLevel(logging.WARNING)
 
+        suggestions: list[FixSuggestion]
         # Process existing output file or run tests
         if args.output_file:
             # Always print this message to stdout so E2E tests can capture it
@@ -759,7 +762,9 @@ def show_file_diff(file_path: str, new_content: str) -> bool:
 
 
 def apply_suggestions_interactively(
-    suggestions: List[FixSuggestion], analyzer_service: PytestAnalyzerService, args
+    suggestions: list[FixSuggestion],
+    analyzer_service: PytestAnalyzerService,
+    args: argparse.Namespace,
 ) -> None:
     """
     Interactively apply fix suggestions.
@@ -813,7 +818,7 @@ def apply_suggestions_interactively(
             continue
 
         # Skip metadata-only code changes
-        file_changes = {
+        file_changes: dict[str, Any] = {
             k: v
             for k, v in suggestion.code_changes.items()
             if isinstance(k, str) and ("/" in k or "\\" in k)

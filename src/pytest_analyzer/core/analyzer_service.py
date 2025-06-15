@@ -4,7 +4,7 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from rich.progress import Progress, TaskID
 
@@ -32,7 +32,7 @@ class PytestAnalyzerService:
         path_resolver: PathResolver,
         orchestrator: Orchestrator,
         fix_applier: Applier,
-    ):
+    ) -> None:
         self.settings = settings
         self.path_resolver = path_resolver
         self.orchestrator = orchestrator
@@ -59,9 +59,7 @@ class PytestAnalyzerService:
         logger.info(f"Async processing: {'enabled' if self.use_async else 'disabled'}")
 
     @with_timeout(300)
-    def analyze_pytest_output(
-        self, output_path: Union[str, Path]
-    ) -> List[FixSuggestion]:
+    def analyze_pytest_output(self, output_path: str | Path) -> list[FixSuggestion]:
         """Analyze pytest output from a file and generate fix suggestions."""
         path = Path(output_path)
         if not path.exists():
@@ -85,20 +83,20 @@ class PytestAnalyzerService:
     def run_pytest_only(
         self,
         test_path: str,
-        pytest_args: Optional[List[str]] = None,
+        pytest_args: list[str] | None = None,
         quiet: bool = False,
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None,
-    ) -> List[PytestFailure]:
+        progress: Progress | None = None,
+        task_id: TaskID | None = None,
+    ) -> list[PytestFailure]:
         """Run pytest on the given path and return failures."""
-        pytest_task_id: Optional[TaskID] = None
+        pytest_task_id: TaskID | None = None
         if progress and task_id is not None:
             pytest_task_id = progress.add_task(
                 "[cyan]Running pytest...", total=None, parent=task_id
             )
 
         try:
-            args_copy = list(pytest_args) if pytest_args else []
+            args_copy: list[str] = list(pytest_args) if pytest_args else []
             if quiet:
                 if "-qq" not in args_copy:
                     args_copy = [
@@ -111,7 +109,7 @@ class PytestAnalyzerService:
                     args_copy.append("--disable-warnings")
 
             if self.settings.preferred_format == "plugin":
-                all_args = [test_path] + args_copy
+                all_args: list[str] = [test_path] + args_copy
                 failures = collect_failures_with_plugin(all_args)
             elif self.settings.preferred_format == "json":
                 failures = self._run_and_extract_json(test_path, args_copy)
@@ -141,10 +139,10 @@ class PytestAnalyzerService:
     def run_and_analyze(
         self,
         test_path: str,
-        pytest_args: Optional[List[str]] = None,
+        pytest_args: list[str] | None = None,
         quiet: bool = False,
-        use_async: Optional[bool] = None,
-    ) -> List[FixSuggestion]:
+        use_async: bool | None = None,
+    ) -> list[FixSuggestion]:
         """Run pytest on the given path and analyze the output."""
         pytest_args = pytest_args or []
         from rich.console import Console
@@ -211,13 +209,13 @@ class PytestAnalyzerService:
                 return []
 
     def _run_and_extract_json(
-        self, test_path: str, pytest_args: Optional[List[str]] = None
-    ) -> List[PytestFailure]:
+        self, test_path: str, pytest_args: list[str] | None = None
+    ) -> list[PytestFailure]:
         """Run pytest with JSON output and extract failures."""
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
             json_report_path = tmp.name
         try:
-            cmd = [
+            cmd: list[str] = [
                 "pytest",
                 test_path,
                 "--json-report",
@@ -238,13 +236,13 @@ class PytestAnalyzerService:
                 os.remove(json_report_path)
 
     def _run_and_extract_xml(
-        self, test_path: str, pytest_args: Optional[List[str]] = None
-    ) -> List[PytestFailure]:
+        self, test_path: str, pytest_args: list[str] | None = None
+    ) -> list[PytestFailure]:
         """Run pytest with XML output and extract failures."""
         with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as tmp:
             xml_report_path = tmp.name
         try:
-            cmd = [
+            cmd: list[str] = [
                 "pytest",
                 test_path,
                 f"--junit-xml={xml_report_path}",
@@ -263,8 +261,10 @@ class PytestAnalyzerService:
             if os.path.exists(xml_report_path):
                 os.remove(xml_report_path)
 
-    def _run_pytest_subprocess(self, cmd: List[str], pytest_args: Optional[List[str]]):
-        args = pytest_args or []
+    def _run_pytest_subprocess(
+        self, cmd: list[str], pytest_args: list[str] | None
+    ) -> None:
+        args: list[str] = pytest_args or []
         quiet_mode = "-q" in args or "-qq" in args or "--quiet" in args
         if quiet_mode:
             with open(os.devnull, "w") as devnull:
@@ -280,12 +280,12 @@ class PytestAnalyzerService:
 
     def _generate_suggestions(
         self,
-        failures: List[PytestFailure],
+        failures: list[PytestFailure],
         quiet: bool = False,
-        progress: Optional[Progress] = None,
-        parent_task_id: Optional[TaskID] = None,
-        use_async: Optional[bool] = None,
-    ) -> List[FixSuggestion]:
+        progress: Progress | None = None,
+        parent_task_id: TaskID | None = None,
+        use_async: bool | None = None,
+    ) -> list[FixSuggestion]:
         """Generate fix suggestions for the given failures."""
         with performance_tracker.track("generate_suggestions"):
             should_use_async = self.use_async if use_async is None else use_async
@@ -315,11 +315,11 @@ class PytestAnalyzerService:
 
     def _sync_generate_suggestions(
         self,
-        failures: List[PytestFailure],
+        failures: list[PytestFailure],
         quiet: bool = False,
-        progress: Optional[Progress] = None,
-        parent_task_id: Optional[TaskID] = None,
-    ) -> List[FixSuggestion]:
+        progress: Progress | None = None,
+        parent_task_id: TaskID | None = None,
+    ) -> list[FixSuggestion]:
         """Generate fix suggestions synchronously."""
         # The new orchestrator is async-only. The old sync logic was complex and tied to the state machine.
         # For this refactoring, we will run the async orchestrator in a sync context.
@@ -346,7 +346,7 @@ class PytestAnalyzerService:
         with performance_tracker.track("apply_suggestion"):
             return self.fix_applier.apply_fix_suggestion(suggestion)
 
-    def get_performance_metrics(self) -> Dict[str, Any]:
+    def get_performance_metrics(self) -> dict[str, Any]:
         """Get performance metrics."""
         return performance_tracker.get_metrics()
 
