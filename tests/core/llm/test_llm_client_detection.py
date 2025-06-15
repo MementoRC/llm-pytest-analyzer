@@ -310,6 +310,9 @@ class TestLLMClientDetection:
         service_collection.container = container
         service_collection.configure_llm_services()
 
+        # Resolve the LLM service to trigger the factory function
+        service_collection.build_container().resolve(LLMServiceProtocol)
+
         # Verify the client detection was called
         mock_detect_client.assert_called_once()
 

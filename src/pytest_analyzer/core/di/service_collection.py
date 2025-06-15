@@ -42,7 +42,7 @@ from ..analyzer_service import PytestAnalyzerService
 from ..analyzer_service_di import DIPytestAnalyzerService
 from ..environment.detector import EnvironmentManagerDetector
 from ..environment.protocol import EnvironmentManager
-from ..factories.analyzer_factory import create_llm_service, create_llm_suggester
+from ..factories.analyzer_factory import create_llm_suggester
 from ..interfaces.protocols import Applier, Orchestrator
 from ..llm.llm_service_protocol import LLMServiceProtocol
 from ..orchestration.analyzer_orchestrator import AnalyzerOrchestrator
@@ -270,7 +270,7 @@ def configure_services(
 
     # Register LLM components using factories
     container.register_factory(
-        LLMServiceProtocol, lambda: create_llm_service(container)
+        LLMServiceProtocol, lambda: _create_llm_service(container)
     )
     container.register_factory(LLMSuggester, lambda: create_llm_suggester(container))
 
@@ -369,7 +369,7 @@ def _create_llm_service_with_provider(
         llm_client, provider = detect_llm_client(
             settings=settings,
             preferred_provider=override_provider,
-            fallback=settings.use_fallback,
+            fallback=False,
         )
 
         if llm_client:
