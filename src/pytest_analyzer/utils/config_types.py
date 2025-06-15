@@ -239,7 +239,6 @@ class Settings(BaseModel):
     debug: bool = False  # Enable debug mode (backward compatibility)
 
     @computed_field
-    @property
     def llm(self) -> LLMSettings:
         """Return an LLMSettings instance from top-level settings for section-based access."""
         return LLMSettings(
