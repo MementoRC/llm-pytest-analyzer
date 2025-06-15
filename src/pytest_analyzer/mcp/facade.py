@@ -927,9 +927,53 @@ class MCPAnalyzerFacade:
         original_config = copy.deepcopy(config_dict)
 
         # 3. Prepare updates
+        # Define the valid sections that correspond to the logical sections in get_config
+        valid_sections = {
+            "llm": [
+                "use_llm",
+                "llm_timeout",
+                "llm_api_key",
+                "llm_model",
+                "llm_provider",
+                "use_fallback",
+                "auto_apply",
+                "anthropic_api_key",
+                "openai_api_key",
+                "azure_api_key",
+                "azure_endpoint",
+                "azure_api_version",
+                "together_api_key",
+                "ollama_host",
+                "ollama_port",
+            ],
+            "mcp": ["mcp"],  # This is a nested object
+            "analysis": [
+                "max_suggestions",
+                "max_suggestions_per_failure",
+                "min_confidence",
+                "parser_timeout",
+                "analyzer_timeout",
+                "max_failures",
+                "preferred_format",
+            ],
+            "extraction": [
+                "pytest_timeout",
+                "pytest_args",
+            ],
+            "logging": [
+                "log_level",
+                "debug",
+            ],
+            "git": [
+                "check_git",
+                "auto_init_git",
+                "use_git_branches",
+            ],
+        }
+
         updates_to_merge = request.config_updates
         if request.section:
-            if request.section not in config_dict:
+            if request.section not in valid_sections:
                 validation_errors.append(f"Section '{request.section}' not found.")
                 execution_time_ms = max(1, int((time.time() - start_time) * 1000))
                 return UpdateConfigResponse(
@@ -938,7 +982,37 @@ class MCPAnalyzerFacade:
                     validation_errors=validation_errors,
                     execution_time_ms=execution_time_ms,
                 )
-            updates_to_merge = {request.section: request.config_updates}
+
+            # When updating with a section, we need to apply the updates to the flat config structure
+            # but validate that the keys are appropriate for that section
+            section_fields = valid_sections[request.section]
+            invalid_keys = []
+            for key in request.config_updates.keys():
+                if request.section == "mcp":
+                    # For MCP section, allow nested updates
+                    pass
+                elif key not in section_fields:
+                    invalid_keys.append(key)
+
+            if invalid_keys:
+                validation_errors.append(
+                    f"Invalid keys for section '{request.section}': {invalid_keys}. "
+                    f"Valid keys are: {section_fields}"
+                )
+                execution_time_ms = max(1, int((time.time() - start_time) * 1000))
+                return UpdateConfigResponse(
+                    success=False,
+                    request_id=request.request_id,
+                    validation_errors=validation_errors,
+                    execution_time_ms=execution_time_ms,
+                )
+
+            # For section-based updates, apply directly to the flat config (except for mcp)
+            if request.section == "mcp":
+                updates_to_merge = {"mcp": request.config_updates}
+            else:
+                # Apply the updates directly to the top-level config since it's flat
+                updates_to_merge = request.config_updates
 
         # 4. Merge/replace/append strategy
         merge_strategy = request.merge_strategy or "merge"
@@ -993,14 +1067,15 @@ class MCPAnalyzerFacade:
         updated_fields = []
         applied_changes = {}
         for key, value in request.config_updates.items():
-            old_value_dict = original_config
-            new_value_dict = new_config
-            if request.section:
-                old_value_dict = original_config.get(request.section, {})
-                new_value_dict = new_config.get(request.section, {})
-
-            old_value = old_value_dict.get(key)
-            new_value = new_value_dict.get(key)
+            # For flat config structure, check directly in the top-level config
+            if request.section == "mcp":
+                # MCP is a nested object, check within the mcp section
+                old_value = original_config.get("mcp", {}).get(key)
+                new_value = new_config.get("mcp", {}).get(key)
+            else:
+                # For other sections, the keys are at the top level of the flat config
+                old_value = original_config.get(key)
+                new_value = new_config.get(key)
 
             if old_value != new_value:
                 updated_fields.append(key)

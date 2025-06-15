@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional, Set
 from pydantic import (
     BaseModel,
     Field,
-    computed_field,
     field_validator,
     model_validator,
 )
@@ -238,7 +237,7 @@ class Settings(BaseModel):
     # Backward compatibility properties
     debug: bool = False  # Enable debug mode (backward compatibility)
 
-    @computed_field
+    @property
     def llm(self) -> LLMSettings:
         """Return an LLMSettings instance from top-level settings for section-based access."""
         return LLMSettings(
