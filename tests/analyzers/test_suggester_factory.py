@@ -8,6 +8,8 @@ different types of suggester implementations.
 import unittest
 from unittest.mock import MagicMock
 
+import pytest
+
 from src.pytest_analyzer.core.analysis.composite_suggester import CompositeSuggester
 from src.pytest_analyzer.core.analysis.fix_suggester import FixSuggester
 from src.pytest_analyzer.core.analysis.llm_suggester import LLMSuggester
@@ -75,9 +77,11 @@ class TestSuggesterFactory(unittest.TestCase):
         """Test creating an LLM-based suggester without an LLM service."""
         config = {"min_confidence": 0.8}
 
-        # Should raise ValueError
-        with self.assertRaises(ValueError):
+        with pytest.raises(Exception) as excinfo:
             create_llm_based_suggester(config)
+        exc = excinfo.value
+        assert "LLM service is required for LLM-based suggester" in str(exc)
+        assert "config" in getattr(exc, "context", {})
 
     def test_create_composite_suggester(self):
         """Test creating a composite suggester."""
@@ -138,9 +142,11 @@ class TestSuggesterFactory(unittest.TestCase):
         """Test creating a suggester with an invalid type."""
         config = {"type": "invalid"}
 
-        # Should raise ValueError
-        with self.assertRaises(ValueError):
+        with pytest.raises(Exception) as excinfo:
             create_suggester(config)
+        exc = excinfo.value
+        assert "Invalid suggester type" in str(exc)
+        assert "suggester_type" in getattr(exc, "context", {})
 
     def test_create_composite_suggester_default_suggesters(self):
         """Test creating a composite suggester with default suggesters."""

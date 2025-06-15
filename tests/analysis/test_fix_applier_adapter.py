@@ -19,8 +19,8 @@ from pytest_analyzer.core.analysis.fix_applier_adapter import FixApplierAdapter
 from pytest_analyzer.core.di.container import Container
 from pytest_analyzer.core.di.service_collection import ServiceCollection
 from pytest_analyzer.core.errors import FixApplicationError
+from pytest_analyzer.core.interfaces.protocols import Applier
 from pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
-from pytest_analyzer.core.protocols import Applier
 
 
 class TestFixApplierAdapter:
@@ -28,7 +28,7 @@ class TestFixApplierAdapter:
 
     def test_implements_applier_protocol(self):
         """Test that FixApplierAdapter implements the Applier protocol."""
-        adapter = FixApplierAdapter()
+        adapter = FixApplierAdapter(fix_applier=MagicMock(spec=FixApplier))
         assert isinstance(adapter, Applier), "Adapter should implement Applier protocol"
 
     def test_apply_delegates_to_fix_applier(self, tmp_path):
@@ -60,15 +60,12 @@ class TestFixApplierAdapter:
             tests_to_validate=validation_tests,
         )
 
-        # Verify the result was properly transformed
-        assert result["success"] is True
-        assert result["message"] == "Applied successfully"
-        assert result["applied_files"] == ["/path/to/file1.py", "/path/to/file2.py"]
-        assert result["rolled_back_files"] == []
+        # Verify the result is the object returned by the mock
+        assert result is mock_result
 
-    def test_apply_fix_suggestion(self, tmp_path):
-        """Test that apply_fix_suggestion correctly processes a FixSuggestion."""
-        # Create a mock FixApplier with a mocked apply_fix method
+    def test_apply_suggestion(self, tmp_path):
+        """Test that apply_suggestion correctly delegates to the FixApplier."""
+        # Create a mock FixApplier with a mocked apply_fix_suggestion method
         mock_fix_applier = MagicMock(spec=FixApplier)
         mock_result = FixApplicationResult(
             success=True,
@@ -76,7 +73,7 @@ class TestFixApplierAdapter:
             applied_files=[Path("/path/to/file.py")],
             rolled_back_files=[],
         )
-        mock_fix_applier.apply_fix.return_value = mock_result
+        mock_fix_applier.apply_fix_suggestion.return_value = mock_result
 
         # Create adapter with our mock
         adapter = FixApplierAdapter(fix_applier=mock_fix_applier)
@@ -98,79 +95,65 @@ class TestFixApplierAdapter:
             confidence=0.9,
             code_changes={
                 "/path/to/file.py": "def func():\n    x = 2  # Fixed\n    return x",
-                "source": "LLM",  # Metadata that should be filtered out
+                "source": "LLM",
             },
             explanation="The function was returning 1 instead of 2",
         )
 
-        # Call the apply_fix_suggestion method
-        result = adapter.apply_fix_suggestion(suggestion)
+        # Call the apply_suggestion method
+        result = adapter.apply_suggestion(suggestion)
 
         # Verify the mock was called with the right arguments
-        mock_fix_applier.apply_fix.assert_called_once()
-        call_args = mock_fix_applier.apply_fix.call_args[1]
-        assert call_args["code_changes"] == {
-            "/path/to/file.py": "def func():\n    x = 2  # Fixed\n    return x"
-        }
-        assert call_args["tests_to_validate"] == ["test_module::test_func"]
+        mock_fix_applier.apply_fix_suggestion.assert_called_once_with(suggestion)
 
-        # Verify the result was properly transformed
-        assert result["success"] is True
-        assert result["message"] == "Suggestion applied successfully"
-        assert result["applied_files"] == ["/path/to/file.py"]
-        assert result["rolled_back_files"] == []
+        # Verify the result is the object returned by the mock
+        assert result is mock_result
 
-    def test_apply_fix_suggestion_no_code_changes(self):
-        """Test handling of a suggestion with no code changes."""
-        # Create adapter
-        adapter = FixApplierAdapter()
-
-        # Create a test failure
-        failure = PytestFailure(
-            test_name="test_module::test_func",
-            test_file="/path/to/test_file.py",
-            error_type="AssertionError",
-            error_message="expected 2 but got 1",
-            traceback="Traceback...",
-            line_number=42,
+    def test_apply_suggestion_no_code_changes(self):
+        """Test delegation for a suggestion with no code changes."""
+        # Create a mock FixApplier
+        mock_fix_applier = MagicMock(spec=FixApplier)
+        mock_result = FixApplicationResult(
+            success=False,
+            message="Cannot apply fix: No code changes provided in suggestion.",
+            applied_files=[],
+            rolled_back_files=[],
         )
+        mock_fix_applier.apply_fix_suggestion.return_value = mock_result
+        adapter = FixApplierAdapter(fix_applier=mock_fix_applier)
 
         # Create a suggestion with NO code changes
         suggestion = FixSuggestion(
-            failure=failure,
+            failure=MagicMock(),
             suggestion="I can't fix this automatically",
             confidence=0.5,
             code_changes=None,
             explanation="Manual fix needed",
         )
 
-        # Call the apply_fix_suggestion method
-        result = adapter.apply_fix_suggestion(suggestion)
+        # Call the apply_suggestion method
+        result = adapter.apply_suggestion(suggestion)
 
         # Verify the result
-        assert result["success"] is False
-        assert "No code changes" in result["message"]
-        assert result["applied_files"] == []
-        assert result["rolled_back_files"] == []
+        assert result.success is False
+        assert "No code changes" in result.message
 
-    def test_apply_fix_suggestion_only_metadata(self):
-        """Test handling of a suggestion with only metadata in code_changes."""
-        # Create adapter
-        adapter = FixApplierAdapter()
-
-        # Create a test failure
-        failure = PytestFailure(
-            test_name="test_module::test_func",
-            test_file="/path/to/test_file.py",
-            error_type="AssertionError",
-            error_message="expected 2 but got 1",
-            traceback="Traceback...",
-            line_number=42,
+    def test_apply_suggestion_only_metadata(self):
+        """Test delegation for a suggestion with only metadata in code_changes."""
+        # Create a mock FixApplier
+        mock_fix_applier = MagicMock(spec=FixApplier)
+        mock_result = FixApplicationResult(
+            success=False,
+            message="Cannot apply fix: No valid file changes found in suggestion.",
+            applied_files=[],
+            rolled_back_files=[],
         )
+        mock_fix_applier.apply_fix_suggestion.return_value = mock_result
+        adapter = FixApplierAdapter(fix_applier=mock_fix_applier)
 
         # Create a suggestion with ONLY metadata in code_changes
         suggestion = FixSuggestion(
-            failure=failure,
+            failure=MagicMock(),
             suggestion="This is just metadata",
             confidence=0.5,
             code_changes={
@@ -180,14 +163,12 @@ class TestFixApplierAdapter:
             explanation="No actual file changes",
         )
 
-        # Call the apply_fix_suggestion method
-        result = adapter.apply_fix_suggestion(suggestion)
+        # Call the apply_suggestion method
+        result = adapter.apply_suggestion(suggestion)
 
         # Verify the result
-        assert result["success"] is False
-        assert "No valid file changes" in result["message"]
-        assert result["applied_files"] == []
-        assert result["rolled_back_files"] == []
+        assert result.success is False
+        assert "No valid file changes" in result.message
 
     def test_error_handling(self):
         """Test that errors are properly caught and propagated."""

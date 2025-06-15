@@ -1,0 +1,127 @@
+[MAIN]
+# Python code to execute, usually for sys.path manipulation such as pygtk.require().
+init-hook='import sys; sys.path.append("src")'
+
+# Add files or directories to the blacklist. They should be base names, not paths.
+ignore=tests,examples,docs,.git,.venv,__pycache__
+
+# Use multiple processes to speed up Pylint. Specifying 0 will auto-detect the number of processors.
+jobs=0
+
+# Pickle collected data for later comparisons.
+persistent=yes
+
+# When enabled, pylint would attempt to guess common misconfiguration and emit user-friendly hints.
+suggestion-mode=yes
+
+[MESSAGES CONTROL]
+# Enable specific message types
+enable=all
+
+# Disable specific message types (focus on critical issues)
+disable=
+    C0103,  # invalid-name (too strict for our use case)
+    C0111,  # missing-docstring (we'll add these systematically)
+    C0301,  # line-too-long (handled by ruff)
+    R0903,  # too-few-public-methods (common in data classes)
+    R0913,  # too-many-arguments (will address case by case)
+    W0613,  # unused-argument (common in interfaces)
+    W0221,  # arguments-differ (common in inheritance)
+    E1101,  # no-member (too many false positives with dynamic imports)
+
+[REPORTS]
+# Set to yes to have reports generated
+reports=yes
+
+# Template used to display messages. This is a python new-style format string.
+msg-template='{path}:{line}:{column}: {msg_id}: {msg} ({symbol})'
+
+# Set the output format. Available formats are text, parseable, colorized, json
+output-format=text
+
+[REFACTORING]
+# Maximum number of nested blocks for function / method body
+max-nested-blocks=5
+
+[BASIC]
+# Good variable names which should always be accepted, separated by a comma
+good-names=i,j,k,ex,Run,_,id,db,ui,pk,fd
+
+# Bad variable names which should always be refused, separated by a comma
+bad-names=foo,bar,baz,toto,tutu,tata
+
+[FORMAT]
+# Maximum number of characters on a single line (handled by ruff)
+max-line-length=88
+
+[DESIGN]
+# Maximum number of arguments for function / method
+max-args=7
+
+# Maximum number of attributes for a class (see R0902).
+max-attributes=15
+
+# Maximum number of boolean expressions in an if statement
+max-bool-expr=5
+
+# Maximum number of branch for function / method body
+max-branches=12
+
+# Maximum number of locals for function / method body
+max-locals=15
+
+# Maximum number of parents for a class (see R0901).
+max-parents=7
+
+# Maximum number of public methods for a class (see R0904).
+max-public-methods=20
+
+# Maximum number of return / yield for function / method body
+max-returns=6
+
+# Maximum number of statements in function / method body
+max-statements=50
+
+[SIMILARITIES]
+# Minimum lines number of a similarity.
+min-similarity-lines=4
+
+# Ignore comments when computing similarities.
+ignore-comments=yes
+
+# Ignore docstrings when computing similarities.
+ignore-docstrings=yes
+
+# Ignore imports when computing similarities.
+ignore-imports=no
+
+[SPELLING]
+# Spelling dictionary name. Available dictionaries: none.
+spelling-dict=
+
+# List of comma separated words that should not be checked.
+spelling-ignore-words=
+
+[TYPECHECK]
+# List of module names for which member attributes should not be checked
+ignored-modules=mcp,anthropic,openai
+
+# List of class names for which member attributes should not be checked
+ignored-classes=optparse.Values,thread._local,_thread._local
+
+[VARIABLES]
+# Tells whether we should check for unused import in __init__ files.
+init-import=no
+
+# List of strings which can identify a callback function by name.
+callbacks=cb_,_cb
+
+[CLASSES]
+# List of method names used to declare (i.e. assign) instance attributes.
+defining-attr-methods=__init__,__new__,setUp
+
+# List of valid names for the first argument in a class method.
+valid-classmethod-first-arg=cls
+
+# List of valid names for the first argument in a metaclass class method.
+valid-metaclass-classmethod-first-arg=mcs

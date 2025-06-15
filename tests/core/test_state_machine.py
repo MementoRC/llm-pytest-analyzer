@@ -6,9 +6,10 @@ import pytest
 from rich.progress import Progress, TaskID
 
 from pytest_analyzer.core.analysis.llm_suggester import LLMSuggester
+from pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
 
 # Import state machine components
-from pytest_analyzer.core.analyzer_service import (
+from pytest_analyzer.core.orchestration.analyzer_orchestrator import (
     BatchProcess,
     BatchProcessingError,
     Context,
@@ -22,7 +23,6 @@ from pytest_analyzer.core.analyzer_service import (
     PrepareRepresentatives,
     RepresentativeSelectionError,
 )
-from pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
 from pytest_analyzer.utils.path_resolver import PathResolver
 from pytest_analyzer.utils.resource_manager import PerformanceTracker
 from pytest_analyzer.utils.settings import Settings
@@ -121,11 +121,17 @@ def test_context(
         progress=mock_progress,
         parent_task_id=TaskID(0),
     ):
+        # Create a progress manager from the progress mock
+        from pytest_analyzer.core.progress.progress_manager import RichProgressManager
+
+        progress_manager = RichProgressManager(
+            progress=progress, parent_task_id=parent_task_id
+        )
+
         return Context(
             failures=failures,
             quiet=quiet,
-            progress=progress,
-            parent_task_id=parent_task_id,
+            progress_manager=progress_manager,
             path_resolver=mock_path_resolver,
             settings=mock_settings,
             llm_suggester=mock_llm_suggester,
@@ -154,7 +160,7 @@ async def test_initialize_state_success(test_context, mock_progress):
     mock_progress.add_task.assert_called_once_with(
         "[cyan]Generating async LLM-based suggestions...",
         total=len(context.failures),
-        parent=context.parent_task_id,  # Check parent task ID is passed
+        parent=TaskID(0),  # Check parent task ID is passed
     )
     # Verify transition to GroupFailures
     context.transition_to.assert_awaited_once_with(GroupFailures)
@@ -207,7 +213,9 @@ async def test_group_failures_state_success(test_context, mock_progress):
     context.transition_to = AsyncMock()  # Mock transition
 
     # Mock the actual grouping function
-    with patch("pytest_analyzer.core.analyzer_service.group_failures") as mock_group:
+    with patch(
+        "pytest_analyzer.core.orchestration.analyzer_orchestrator.group_failures"
+    ) as mock_group:
         mock_group.return_value = {
             "group1": [context.failures[0]],
             "group2": context.failures[1:],
@@ -240,7 +248,9 @@ async def test_group_failures_state_no_groups(test_context, mock_progress):
     group_state = GroupFailures(context)
     context.transition_to = AsyncMock()
 
-    with patch("pytest_analyzer.core.analyzer_service.group_failures") as mock_group:
+    with patch(
+        "pytest_analyzer.core.orchestration.analyzer_orchestrator.group_failures"
+    ) as mock_group:
         mock_group.return_value = {}  # Simulate no groups found
         await group_state.run()
 
@@ -261,7 +271,9 @@ async def test_group_failures_state_error(test_context, mock_progress):
     group_state = GroupFailures(context)
     context.transition_to = AsyncMock()
 
-    with patch("pytest_analyzer.core.analyzer_service.group_failures") as mock_group:
+    with patch(
+        "pytest_analyzer.core.orchestration.analyzer_orchestrator.group_failures"
+    ) as mock_group:
         mock_group.side_effect = ValueError("Grouping failed")
         with pytest.raises(FailureGroupingError):
             await group_state.run()
@@ -284,7 +296,7 @@ async def test_prepare_representatives_state_success(test_context, mock_progress
 
     # Mock select_representative_failure
     with patch(
-        "pytest_analyzer.core.analyzer_service.select_representative_failure"
+        "pytest_analyzer.core.orchestration.analyzer_orchestrator.select_representative_failure"
     ) as mock_select:
         # Return the first element of each group as representative
         mock_select.side_effect = lambda group: group[0]
@@ -318,7 +330,7 @@ async def test_prepare_representatives_state_error(test_context):
     context.transition_to = AsyncMock()
 
     with patch(
-        "pytest_analyzer.core.analyzer_service.select_representative_failure"
+        "pytest_analyzer.core.orchestration.analyzer_orchestrator.select_representative_failure"
     ) as mock_select:
         mock_select.side_effect = ValueError("Selection failed")
         with pytest.raises(RepresentativeSelectionError):
@@ -417,7 +429,7 @@ async def test_batch_process_state_timeout(test_context, mock_llm_suggester):
     # Simulate timeout using AsyncResourceMonitor mock (more realistic)
     # We need to patch the AsyncResourceMonitor within the BatchProcess state's run method
     with patch(
-        "pytest_analyzer.core.analyzer_service.AsyncResourceMonitor"
+        "pytest_analyzer.core.orchestration.analyzer_orchestrator.AsyncResourceMonitor"
     ) as mock_monitor:
         # Make the context manager raise TimeoutError on exit
         mock_instance = mock_monitor.return_value
@@ -624,7 +636,7 @@ async def test_full_flow_success(test_context, mock_llm_suggester, sample_failur
     with (
         patch("pytest_analyzer.core.analyzer_service.group_failures") as mock_group,
         patch(
-            "pytest_analyzer.core.analyzer_service.select_representative_failure"
+            "pytest_analyzer.core.orchestration.analyzer_orchestrator.select_representative_failure"
         ) as mock_select,
     ):
         # Simulate grouping into one group
@@ -687,7 +699,7 @@ async def test_full_flow_error_in_batch_process(
     with (
         patch("pytest_analyzer.core.analyzer_service.group_failures") as mock_group,
         patch(
-            "pytest_analyzer.core.analyzer_service.select_representative_failure"
+            "pytest_analyzer.core.orchestration.analyzer_orchestrator.select_representative_failure"
         ) as mock_select,
     ):
         mock_group.return_value = {"group1": sample_failures}
@@ -697,7 +709,7 @@ async def test_full_flow_error_in_batch_process(
         error_message = "LLM API failed"
         # Patch AsyncResourceMonitor to raise the error on exit, simulating error within the context
         with patch(
-            "pytest_analyzer.core.analyzer_service.AsyncResourceMonitor"
+            "pytest_analyzer.core.orchestration.analyzer_orchestrator.AsyncResourceMonitor"
         ) as mock_monitor:
             mock_instance = mock_monitor.return_value
             # Simulate the error happening *after* the LLM call attempt but within the monitored block
