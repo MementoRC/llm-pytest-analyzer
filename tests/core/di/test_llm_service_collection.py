@@ -49,13 +49,13 @@ class TestLLMServiceCollection:
             # Configure with provider override
             services.configure_llm_services(override_provider="anthropic")
 
+            # Resolve service first to trigger factory
+            llm_service = services.container.resolve(LLMServiceProtocol)
+            assert isinstance(llm_service, LLMServiceProtocol)
+
             # Verify detect_llm_client was called with the right provider
             mock_detect.assert_called_once()
             assert mock_detect.call_args[1]["preferred_provider"] == "anthropic"
-
-            # Verify service was registered with expected timeout
-            llm_service = services.container.resolve(LLMServiceProtocol)
-            assert isinstance(llm_service, LLMServiceProtocol)
 
     def test_configure_llm_services_with_settings_provider(self):
         """Test configuring LLM services using settings provider."""
@@ -78,14 +78,14 @@ class TestLLMServiceCollection:
             # Configure LLM services
             services.configure_llm_services()
 
+            # Resolve service first to trigger factory
+            llm_service = services.container.resolve(LLMServiceProtocol)
+            assert isinstance(llm_service, LLMServiceProtocol)
+
             # Verify detect_llm_client was called with settings provider
             mock_detect.assert_called_once()
             assert mock_detect.call_args[1]["preferred_provider"] == "openai"
             assert mock_detect.call_args[1]["fallback"] is True
-
-            # Verify service was registered
-            llm_service = services.container.resolve(LLMServiceProtocol)
-            assert isinstance(llm_service, LLMServiceProtocol)
 
     def test_configure_llm_services_fallback_control(self):
         """Test fallback control in LLM service configuration."""
@@ -108,6 +108,9 @@ class TestLLMServiceCollection:
 
             # Configure LLM services
             services.configure_llm_services()
+
+            # Resolve service first to trigger factory
+            services.container.resolve(LLMServiceProtocol)
 
             # Verify detect_llm_client was called with fallback disabled
             mock_detect.assert_called_once()
@@ -135,16 +138,14 @@ class TestLLMServiceCollection:
             services.add_singleton(Settings, settings)
             container = services.build_container()
 
-            # Call the factory function
+            # Call the factory function and verify service creation
             llm_service = _create_llm_service(container)
+            assert isinstance(llm_service, LLMService)
+            assert llm_service.timeout_seconds == 90
 
             # Verify detect_llm_client was called correctly
             mock_detect.assert_called_once()
             assert mock_detect.call_args[1]["preferred_provider"] == "anthropic"
-
-            # Verify service was created correctly
-            assert isinstance(llm_service, LLMService)
-            assert llm_service.timeout_seconds == 90
 
     def test_integration_with_core_services(self):
         """Test integration of LLM services with core services configuration."""
@@ -177,10 +178,13 @@ class TestLLMServiceCollection:
             services = ServiceCollection()
             services.configure_llm_services()
 
-            # A service should still be created but with no client
+            # Resolve and verify service
             llm_service = services.container.resolve(LLMServiceProtocol)
             assert isinstance(llm_service, LLMService)
             assert llm_service.llm_client is None
+
+            # Verify mock was called
+            mock_detect.assert_called_once()
 
     def test_error_handling_in_configuration(self):
         """Test error handling during LLM service configuration."""
@@ -195,7 +199,10 @@ class TestLLMServiceCollection:
             services = ServiceCollection()
             services.configure_llm_services()
 
-            # A service should still be created with no client
+            # Resolve and verify service
             llm_service = services.container.resolve(LLMServiceProtocol)
             assert isinstance(llm_service, LLMService)
             assert llm_service.llm_client is None
+
+            # Verify mock was called
+            mock_detect.assert_called_once()

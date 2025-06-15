@@ -170,14 +170,37 @@ class ServiceCollection:
     ) -> "ServiceCollection":
         """
         Configure LLM services with an optional specific client or provider override.
-        This is now handled by the factory. We just need to ensure the factory is registered.
-        The logic for llm_client and override_provider is more complex to handle here.
-        For now, the factory `create_llm_service` will be used which reads from settings.
-        A more advanced implementation would allow passing client/provider to the factory.
+
+        Args:
+            llm_client: Optional pre-configured LLM client to use
+            override_provider: Optional provider name to override settings
+
+        Returns:
+            Self for method chaining
         """
-        logger.debug(
-            "LLM services are configured via factories in `configure_services`."
-        )
+        # Register the LLM service factory with the specific parameters
+        if llm_client is not None:
+            # Direct client provided - create factory that returns LLMService with this client
+            self.container.register_factory(
+                LLMServiceProtocol,
+                lambda: _create_llm_service_with_client(self.container, llm_client),
+            )
+        elif override_provider is not None:
+            # Provider override - create factory that uses the override provider
+            self.container.register_factory(
+                LLMServiceProtocol,
+                lambda: _create_llm_service_with_provider(
+                    self.container, override_provider
+                ),
+            )
+        else:
+            # Default behavior - use existing factory from configure_services
+            # This is already registered in configure_services, but register it explicitly if not present
+            if LLMServiceProtocol not in self._get_registrations():
+                self.container.register_factory(
+                    LLMServiceProtocol, lambda: _create_llm_service(self.container)
+                )
+
         return self
 
     def build_container(self) -> Container:
@@ -289,6 +312,165 @@ def configure_services(
     )
 
     return container
+
+
+def _create_llm_service_with_client(
+    container: Container, llm_client: Any
+) -> LLMServiceProtocol:
+    """
+    Create an LLM service with a specific client.
+
+    Args:
+        container: The DI container
+        llm_client: The pre-configured LLM client to use
+
+    Returns:
+        LLM service instance with the specified client
+    """
+    from ..llm.backward_compat import LLMService
+
+    try:
+        settings = container.resolve(Settings)
+    except Exception:
+        # If settings not available, create default settings
+        settings = Settings()
+
+    return LLMService(
+        llm_client=llm_client,
+        timeout_seconds=settings.llm_timeout,
+        disable_auto_detection=True,  # We have a specific client, no need for auto-detection
+    )
+
+
+def _create_llm_service_with_provider(
+    container: Container, override_provider: str
+) -> LLMServiceProtocol:
+    """
+    Create an LLM service with a provider override.
+
+    Args:
+        container: The DI container
+        override_provider: The provider name to use (e.g., "anthropic", "openai")
+
+    Returns:
+        LLM service instance configured with the specified provider
+    """
+    from ..llm.backward_compat import LLMService
+
+    try:
+        settings = container.resolve(Settings)
+    except Exception:
+        # If settings not available, create default settings
+        settings = Settings()
+
+    try:
+        from ..llm.llm_service_factory import detect_llm_client
+
+        llm_client, provider = detect_llm_client(
+            settings=settings,
+            preferred_provider=override_provider,
+            fallback=settings.use_fallback,
+        )
+
+        if llm_client:
+            logger.info(
+                f"Created LLM service with provider override '{override_provider}': {type(llm_client).__name__}"
+            )
+        else:
+            logger.warning(
+                f"No LLM client detected for provider '{override_provider}', creating service with no client."
+            )
+
+        return LLMService(
+            llm_client=llm_client,
+            timeout_seconds=settings.llm_timeout,
+            disable_auto_detection=(llm_client is None),
+        )
+    except ImportError:
+        logger.debug(
+            "LLM service factory not available, creating service with no client."
+        )
+        return LLMService(
+            llm_client=None,
+            timeout_seconds=settings.llm_timeout,
+            disable_auto_detection=True,
+        )
+    except Exception as e:
+        logger.warning(
+            f"Error creating LLM service with provider '{override_provider}': {e}. Creating service with no client."
+        )
+        return LLMService(
+            llm_client=None,
+            timeout_seconds=settings.llm_timeout,
+            disable_auto_detection=True,
+        )
+
+
+def _create_llm_service(container: Container) -> LLMServiceProtocol:
+    """
+    Create an LLM service using container resolution (for backward compatibility).
+
+    Args:
+        container: The DI container
+
+    Returns:
+        LLM service instance
+    """
+    from ..llm.backward_compat import LLMService
+
+    try:
+        settings = container.resolve(Settings)
+    except Exception:
+        # If settings not available, create default settings
+        settings = Settings()
+
+    # Always try LLM detection for default case (not fallback)
+    if not settings.use_llm:
+        return LLMService(
+            llm_client=None,
+            timeout_seconds=settings.llm_timeout,
+            disable_auto_detection=True,
+        )
+
+    try:
+        from ..llm.llm_service_factory import detect_llm_client
+
+        llm_client, provider = detect_llm_client(
+            settings=settings,
+            preferred_provider=settings.llm_provider,
+            fallback=settings.use_fallback,
+        )
+
+        if llm_client:
+            logger.info(
+                f"Created LLM service with detected client: {type(llm_client).__name__}"
+            )
+        else:
+            logger.warning("No LLM client detected, creating service with no client.")
+
+        return LLMService(
+            llm_client=llm_client,
+            timeout_seconds=settings.llm_timeout,
+            disable_auto_detection=(llm_client is None),
+        )
+    except ImportError:
+        logger.debug(
+            "LLM service factory not available, creating service with no client."
+        )
+        return LLMService(
+            llm_client=None,
+            timeout_seconds=settings.llm_timeout,
+            disable_auto_detection=True,
+        )
+    except Exception as e:
+        logger.warning(
+            f"Error creating LLM service: {e}. Creating service with no client."
+        )
+        return LLMService(
+            llm_client=None,
+            timeout_seconds=settings.llm_timeout,
+            disable_auto_detection=True,
+        )
 
 
 # Helper function to get a service from the container
