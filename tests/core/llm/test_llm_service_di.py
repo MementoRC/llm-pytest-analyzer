@@ -9,10 +9,8 @@ import os
 from unittest.mock import MagicMock, patch
 
 from pytest_analyzer.core.di import Container, initialize_container
-from pytest_analyzer.core.di.service_collection import (
-    ServiceCollection,
-    _create_llm_service,
-)
+from pytest_analyzer.core.di.service_collection import ServiceCollection
+from pytest_analyzer.core.factories.analyzer_factory import create_llm_service
 from pytest_analyzer.core.llm.llm_service_factory import LLMProvider
 from pytest_analyzer.core.llm.llm_service_protocol import LLMServiceProtocol
 from pytest_analyzer.utils.settings import Settings
@@ -155,7 +153,7 @@ class TestLLMServiceDI:
                 container.register_instance(Settings, settings)
 
                 # Call the factory function
-                llm_service = _create_llm_service(container)
+                llm_service = create_llm_service(container)
 
                 # Verify detect_llm_client was called
                 mock_detect_client.assert_called_once()
@@ -183,7 +181,7 @@ class TestLLMServiceDI:
                 mock_service.return_value = MagicMock()
 
                 # Call the function but don't need to store it as we're just testing the calls
-                _create_llm_service(container)
+                create_llm_service(container)
 
                 # Verify LLMService was called - specific client None check moved to mock
                 assert mock_service.call_count == 1
@@ -209,7 +207,7 @@ class TestLLMServiceDI:
                 mock_service.return_value = MagicMock()
 
                 # Call the function but don't need to store it, testing the error handling
-                _create_llm_service(container)
+                create_llm_service(container)
 
                 # Verify LLMService was called as a fallback
                 assert mock_service.call_count == 1

@@ -8,9 +8,7 @@ protocol for projects managed with Pipenv.
 from pathlib import Path
 from typing import List
 
-from pytest_analyzer.core.infrastructure.environment.base_manager import (
-    BaseEnvironmentManager,
-)
+from ..infrastructure.environment.base_manager import BaseEnvironmentManager
 
 
 class PipenvManager(BaseEnvironmentManager):
