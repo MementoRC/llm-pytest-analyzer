@@ -1,9 +1,8 @@
 """End-to-end tests for using the pytest-analyzer as an API."""
 
-import asyncio
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 
 import pytest
 
@@ -28,7 +27,7 @@ def test_api_direct_usage(sample_json_report, mock_llm_client):
 
     # Mock the async suggestion generation
     with patch.object(
-        service.llm_suggester, "batch_suggest_fixes", new_callable=MagicMock
+        service.llm_suggester, "batch_suggest_fixes", new_callable=AsyncMock
     ) as mock_batch_suggest:
         # The key of the dict should be the failure ID from the report
         # Let's create a plausible failure ID. In real code, this is generated.
@@ -36,19 +35,16 @@ def test_api_direct_usage(sample_json_report, mock_llm_client):
         # The extractor will create a PytestFailure with a generated ID.
         # The state machine will then use this ID.
         # We can let the extractor run and then mock what the suggester returns.
-        mock_batch_suggest.return_value = asyncio.Future()
-        mock_batch_suggest.return_value.set_result(
-            {
-                "some_failure_id": [
-                    FixSuggestion(
-                        failure=MagicMock(),
-                        suggestion="Mocked LLM Suggestion",
-                        confidence=0.9,
-                        explanation="Mocked explanation",
-                    )
-                ]
-            }
-        )
+        mock_batch_suggest.return_value = {
+            "some_failure_id": [
+                FixSuggestion(
+                    failure=MagicMock(),
+                    suggestion="Mocked LLM Suggestion",
+                    confidence=0.9,
+                    explanation="Mocked explanation",
+                )
+            ]
+        }
 
         # Analyze the report
         suggestions = service.analyze_pytest_output(sample_json_report)
@@ -90,12 +86,10 @@ def test_api_with_llm(sample_json_report):
     service = PytestAnalyzerService(settings=settings)
 
     with patch.object(
-        service.llm_suggester, "batch_suggest_fixes", new_callable=MagicMock
+        service.llm_suggester, "batch_suggest_fixes", new_callable=AsyncMock
     ) as mock_batch_suggest:
         # The suggester returns a dict mapping failure ID to suggestions
-        future = asyncio.Future()
-        future.set_result({"some_id": mock_response_suggestions})
-        mock_batch_suggest.return_value = future
+        mock_batch_suggest.return_value = {"some_id": mock_response_suggestions}
 
         # Analyze the report
         suggestions = service.analyze_pytest_output(sample_json_report)
