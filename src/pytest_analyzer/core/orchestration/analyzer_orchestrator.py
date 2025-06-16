@@ -141,9 +141,8 @@ class Context:
 
     def mark_llm_async(self, suggestion: FixSuggestion) -> FixSuggestion:
         """Mark a suggestion as coming from asynchronous LLM processing."""
-        if not suggestion.code_changes:
-            suggestion.code_changes = {}
-        suggestion.code_changes["source"] = "llm_async"
+        # Add source to metadata instead of code_changes
+        suggestion.add_metadata("source", "llm_async")
         return suggestion
 
     @asynccontextmanager
@@ -222,11 +221,15 @@ class PrepareRepresentatives(State):
                 if representative is None:
                     continue
                 self.context.representative_failures.append(representative)
-                self.context.group_mapping[representative.test_name] = group
+                # Store mapping from representative failure ID to the full group
+                self.context.group_mapping[representative.id] = group
+
             self.context.progress_manager.create_task(
                 "batch_processing",
                 f"[cyan]Processing {len(self.context.representative_failures)} failure groups in parallel...",
-                total=1,
+                total=len(
+                    self.context.representative_failures
+                ),  # Total should be number of representatives
             )
             self.context.log_info(
                 f"Processing {len(self.context.representative_failures)} failure groups with "
@@ -250,22 +253,29 @@ class BatchProcess(State):
                 async with AsyncResourceMonitor(
                     max_time_seconds=self.context.settings.llm_timeout
                 ):
-                    suggestions_by_test = (
+                    # batch_suggest_fixes returns Dict[str, List[FixSuggestion]] where key is failure_id
+                    suggestions_by_failure_id = (
                         await self.context.llm_suggester.batch_suggest_fixes(
                             self.context.representative_failures
                         )
                     )
-                    for test_name, suggestions in suggestions_by_test.items():
-                        group = self.context.group_mapping.get(test_name, [])
-                        if not group:
-                            continue
-                        representative = next(
-                            (f for f in group if f.test_name == test_name), None
+
+                    processed_count = 0
+                    for representative in self.context.representative_failures:
+                        suggestions = suggestions_by_failure_id.get(
+                            representative.id, []
                         )
-                        if representative and suggestions:
+                        group = self.context.group_mapping.get(representative.id, [])
+
+                        if suggestions and group:
                             await self._process_suggestions_for_group(
                                 representative, group, suggestions
                             )
+                        processed_count += 1
+                        self.context.progress_manager.update_task(
+                            "batch_processing", advance=1
+                        )
+
             self.context.progress_manager.update_task(
                 "batch_processing",
                 f"[green]Completed processing {len(self.context.representative_failures)} failure groups",
@@ -285,22 +295,27 @@ class BatchProcess(State):
         self,
         representative: PytestFailure,
         group: List[PytestFailure],
-        suggestions: List[FixSuggestion],
+        suggestions: List[FixSuggestion],  # Suggestions are for the representative
     ) -> None:
+        """Distribute suggestions from the representative to all failures in the group."""
         for suggestion in suggestions:
+            # Add the original suggestion for the representative
             self.context.all_suggestions.append(self.context.mark_llm_async(suggestion))
+
+            # Create duplicates for other failures in the group
             for other_failure in group:
-                if other_failure is not representative:
-                    duplicate_suggestion = FixSuggestion(
-                        failure=other_failure,
-                        suggestion=suggestion.suggestion,
-                        explanation=suggestion.explanation,
+                if other_failure.id != representative.id:  # Use ID for comparison
+                    # Create a new suggestion entity for the duplicate
+                    duplicate_suggestion = FixSuggestion.create(
+                        failure_id=other_failure.id,  # Link to the other failure's ID
+                        suggestion_text=suggestion.suggestion_text,
                         confidence=suggestion.confidence,
-                        code_changes=(
-                            dict(suggestion.code_changes)
-                            if suggestion.code_changes
-                            else None
-                        ),
+                        explanation=suggestion.explanation,
+                        code_changes=list(suggestion.code_changes),  # Copy the list
+                        alternative_approaches=list(
+                            suggestion.alternative_approaches
+                        ),  # Copy the list
+                        metadata=dict(suggestion.metadata),  # Copy the dict
                     )
                     self.context.all_suggestions.append(
                         self.context.mark_llm_async(duplicate_suggestion)
@@ -313,6 +328,7 @@ class PostProcess(State):
     async def run(self) -> None:
         try:
             async with self.context.track_performance("async_post_processing"):
+                # Sort by confidence (descending)
                 self.context.all_suggestions.sort(
                     key=lambda s: s.confidence, reverse=True
                 )
@@ -323,14 +339,16 @@ class PostProcess(State):
             raise PostProcessingError(f"Error in post-processing: {e}") from e
 
     def _limit_suggestions_per_failure(self) -> None:
-        suggestions_by_failure: Dict[str, List[FixSuggestion]] = {}
+        suggestions_by_failure_id: Dict[str, List[FixSuggestion]] = {}
         for suggestion in self.context.all_suggestions:
-            failure_id = suggestion.failure.test_name
-            if failure_id not in suggestions_by_failure:
-                suggestions_by_failure[failure_id] = []
-            suggestions_by_failure[failure_id].append(suggestion)
+            failure_id = suggestion.failure_id  # Use failure_id
+            if failure_id not in suggestions_by_failure_id:
+                suggestions_by_failure_id[failure_id] = []
+            suggestions_by_failure_id[failure_id].append(suggestion)
+
         limited_suggestions = []
-        for suggestions in suggestions_by_failure.values():
+        for suggestions in suggestions_by_failure_id.values():
+            # Suggestions are already sorted by confidence from the previous step
             limited_suggestions.extend(
                 suggestions[: self.context.settings.max_suggestions_per_failure]
             )
@@ -345,6 +363,7 @@ class ErrorState(State):
         self.context.log_warning(
             "Error encountered during async suggestion generation. Moving to post-processing with partial results."
         )
+        # Transition to PostProcess to allow cleanup and return partial results
         await self.context.transition_to(PostProcess)
 
 
@@ -369,6 +388,9 @@ class AnalyzerOrchestrator(Orchestrator):
         parent_task_id: Optional[TaskID] = None,
     ) -> List[FixSuggestion]:
         async with performance_tracker.async_track("async_generate_suggestions"):
+            # RichProgressManager requires a rich.Progress instance, which is optional here.
+            # If not provided, it operates in a 'quiet' mode where tasks are not added/updated.
+            # The Context needs a ProgressManager instance regardless.
             progress_manager = RichProgressManager(progress, parent_task_id, quiet)
             context = Context(
                 failures=failures,
@@ -382,17 +404,22 @@ class AnalyzerOrchestrator(Orchestrator):
             )
             try:
                 await context.transition_to(Initialize)
+                # Wait for the state machine execution to complete
                 await context.execution_complete_event.wait()
                 if context.final_error:
-                    logger.error(
-                        f"State machine execution failed: {context.final_error}"
-                    )
+                    # Re-raise the final error if one occurred, after cleanup
+                    raise context.final_error
             except asyncio.TimeoutError:
                 logger.warning(
                     "Async suggestion generation timed out. Returning partial results."
                 )
+                # Cleanup tasks if timeout happens outside the state machine's error handling
                 context.progress_manager.cleanup_tasks()
             except Exception as e:
+                # Catch any unhandled exceptions from the state machine or orchestrator itself
                 logger.error(f"Unhandled error in async suggestion generation: {e}")
                 context.progress_manager.cleanup_tasks()
+                # Decide whether to re-raise or return partial results.
+                # For now, let's return partial results and log the error.
+                # raise e # Option to re-raise
             return context.all_suggestions
