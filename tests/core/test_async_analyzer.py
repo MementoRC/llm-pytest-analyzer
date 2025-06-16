@@ -91,17 +91,13 @@ def sample_failures():
 @pytest.fixture
 def analyzer_service_sync(mock_llm_client):
     """Create a synchronous analyzer service."""
-    return PytestAnalyzerService(
-        llm_client=mock_llm_client, use_async=False, batch_size=5, max_concurrency=3
-    )
+    return PytestAnalyzerService(llm_client=mock_llm_client)
 
 
 @pytest.fixture
 def analyzer_service_async(mock_llm_client):
     """Create an asynchronous analyzer service."""
-    return PytestAnalyzerService(
-        llm_client=mock_llm_client, use_async=True, batch_size=5, max_concurrency=3
-    )
+    return PytestAnalyzerService(llm_client=mock_llm_client)
 
 
 def test_async_generate_suggestions(analyzer_service_async, sample_failures):
