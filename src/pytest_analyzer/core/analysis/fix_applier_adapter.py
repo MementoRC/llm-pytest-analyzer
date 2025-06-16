@@ -117,6 +117,25 @@ class FixApplierAdapter(Applier):
             logger.error(error_message)
             raise FixApplicationError(error_message) from e
 
+    def apply_fix_suggestion(self, suggestion: FixSuggestion) -> FixApplicationResult:
+        """
+        Apply a specific fix suggestion (alias for apply_suggestion).
+
+        This method provides compatibility with the core.protocols.Applier interface
+        which expects apply_fix_suggestion instead of apply_suggestion.
+
+        Args:
+            suggestion: The fix suggestion to apply
+
+        Returns:
+            Results of the application including success status
+
+        Raises:
+            FixApplicationError: If application fails
+        """
+        # Delegate to apply_suggestion to avoid code duplication
+        return self.apply_suggestion(suggestion)
+
     def show_diff(self, file_path: Union[str, Path], new_content: str) -> str:
         """
         Generate a diff between original and new file content.

@@ -23,10 +23,22 @@ class TestAnalyzerServiceFixIntegration:
 
     @pytest.fixture
     def analyzer_service(self, tmp_path):
-        """Create a PytestAnalyzerService with a mocked project root."""
+        """Create a PytestAnalyzerService with all dependencies via DI container."""
+        # Import DI components
+        from pytest_analyzer.core.di.service_collection import ServiceCollection
+
+        # Create settings and set project_root
         settings = Settings()
         settings.project_root = tmp_path
-        return PytestAnalyzerService(settings=settings)
+
+        # Build DI container with all services
+        services = ServiceCollection()
+        services.add_singleton(Settings, settings)
+        services.configure_core_services()
+        container = services.build_container()
+
+        # Resolve PytestAnalyzerService from the container
+        return container.resolve(PytestAnalyzerService)
 
     @pytest.fixture
     def failure(self):
@@ -79,8 +91,10 @@ class TestAnalyzerServiceFixIntegration:
 
             # Check that FixApplier was called correctly
             mock_apply_fix.assert_called_once()
-            code_changes_arg = mock_apply_fix.call_args[0][0]
-            tests_arg = mock_apply_fix.call_args[0][1]
+            # Extract keyword arguments since apply_fix is called with keyword args
+            call_kwargs = mock_apply_fix.call_args.kwargs
+            code_changes_arg = call_kwargs["code_changes"]
+            tests_arg = call_kwargs["tests_to_validate"]
 
             # Check arguments passed to FixApplier
             assert str(source_file) in code_changes_arg, (
