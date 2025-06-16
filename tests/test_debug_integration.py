@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 
-from pytest_analyzer.core.analyzer_service import PytestAnalyzerService
+from pytest_analyzer.core.backward_compat import PytestAnalyzerService
 from pytest_analyzer.core.llm.llm_service import LLMService
 from pytest_analyzer.utils.settings import Settings
 

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pytest_analyzer.core.analyzer_service import PytestAnalyzerService
+from pytest_analyzer.core.backward_compat import PytestAnalyzerService
 from pytest_analyzer.core.models.pytest_failure import PytestFailure
 from pytest_analyzer.utils.settings import Settings
 

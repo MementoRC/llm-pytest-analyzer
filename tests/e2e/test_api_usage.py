@@ -10,7 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parents[2] / "src"))
 
 # Import the API classes
-from pytest_analyzer.core.analyzer_service import PytestAnalyzerService
+from pytest_analyzer.core.backward_compat import PytestAnalyzerService
 from pytest_analyzer.core.models.pytest_failure import FixSuggestion
 from pytest_analyzer.utils.settings import Settings
 
