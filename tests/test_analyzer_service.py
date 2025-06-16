@@ -2,11 +2,11 @@
 
 import subprocess
 import tempfile
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from pytest_analyzer.core.backward_compat import PytestAnalyzerService
+from pytest_analyzer.analyzer_service import PytestAnalyzerService
 from pytest_analyzer.core.models.pytest_failure import PytestFailure
 from pytest_analyzer.utils.settings import Settings
 
@@ -48,19 +48,22 @@ def analyzer_service():
         max_failures=10,
         max_suggestions=3,
         min_confidence=0.5,
+        use_llm=True,  # Enable LLM for tests
     )
     return PytestAnalyzerService(settings=settings)
 
 
-@patch("pytest_analyzer.core.analyzer_service.get_extractor")
-@patch("pytest_analyzer.core.analyzer_service.LLMSuggester.suggest_fixes")
+@patch("pytest_analyzer.analyzer_service.get_extractor")
+@patch("pytest_analyzer.analyzer_service.asyncio.run")
 def test_analyze_pytest_output(
-    mock_suggest_fixes, mock_get_extractor, mock_extractor, analyzer_service
+    mock_asyncio_run, mock_get_extractor, mock_extractor, analyzer_service
 ):
     """Test analyzing pytest output from a file."""
     # Setup
     mock_get_extractor.return_value = mock_extractor
-    mock_suggest_fixes.return_value = []  # Mock suggest_fixes to return empty list
+    # The service will call the state machine, which calls the suggester.
+    # We can mock the suggester's async method.
+    analyzer_service.llm_suggester.batch_suggest_fixes = AsyncMock(return_value={})
 
     with tempfile.NamedTemporaryFile(suffix=".json") as tmp:
         # Execute
@@ -70,11 +73,14 @@ def test_analyze_pytest_output(
         # Assert
         mock_get_extractor.assert_called_once()
         mock_extractor.extract_failures.assert_called_once()
-        mock_suggest_fixes.assert_called()
-        assert len(suggestions) == 0  # No suggestions since we mocked the suggester
+        # asyncio.run should be called to start the state machine
+        mock_asyncio_run.assert_called_once()
+        # The suggester's async method should be awaited
+        analyzer_service.llm_suggester.batch_suggest_fixes.assert_awaited()
+        assert len(suggestions) == 0  # No suggestions since we mocked an empty response
 
 
-@patch("pytest_analyzer.core.extraction.extractor_factory.get_extractor")
+@patch("pytest_analyzer.analyzer_service.get_extractor")
 def test_analyze_pytest_output_nonexistent_file(mock_get_extractor, analyzer_service):
     """Test analyzing a nonexistent pytest output file."""
     # Execute
@@ -86,45 +92,37 @@ def test_analyze_pytest_output_nonexistent_file(mock_get_extractor, analyzer_ser
     assert len(suggestions) == 0
 
 
-@patch("pytest_analyzer.core.analyzer_service.collect_failures_with_plugin")
-@patch("pytest_analyzer.core.analyzer_service.LLMSuggester.suggest_fixes")
-def test_run_and_analyze_plugin(mock_suggest_fixes, mock_collect, analyzer_service):
+@patch("pytest_analyzer.analyzer_service.collect_failures_with_plugin")
+@patch("pytest_analyzer.analyzer_service.asyncio.run")
+def test_run_and_analyze_plugin(
+    mock_asyncio_run, mock_collect, analyzer_service, test_failure
+):
     """Test running and analyzing tests with plugin integration."""
     # Setup
-    mock_collect.return_value = [
-        PytestFailure(
-            test_name="test_function",
-            test_file="test_file.py",
-            error_type="AssertionError",
-            error_message="assert 1 == 2",
-            traceback="Traceback...",
-        )
-    ]
-    mock_suggest_fixes.return_value = []  # Mock suggest_fixes to return empty list
-
+    mock_collect.return_value = [test_failure]
+    analyzer_service.llm_suggester.batch_suggest_fixes = AsyncMock(return_value={})
     analyzer_service.settings.preferred_format = "plugin"
 
     # Execute
     suggestions = analyzer_service.run_and_analyze("test_path")
 
     # Assert
-    # Expect the call with additional flags added by the service
     mock_collect.assert_called_once_with(["test_path", "-s", "--disable-warnings"])
-    mock_suggest_fixes.assert_called()
-    assert len(suggestions) == 0  # No suggestions since we mocked the suggester
+    mock_asyncio_run.assert_called_once()
+    analyzer_service.llm_suggester.batch_suggest_fixes.assert_awaited()
+    assert len(suggestions) == 0
 
 
 @patch("subprocess.run")
-@patch("pytest_analyzer.core.analyzer_service.get_extractor")
-@patch("pytest_analyzer.core.analyzer_service.LLMSuggester.suggest_fixes")
+@patch("pytest_analyzer.analyzer_service.get_extractor")
+@patch("pytest_analyzer.analyzer_service.asyncio.run")
 def test_run_and_analyze_json(
-    mock_suggest_fixes, mock_get_extractor, mock_run, mock_extractor, analyzer_service
+    mock_asyncio_run, mock_get_extractor, mock_run, mock_extractor, analyzer_service
 ):
     """Test running and analyzing tests with JSON output."""
     # Setup
     mock_get_extractor.return_value = mock_extractor
-    mock_suggest_fixes.return_value = []  # Mock suggest_fixes to return empty list
-
+    analyzer_service.llm_suggester.batch_suggest_fixes = AsyncMock(return_value={})
     analyzer_service.settings.preferred_format = "json"
 
     # Execute
@@ -135,21 +133,21 @@ def test_run_and_analyze_json(
     mock_run.assert_called_once()
     mock_get_extractor.assert_called_once()
     mock_extractor.extract_failures.assert_called_once()
-    mock_suggest_fixes.assert_called()
-    assert len(suggestions) == 0  # No suggestions since we mocked the suggester
+    mock_asyncio_run.assert_called_once()
+    analyzer_service.llm_suggester.batch_suggest_fixes.assert_awaited()
+    assert len(suggestions) == 0
 
 
 @patch("subprocess.run")
-@patch("pytest_analyzer.core.analyzer_service.get_extractor")
-@patch("pytest_analyzer.core.analyzer_service.LLMSuggester.suggest_fixes")
+@patch("pytest_analyzer.analyzer_service.get_extractor")
+@patch("pytest_analyzer.analyzer_service.asyncio.run")
 def test_run_and_analyze_xml(
-    mock_suggest_fixes, mock_get_extractor, mock_run, mock_extractor, analyzer_service
+    mock_asyncio_run, mock_get_extractor, mock_run, mock_extractor, analyzer_service
 ):
     """Test running and analyzing tests with XML output."""
     # Setup
     mock_get_extractor.return_value = mock_extractor
-    mock_suggest_fixes.return_value = []  # Mock suggest_fixes to return empty list
-
+    analyzer_service.llm_suggester.batch_suggest_fixes = AsyncMock(return_value={})
     analyzer_service.settings.preferred_format = "xml"
 
     # Execute
@@ -160,8 +158,9 @@ def test_run_and_analyze_xml(
     mock_run.assert_called_once()
     mock_get_extractor.assert_called_once()
     mock_extractor.extract_failures.assert_called_once()
-    mock_suggest_fixes.assert_called()
-    assert len(suggestions) == 0  # No suggestions since we mocked the suggester
+    mock_asyncio_run.assert_called_once()
+    analyzer_service.llm_suggester.batch_suggest_fixes.assert_awaited()
+    assert len(suggestions) == 0
 
 
 @patch("subprocess.run")

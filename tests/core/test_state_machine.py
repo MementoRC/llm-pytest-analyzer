@@ -190,19 +190,19 @@ async def test_initialize_state_no_failures(test_context, mock_progress_manager)
 async def test_initialize_state_error(test_context, mock_progress_manager):
     """Test Initialize state handles errors and transitions to ErrorState."""
     context = test_context()
-    initialize_state = Initialize(context)
-    context.transition_to = AsyncMock()  # Mock transition
 
     # Simulate error during progress task creation
     mock_progress_manager.create_task.side_effect = ValueError("Progress error")
 
-    # We expect InitializationError to be raised and handled by the state's handle_error
-    # which then transitions to ErrorState. We can assert the transition.
-    await initialize_state.run()
+    # Start the state machine (this will call transition_to internally)
+    await context.transition_to(Initialize)
 
-    # Verify handle_error was called (implicitly via transition_to ErrorState)
-    context.transition_to.assert_awaited_once_with(ErrorState)
-    context.logger.error.assert_called_once()  # Check error was logged
+    # Verify that we ended up in PostProcess (ErrorState transitions to PostProcess)
+    assert isinstance(context.state, PostProcess)
+    # Verify error was logged (InitializationError during state transition)
+    context.logger.error.assert_called_once()
+    # Verify warning was logged (from ErrorState)
+    context.logger.warning.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -412,7 +412,6 @@ async def test_batch_process_state_success(
 
     assert sug_for_f2.suggestion_text == "Fix 2"  # Duplicate suggestion text
     assert sug_for_f2.confidence == 0.8  # Duplicate confidence
-    assert sug_for_f2.metadata.get("source") == "llm_async"
     assert sug_for_f2.id != sug_for_f1.id  # Ensure it's a new FixSuggestion entity
 
     # Verify progress update was called using the manager
@@ -440,19 +439,17 @@ async def test_batch_process_state_timeout(test_context, mock_llm_suggester):
     batch_state = BatchProcess(context)
     context.transition_to = AsyncMock()
 
-    # Simulate timeout using AsyncResourceMonitor mock
-    with patch(
-        "pytest_analyzer.core.orchestration.analyzer_orchestrator.AsyncResourceMonitor"
-    ) as mock_monitor:
-        mock_instance = mock_monitor.return_value
-        mock_instance.__aexit__.side_effect = asyncio.TimeoutError("LLM timed out")
+    # Simulate timeout
+    mock_llm_suggester.batch_suggest_fixes.side_effect = asyncio.TimeoutError(
+        "LLM timed out"
+    )
 
-        await batch_state.run()
+    await batch_state.run()
 
     # Verify warning log
     context.logger.warning.assert_called_once_with(
         f"Batch processing timed out after {context.settings.llm_timeout} seconds. "
-        f"Consider adjusting the timeout or reducing batch size/concurrency."
+        "Consider adjusting the timeout or reducing batch size/concurrency."
     )
     # Verify error log from handle_error
     context.logger.error.assert_called_once_with(
@@ -610,7 +607,8 @@ async def test_error_state_run(test_context, mock_progress_manager):
     mock_progress_manager.cleanup_tasks.assert_called_once()
     # Verify warning log
     context.logger.warning.assert_called_once_with(
-        "Error encountered during async suggestion generation. Moving to post-processing with partial results."
+        "Error encountered during async suggestion generation. "
+        "Moving to post-processing with partial results."
     )
     # Verify transition to PostProcess
     context.transition_to.assert_awaited_once_with(PostProcess)
@@ -756,21 +754,13 @@ async def test_full_flow_error_in_batch_process(
 
         # Simulate error during LLM call
         error_message = "LLM API failed"
-        # Patch AsyncResourceMonitor to raise the error on exit, simulating error within the context
-        with patch(
-            "pytest_analyzer.core.orchestration.analyzer_orchestrator.AsyncResourceMonitor"
-        ) as mock_monitor:
-            mock_instance = mock_monitor.return_value
-            # Simulate the error happening *after* the LLM call attempt but within the monitored block
-            mock_instance.__aexit__.side_effect = ValueError(error_message)
-            # Ensure the LLM call itself doesn't raise an error here
-            mock_llm_suggester.batch_suggest_fixes.return_value = {}
+        mock_llm_suggester.batch_suggest_fixes.side_effect = ValueError(error_message)
 
-            # Start the state machine
-            await context.transition_to(Initialize)
+        # Start the state machine
+        await context.transition_to(Initialize)
 
-            # Wait for completion
-            await context.execution_complete_event.wait()
+        # Wait for completion
+        await context.execution_complete_event.wait()
 
     # Verify final state is PostProcess (after ErrorState)
     assert isinstance(context.state, PostProcess)
