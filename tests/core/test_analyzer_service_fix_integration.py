@@ -153,12 +153,29 @@ class TestAnalyzerServiceFixIntegration:
             code_changes={"/path/to/file.py": "code"},
         )
 
-        # Apply suggestion
-        result = analyzer_service.apply_suggestion(suggestion)
+        # Patch FixApplier.apply_fix to check arguments
+        with patch.object(FixApplier, "apply_fix") as mock_apply_fix:
+            mock_apply_fix.return_value = FixApplicationResult(
+                success=False,
+                message="Missing original failure information",
+                applied_files=[],
+                rolled_back_files=[],
+            )
 
-        # Check result
-        assert not result.success, "Should fail when suggestion has no failure info"
-        assert "Missing original failure information" in result.message
+            # Apply suggestion
+            result = analyzer_service.apply_suggestion(suggestion)
+
+            # Check that FixApplier was called correctly
+            call_kwargs = mock_apply_fix.call_args.kwargs
+            code_changes_arg = call_kwargs["code_changes"]
+            tests_arg = call_kwargs["tests_to_validate"]
+
+            assert "/path/to/file.py" in code_changes_arg
+            assert tests_arg == []
+
+            # Check result
+            assert not result.success, "Should fail when suggestion has no failure info"
+            assert "Missing original failure information" in result.message
 
     def test_apply_suggestion_no_code_changes(self, analyzer_service, failure):
         """Test handling of suggestion without code changes."""
@@ -221,7 +238,8 @@ class TestAnalyzerServiceFixIntegration:
             analyzer_service.apply_suggestion(fix_suggestion)
 
             # Check that custom tests were used
-            tests_arg = mock_apply_fix.call_args[0][1]
+            call_kwargs = mock_apply_fix.call_args.kwargs
+            tests_arg = call_kwargs["tests_to_validate"]
             assert tests_arg == [
                 "custom_test1",
                 "custom_test2",
