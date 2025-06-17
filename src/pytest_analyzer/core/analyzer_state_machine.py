@@ -334,7 +334,7 @@ class AnalyzerStateMachine(BaseStateMachine[AnalyzerContext, AnalyzerEvent]):
         if context.settings.use_llm and not context.llm_suggester:
             if context.llm_service:
                 context.llm_suggester = LLMSuggester(
-                    llm_service=context.llm_service,
+                    llm_client=context.llm_service,
                     min_confidence=context.settings.min_confidence,
                     timeout_seconds=context.settings.llm_timeout,
                 )

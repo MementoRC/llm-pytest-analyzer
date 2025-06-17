@@ -8,7 +8,6 @@ suggestions using LLMs, and post-processes the results.
 
 import abc
 import asyncio
-import dataclasses
 import logging
 from typing import Any, Dict, List, Optional, Type
 
@@ -140,6 +139,48 @@ class Context:
         """Helper to track performance of a code block."""
         return self.performance_tracker.async_track(name)
 
+    def _convert_code_changes(self, code_changes: Any) -> List[str]:
+        """
+        Convert code changes from legacy model format to domain entity format.
+
+        The legacy model uses Dict[str, Any] for code_changes,
+        but the domain entity expects List[str].
+
+        Args:
+            code_changes: Code changes in legacy format
+
+        Returns:
+            List of code change strings
+        """
+        if not code_changes:
+            return []
+
+        if isinstance(code_changes, list):
+            return [str(change) for change in code_changes]
+
+        if isinstance(code_changes, dict):
+            changes = []
+            # Extract meaningful code changes from the dict
+            if "fixed_code" in code_changes:
+                changes.append(f"Fixed code: {code_changes['fixed_code']}")
+            if "original_code" in code_changes and "fixed_code" in code_changes:
+                changes.append(
+                    f"Replace:\n{code_changes['original_code']}\nWith:\n{code_changes['fixed_code']}"
+                )
+            elif "file" in code_changes:
+                changes.append(f"Modify file: {code_changes['file']}")
+
+            # If no specific patterns found, convert all non-metadata entries
+            if not changes:
+                for key, value in code_changes.items():
+                    if key not in ("source", "fingerprint"):
+                        changes.append(f"{key}: {value}")
+
+            return changes
+
+        # Fallback: convert to string
+        return [str(code_changes)]
+
 
 # --- State Implementations ---
 
@@ -236,17 +277,55 @@ class BatchProcess(State):
 
                         for original_failure in group:
                             for suggestion in suggestions:
-                                # Create a new suggestion for each failure in the group,
-                                # linking it to the specific failure.
-                                new_suggestion = dataclasses.replace(
-                                    suggestion, failure=original_failure
+                                # Handle both legacy model and domain entity FixSuggestion instances
+                                from ..domain.entities.fix_suggestion import (
+                                    FixSuggestion as DomainFixSuggestion,
+                                )
+                                from ..domain.value_objects.suggestion_confidence import (
+                                    SuggestionConfidence,
                                 )
 
-                                # Ensure metadata exists and is a dict.
-                                if not hasattr(new_suggestion, "metadata"):
-                                    setattr(new_suggestion, "metadata", {})
-                                elif new_suggestion.metadata is None:
-                                    new_suggestion.metadata = {}
+                                # Check if this is already a domain entity FixSuggestion
+                                if hasattr(suggestion, "failure_id") and hasattr(
+                                    suggestion, "suggestion_text"
+                                ):
+                                    # This is already a domain entity, create a copy for the original failure
+                                    new_suggestion = DomainFixSuggestion.create(
+                                        failure_id=original_failure.id,
+                                        suggestion_text=suggestion.suggestion_text,
+                                        confidence=suggestion.confidence,
+                                        explanation=suggestion.explanation,
+                                        code_changes=suggestion.code_changes,
+                                        metadata=suggestion.metadata.copy()
+                                        if suggestion.metadata
+                                        else {},
+                                    )
+                                else:
+                                    # This is a legacy model FixSuggestion, convert it
+                                    # Convert confidence to domain value object
+                                    if hasattr(suggestion, "confidence"):
+                                        confidence = SuggestionConfidence.from_score(
+                                            suggestion.confidence
+                                        )
+                                    else:
+                                        confidence = SuggestionConfidence.MEDIUM
+
+                                    # Legacy model uses 'suggestion' field, domain entity uses 'suggestion_text'
+                                    suggestion_text = getattr(
+                                        suggestion, "suggestion", ""
+                                    )
+                                    new_suggestion = DomainFixSuggestion.create(
+                                        failure_id=original_failure.id,
+                                        suggestion_text=suggestion_text,
+                                        confidence=confidence,
+                                        explanation=getattr(
+                                            suggestion, "explanation", ""
+                                        ),
+                                        code_changes=self.context._convert_code_changes(
+                                            getattr(suggestion, "code_changes", None)
+                                        ),
+                                        metadata=getattr(suggestion, "metadata", {}),
+                                    )
 
                                 # Preserve original metadata, set source if not present.
                                 new_suggestion.metadata.setdefault(
@@ -285,8 +364,9 @@ class PostProcess(State):
                     suggestions_by_failure: Dict[str, List[FixSuggestion]] = {}
                     for s in self.context.all_suggestions:
                         # Group suggestions by the ID of their associated failure.
-                        if hasattr(s, "failure") and hasattr(s.failure, "id"):
-                            suggestions_by_failure.setdefault(s.failure.id, []).append(
+                        # Domain entity FixSuggestion uses failure_id field instead of failure object
+                        if hasattr(s, "failure_id") and s.failure_id:
+                            suggestions_by_failure.setdefault(s.failure_id, []).append(
                                 s
                             )
 

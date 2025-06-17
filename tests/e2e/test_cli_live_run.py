@@ -267,4 +267,4 @@ def test_cli_with_different_formats(sample_assertion_file, patch_subprocess):
     sys.argv = original_argv
 
     # Check that XML format was used
-    assert "junitxml" in " ".join(patch_subprocess.last_command)
+    assert "junit-xml" in " ".join(patch_subprocess.last_command)

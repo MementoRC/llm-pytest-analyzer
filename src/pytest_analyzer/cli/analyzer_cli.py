@@ -21,7 +21,8 @@ from rich.console import Console
 from rich.syntax import Syntax
 from rich.table import Table
 
-from ..core.analyzer_service import PytestAnalyzerService
+from ..core.analyzer_service_di import DIPytestAnalyzerService
+from ..core.factory import create_analyzer_service
 from ..core.models.pytest_failure import FixSuggestion, PytestFailure
 from ..utils.settings import Settings, load_settings
 
@@ -588,7 +589,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
             console.print(config_table)
 
         # Initialize the analyzer service
-        analyzer_service = PytestAnalyzerService(settings=settings)
+        analyzer_service = create_analyzer_service(settings=settings)
 
         # Set quiet mode based on verbosity
         quiet_mode = args.verbosity == 0
@@ -763,7 +764,7 @@ def show_file_diff(file_path: str, new_content: str) -> bool:
 
 def apply_suggestions_interactively(
     suggestions: list[FixSuggestion],
-    analyzer_service: PytestAnalyzerService,
+    analyzer_service: DIPytestAnalyzerService,
     args: argparse.Namespace,
 ) -> None:
     """

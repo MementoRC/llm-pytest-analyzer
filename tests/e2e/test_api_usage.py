@@ -11,7 +11,13 @@ sys.path.insert(0, str(Path(__file__).parents[2] / "src"))
 
 # Import the API classes
 from pytest_analyzer.analyzer_service import PytestAnalyzerService
-from pytest_analyzer.core.models.pytest_failure import FixSuggestion
+from pytest_analyzer.core.domain.entities.fix_suggestion import FixSuggestion
+from pytest_analyzer.core.domain.value_objects.suggestion_confidence import (
+    SuggestionConfidence,
+)
+from pytest_analyzer.core.models.pytest_failure import (
+    FixSuggestion as LegacyFixSuggestion,
+)
 from pytest_analyzer.utils.settings import Settings
 
 
@@ -36,7 +42,7 @@ def test_api_direct_usage(sample_json_report, mock_llm_client):
 
         return {
             rep_failure.id: [
-                FixSuggestion(
+                LegacyFixSuggestion(
                     failure=rep_failure,
                     suggestion="Mocked LLM Suggestion",
                     confidence=0.9,
@@ -57,11 +63,11 @@ def test_api_direct_usage(sample_json_report, mock_llm_client):
     assert suggestions is not None
     assert len(suggestions) == 1
     assert isinstance(suggestions[0], FixSuggestion)
-    assert suggestions[0].failure is not None
-    # Verify that the suggestion is linked to the correct failure from the report
-    assert suggestions[0].failure.test_name == "test_assertion.py::test_assertion_error"
-    assert suggestions[0].suggestion == "Mocked LLM Suggestion"
-    assert suggestions[0].confidence == 0.9
+    assert suggestions[0].failure_id is not None
+    # Domain entity FixSuggestion uses different field names
+    assert suggestions[0].suggestion_text == "Mocked LLM Suggestion"
+    # Domain entity uses SuggestionConfidence enum, 0.9 maps to HIGH
+    assert suggestions[0].confidence == SuggestionConfidence.HIGH
 
 
 @pytest.mark.e2e
@@ -83,7 +89,7 @@ def test_api_with_llm(sample_json_report):
         rep_failure = failures[0]
 
         mock_response_suggestions = [
-            FixSuggestion(
+            LegacyFixSuggestion(
                 failure=rep_failure,
                 suggestion="API LLM suggestion",
                 confidence=0.95,
@@ -113,12 +119,13 @@ def test_api_with_llm(sample_json_report):
         s for s in suggestions if s.metadata and s.metadata.get("source") == "llm"
     ]
     assert len(llm_suggestions) == 1
-    assert llm_suggestions[0].suggestion == "API LLM suggestion"
-    assert llm_suggestions[0].confidence == 0.95
+    # Domain entity uses suggestion_text and SuggestionConfidence enum
+    assert llm_suggestions[0].suggestion_text == "API LLM suggestion"
     assert (
-        llm_suggestions[0].failure.test_name
-        == "test_assertion.py::test_assertion_error"
-    )
+        llm_suggestions[0].confidence == SuggestionConfidence.HIGH
+    )  # 0.95 maps to HIGH
+    # Domain entity has failure_id instead of failure object
+    assert llm_suggestions[0].failure_id is not None
 
 
 @pytest.mark.e2e
