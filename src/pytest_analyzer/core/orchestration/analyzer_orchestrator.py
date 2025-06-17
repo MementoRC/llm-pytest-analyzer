@@ -10,7 +10,6 @@ import abc
 import asyncio
 import dataclasses
 import logging
-import uuid
 from typing import Any, Dict, List, Optional, Type
 
 from ...utils.path_resolver import PathResolver
@@ -237,12 +236,22 @@ class BatchProcess(State):
 
                         for original_failure in group:
                             for suggestion in suggestions:
+                                # Create a new suggestion for each failure in the group,
+                                # linking it to the specific failure.
                                 new_suggestion = dataclasses.replace(
-                                    suggestion,
-                                    id=str(uuid.uuid4()),
-                                    failure_id=original_failure.id,
+                                    suggestion, failure=original_failure
                                 )
-                                new_suggestion.metadata["source"] = "llm_async"
+
+                                # Ensure metadata exists and is a dict.
+                                if not hasattr(new_suggestion, "metadata"):
+                                    setattr(new_suggestion, "metadata", {})
+                                elif new_suggestion.metadata is None:
+                                    new_suggestion.metadata = {}
+
+                                # Preserve original metadata, set source if not present.
+                                new_suggestion.metadata.setdefault(
+                                    "source", "llm_async"
+                                )
                                 self.context.all_suggestions.append(new_suggestion)
 
                         self.context.progress_manager.update_task(task_key, advance=1)
@@ -275,7 +284,11 @@ class PostProcess(State):
                 if limit > 0:
                     suggestions_by_failure: Dict[str, List[FixSuggestion]] = {}
                     for s in self.context.all_suggestions:
-                        suggestions_by_failure.setdefault(s.failure_id, []).append(s)
+                        # Group suggestions by the ID of their associated failure.
+                        if hasattr(s, "failure") and hasattr(s.failure, "id"):
+                            suggestions_by_failure.setdefault(s.failure.id, []).append(
+                                s
+                            )
 
                     final_suggestions = []
                     for _, suggestions in suggestions_by_failure.items():

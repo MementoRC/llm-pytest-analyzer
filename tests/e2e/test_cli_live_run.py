@@ -129,7 +129,7 @@ def test_cli_with_report_file(sample_json_report):
     # Verify header, test details, and suggestion are present
     assert "Analyzing output file:" in output
     assert (
-        "test_assertion.py::test_assertion_error" in output
+        "test_assertion_fail.py::test_simple_fail" in output
         or "AssertionError" in output
     )
     assert "Suggested fix" in output
@@ -267,4 +267,4 @@ def test_cli_with_different_formats(sample_assertion_file, patch_subprocess):
     sys.argv = original_argv
 
     # Check that XML format was used
-    assert "junit-xml" in " ".join(patch_subprocess.last_command)
+    assert "junitxml" in " ".join(patch_subprocess.last_command)

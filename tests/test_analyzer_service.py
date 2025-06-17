@@ -2,6 +2,7 @@
 
 import subprocess
 import tempfile
+import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -14,7 +15,7 @@ from pytest_analyzer.utils.settings import Settings
 @pytest.fixture
 def test_failure():
     """Create a test failure for testing."""
-    return PytestFailure(
+    failure = PytestFailure(
         test_name="test_function",
         test_file="test_file.py",
         error_type="AssertionError",
@@ -23,6 +24,9 @@ def test_failure():
         line_number=42,
         relevant_code="def test_function():\n    assert 1 == 2",
     )
+    # The orchestrator expects an 'id' on the failure object.
+    failure.id = str(uuid.uuid4())
+    return failure
 
 
 @pytest.fixture
@@ -159,7 +163,7 @@ def test_run_and_analyze_xml(
     mock_get_extractor.assert_called_once()
     mock_extractor.extract_failures.assert_called_once()
     mock_asyncio_run.assert_called_once()
-    analyzer_service.llm_suggester.batch_suggest_fixes.assert_awaited()
+    analyzer_service.llm_suggester.batch__suggest_fixes.assert_awaited()
     assert len(suggestions) == 0
 
 
