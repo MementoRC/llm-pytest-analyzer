@@ -8,7 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
+from pytest_analyzer.core.domain.entities.fix_suggestion import FixSuggestion
+from pytest_analyzer.core.domain.entities.pytest_failure import PytestFailure
 
 
 # Helper function to identify pytest's caplog handler
@@ -350,24 +351,25 @@ def mock_llm_suggester():
 @pytest.fixture
 def test_failure():
     """Provide a PytestFailure instance for testing."""
-    return PytestFailure(
+    return PytestFailure.create(
         test_name="test_file.py::test_function",
-        test_file="test_file.py",
+        file_path="test_file.py",
+        failure_message="assert 1 == 2",
         error_type="AssertionError",
-        error_message="assert 1 == 2",
-        traceback="E       assert 1 == 2\nE       +  where 1 = func()",
+        traceback=["E       assert 1 == 2", "E       +  where 1 = func()"],
         line_number=42,
-        relevant_code="def test_function():\n    assert 1 == 2",
+        function_name="test_function",
+        class_name=None,
     )
 
 
 @pytest.fixture
 def test_suggestion(test_failure):
     """Fixture for a test suggestion."""
-    return FixSuggestion(
-        failure=test_failure,
-        suggestion="Fix the assertion to expect 1 instead of 2",
-        confidence=0.8,
+    return FixSuggestion.create_from_score(
+        failure_id=test_failure.id,
+        suggestion_text="Fix the assertion to expect 1 instead of 2",
+        confidence_score=0.8,
         explanation="The test expected 2 but got 1",
     )
 
@@ -375,12 +377,13 @@ def test_suggestion(test_failure):
 @pytest.fixture
 def llm_suggestion(test_failure):
     """Fixture for an LLM-based suggestion."""
-    return FixSuggestion(
-        failure=test_failure,
-        suggestion="Use assertEqual(1, 2) for better error messages",
-        confidence=0.9,
+    return FixSuggestion.create_from_score(
+        failure_id=test_failure.id,
+        suggestion_text="Use assertEqual(1, 2) for better error messages",
+        confidence_score=0.9,
         explanation="Using assertEqual provides more detailed failure output",
-        code_changes={
+        code_changes=["def test_function():\n    assertEqual(1, 2)"],
+        metadata={
             "source": "llm",
             "fixed_code": "def test_function():\n    assertEqual(1, 2)",
         },

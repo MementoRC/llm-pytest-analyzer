@@ -379,10 +379,10 @@ class TestMCPAnalyzerFacade:
         """Test transformation of domain suggestion to MCP format."""
         mcp_suggestion = mcp_facade._transform_suggestion_to_mcp(sample_suggestion)
 
-        # Handle legacy model attributes (test fixtures use legacy FixSuggestion)
-        expected_id = str(getattr(sample_suggestion, "id", "unknown"))
-        expected_text = getattr(sample_suggestion, "suggestion", "")
-        expected_confidence = float(getattr(sample_suggestion, "confidence", 0.0))
+        # Use the domain entity attributes
+        expected_id = str(sample_suggestion.id)
+        expected_text = sample_suggestion.suggestion_text
+        expected_confidence = sample_suggestion.confidence_score
 
         assert mcp_suggestion.id == expected_id
         assert mcp_suggestion.suggestion_text == expected_text

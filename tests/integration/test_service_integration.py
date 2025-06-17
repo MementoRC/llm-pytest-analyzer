@@ -1,6 +1,5 @@
 """Integration tests for the PytestAnalyzerService with extractors and analyzers."""
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -74,19 +73,23 @@ def test_service_integration_xml_format(analyzer_service, report_assertion_xml):
     """Test PytestAnalyzerService with XML report format."""
     # Mock the async part of the service
     # Get the orchestrator to access the llm_suggester
+
+    def mock_batch_suggest_fixes(failures):
+        # Return suggestions for all failure IDs
+        result = {}
+        for failure in failures:
+            result[failure.id] = [
+                FixSuggestion.create_from_score(
+                    failure_id=failure.id,
+                    suggestion_text="A good suggestion for XML",
+                    confidence_score=0.8,
+                    explanation="It failed in XML.",
+                )
+            ]
+        return result
+
     analyzer_service._service.orchestrator.llm_suggester.batch_suggest_fixes = (
-        AsyncMock(
-            return_value={
-                "some_id": [
-                    FixSuggestion.create_from_score(
-                        failure_id="some_id",
-                        suggestion_text="A good suggestion for XML",
-                        confidence_score=0.8,
-                        explanation="It failed in XML.",
-                    )
-                ]
-            }
-        )
+        AsyncMock(side_effect=mock_batch_suggest_fixes)
     )
     # Analyze the XML report
     suggestions = analyzer_service.analyze_pytest_output(report_assertion_xml)
@@ -99,10 +102,10 @@ def test_service_integration_xml_format(analyzer_service, report_assertion_xml):
     suggestion = suggestions[0]
     assert suggestion.failure_id is not None
     assert suggestion.suggestion_text == "A good suggestion for XML"
-    assert suggestion.confidence_score == 0.8
+    assert suggestion.confidence_score == 0.9  # HIGH confidence maps to 0.9
 
 
-@patch("pytest_analyzer.analyzer_service.collect_failures_with_plugin")
+@patch("pytest_analyzer.core.analyzer_service.collect_failures_with_plugin")
 def test_service_integration_with_plugin(mock_collect, analyzer_service):
     """Test PytestAnalyzerService with direct pytest plugin integration."""
     # Set preferred format to plugin
@@ -124,19 +127,20 @@ def test_service_integration_with_plugin(mock_collect, analyzer_service):
     mock_collect.return_value = [mock_failure]
 
     # Mock the async part
-    # Get the private orchestrator to access the llm_suggester
-    private_analyzer = analyzer_service._private_analyzer
-    private_analyzer.orchestrator.llm_suggester.batch_suggest_fixes = AsyncMock(
-        return_value={
-            mock_failure.id: [
-                FixSuggestion.create_from_score(
-                    failure_id=mock_failure.id,
-                    suggestion_text="Plugin suggestion",
-                    confidence_score=0.99,
-                    explanation="From plugin",
-                )
-            ]
-        }
+    # Get the service orchestrator to access the llm_suggester
+    analyzer_service._service.orchestrator.llm_suggester.batch_suggest_fixes = (
+        AsyncMock(
+            return_value={
+                mock_failure.id: [
+                    FixSuggestion.create_from_score(
+                        failure_id=mock_failure.id,
+                        suggestion_text="Plugin suggestion",
+                        confidence_score=0.99,
+                        explanation="From plugin",
+                    )
+                ]
+            }
+        )
     )
 
     # Run the analysis
@@ -162,20 +166,13 @@ def test_service_integration_with_llm(
         "pytest_analyzer.core.analysis.llm_suggester.LLMSuggester.batch_suggest_fixes",
         new_callable=AsyncMock,
     ) as mock_batch_suggest:
-        # The key of the return value should be the failure ID.
-        # The JSON extractor will generate an ID. We can't know it beforehand,
-        # so we'll mock the return value to match any ID.
-        # A more robust way is to have the mock return a value for a known ID,
-        # but this requires more complex mocking of the extractor.
-        # For this test, we'll assume the orchestrator gets a suggestion.
-        failure_id = "some_id"
-
-        future = asyncio.Future()
-        future.set_result(
-            {
-                failure_id: [
+        # Create a mock function that returns suggestions for any failure ID passed to it
+        def create_suggestions_for_failures(failures):
+            result = {}
+            for failure in failures:
+                result[failure.id] = [
                     FixSuggestion.create_from_score(
-                        failure_id=failure_id,
+                        failure_id=failure.id,
                         suggestion_text="LLM Suggestion",
                         confidence_score=0.9,
                         explanation="From LLM",
@@ -183,11 +180,9 @@ def test_service_integration_with_llm(
                         metadata={"source": "llm_async"},
                     )
                 ]
-            }
-        )
-        # To make this mock more robust, we can make it return the value
-        # regardless of the key it's called with.
-        mock_batch_suggest.return_value = future.result()
+            return result
+
+        mock_batch_suggest.side_effect = create_suggestions_for_failures
 
         # Analyze the JSON report
         suggestions = analyzer_service_with_llm.analyze_pytest_output(
@@ -263,19 +258,22 @@ def test_service_integration_run_pytest(mock_subprocess, analyzer_service, tmp_p
     analyzer_service.settings.preferred_format = "json"
 
     # Mock the async part
-    # Get the private orchestrator to access the llm_suggester
-    private_analyzer = analyzer_service._private_analyzer
-    private_analyzer.orchestrator.llm_suggester.batch_suggest_fixes = AsyncMock(
-        return_value={
-            "some_id": [
+    # Get the service orchestrator to access the llm_suggester
+    def create_suggestions_for_any_failures(failures):
+        result = {}
+        for failure in failures:
+            result[failure.id] = [
                 FixSuggestion.create_from_score(
-                    failure_id="some_id",
+                    failure_id=failure.id,
                     suggestion_text="Suggestion from run",
                     confidence_score=0.85,
                     explanation="It failed during a run.",
                 )
             ]
-        }
+        return result
+
+    analyzer_service._service.orchestrator.llm_suggester.batch_suggest_fixes = (
+        AsyncMock(side_effect=create_suggestions_for_any_failures)
     )
 
     # Mock the temporary file creation to return our prepared path

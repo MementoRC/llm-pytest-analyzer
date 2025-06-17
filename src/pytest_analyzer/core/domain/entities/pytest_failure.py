@@ -23,7 +23,7 @@ class PytestFailure:
     location: TestLocation
     failure_message: str
     failure_type: FailureType
-    traceback: List[str] = field(default_factory=list)
+    traceback: str = ""
     source_code: Optional[str] = None
     raw_output_section: Optional[str] = None
     related_project_files: List[str] = field(default_factory=list)
@@ -62,7 +62,7 @@ class PytestFailure:
             location=location,
             failure_message=failure_message,
             failure_type=failure_type,
-            traceback=traceback or [],
+            traceback="\n".join(traceback) if traceback else "",
         )
 
     @property
@@ -89,6 +89,21 @@ class PytestFailure:
     def file_path(self) -> Path:
         """Get the file path of the test."""
         return self.location.file_path
+
+    @property
+    def error_type(self) -> str:
+        """Get the error type as a string for backward compatibility."""
+        return self.failure_type.value
+
+    @property
+    def error_message(self) -> str:
+        """Get the error message for backward compatibility."""
+        return self.failure_message
+
+    @property
+    def relevant_code(self) -> Optional[str]:
+        """Get the relevant code for backward compatibility."""
+        return self.source_code
 
     @property
     def short_error_message(self) -> str:

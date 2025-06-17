@@ -13,7 +13,8 @@ from pytest_analyzer.cli.analyzer_cli import (
     main,
     setup_parser,
 )
-from pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
+from pytest_analyzer.core.domain.entities.fix_suggestion import FixSuggestion
+from pytest_analyzer.core.domain.entities.pytest_failure import PytestFailure
 
 
 @pytest.fixture
@@ -26,24 +27,25 @@ def mock_console():
 @pytest.fixture
 def test_failure():
     """Fixture for a test failure."""
-    return PytestFailure(
+    return PytestFailure.create(
         test_name="test_file.py::test_function",
-        test_file="test_file.py",
+        file_path="test_file.py",
+        failure_message="assert 1 == 2",
         error_type="AssertionError",
-        error_message="assert 1 == 2",
-        traceback="E       assert 1 == 2\nE       +  where 1 = func()",
+        traceback=["E       assert 1 == 2", "E       +  where 1 = func()"],
         line_number=42,
-        relevant_code="def test_function():\n    assert 1 == 2",
+        function_name="test_function",
+        class_name=None,
     )
 
 
 @pytest.fixture
 def test_suggestion(test_failure):
     """Fixture for a test suggestion."""
-    return FixSuggestion(
-        failure=test_failure,
-        suggestion="Fix the assertion to expect 1 instead of 2",
-        confidence=0.8,
+    return FixSuggestion.create_from_score(
+        failure_id=test_failure.id,
+        suggestion_text="Fix the assertion to expect 1 instead of 2",
+        confidence_score=0.8,
         explanation="The test expected 2 but got 1",
     )
 
@@ -69,12 +71,13 @@ def mock_args():
     return argparse.Namespace(verbosity=1)
 
 
-@patch("pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService")
+@patch("pytest_analyzer.cli.analyzer_cli.create_analyzer_service")
 @patch("pytest_analyzer.cli.analyzer_cli.display_suggestions")
-def test_cli_main_success(mock_display, mock_service):
+def test_cli_main_success(mock_display, mock_create_service):
     """Test the main function with successful operation."""
     # Setup
-    mock_analyzer = mock_service.return_value
+    mock_analyzer = MagicMock()
+    mock_create_service.return_value = mock_analyzer
     mock_analyzer.run_and_analyze.return_value = ["suggestion1", "suggestion2"]
 
     # Execute
@@ -82,18 +85,19 @@ def test_cli_main_success(mock_display, mock_service):
         result = main()
 
     # Assert
-    mock_service.assert_called_once()
+    mock_create_service.assert_called_once()
     mock_analyzer.run_and_analyze.assert_called_once()
     mock_display.assert_called_once_with(["suggestion1", "suggestion2"], ANY)
     assert result == 0  # Success
 
 
-@patch("pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService")
+@patch("pytest_analyzer.cli.analyzer_cli.create_analyzer_service")
 @patch("pytest_analyzer.cli.analyzer_cli.display_suggestions")
-def test_cli_main_with_output_file(mock_display, mock_service):
+def test_cli_main_with_output_file(mock_display, mock_create_service):
     """Test the main function with an output file."""
     # Setup
-    mock_analyzer = mock_service.return_value
+    mock_analyzer = MagicMock()
+    mock_create_service.return_value = mock_analyzer
     mock_analyzer.analyze_pytest_output.return_value = ["suggestion1"]
 
     # Execute
@@ -105,18 +109,19 @@ def test_cli_main_with_output_file(mock_display, mock_service):
         result = main()
 
     # Assert
-    mock_service.assert_called_once()
+    mock_create_service.assert_called_once()
     mock_analyzer.analyze_pytest_output.assert_called_once_with("output.json")
     mock_display.assert_called_once_with(["suggestion1"], ANY)
     assert result == 0  # Success
 
 
-@patch("pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService")
+@patch("pytest_analyzer.cli.analyzer_cli.create_analyzer_service")
 @patch("pytest_analyzer.cli.analyzer_cli.display_suggestions")
-def test_cli_main_no_suggestions(mock_display, mock_service):
+def test_cli_main_no_suggestions(mock_display, mock_create_service):
     """Test the main function when no suggestions are found."""
     # Setup
-    mock_analyzer = mock_service.return_value
+    mock_analyzer = MagicMock()
+    mock_create_service.return_value = mock_analyzer
     mock_analyzer.run_and_analyze.return_value = []
 
     # Execute
@@ -124,17 +129,18 @@ def test_cli_main_no_suggestions(mock_display, mock_service):
         result = main()
 
     # Assert
-    mock_service.assert_called_once()
+    mock_create_service.assert_called_once()
     mock_analyzer.run_and_analyze.assert_called_once()
     mock_display.assert_called_once_with([], ANY)
     assert result == 1  # No suggestions
 
 
-@patch("pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService")
-def test_cli_main_exception(mock_service):
+@patch("pytest_analyzer.cli.analyzer_cli.create_analyzer_service")
+def test_cli_main_exception(mock_create_service):
     """Test the main function when an exception occurs."""
     # Setup
-    mock_analyzer = mock_service.return_value
+    mock_analyzer = MagicMock()
+    mock_create_service.return_value = mock_analyzer
     mock_analyzer.run_and_analyze.side_effect = Exception("Test error")
 
     # Execute
@@ -142,20 +148,21 @@ def test_cli_main_exception(mock_service):
         result = main()
 
     # Assert
-    mock_service.assert_called_once()
+    mock_create_service.assert_called_once()
     mock_analyzer.run_and_analyze.assert_called_once()
     assert result == 2  # Error
 
 
-@patch("pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService")
+@patch("pytest_analyzer.cli.analyzer_cli.create_analyzer_service")
 @patch("logging.getLogger")
 @patch("pytest_analyzer.cli.analyzer_cli.display_suggestions")
-def test_cli_main_with_debug(mock_display, mock_logging, mock_service):
+def test_cli_main_with_debug(mock_display, mock_logging, mock_create_service):
     """Test the main function with debug logging enabled."""
     # Setup
     mock_logger = MagicMock()
     mock_logging.return_value = mock_logger
-    mock_analyzer = mock_service.return_value
+    mock_analyzer = MagicMock()
+    mock_create_service.return_value = mock_analyzer
 
     # Create a proper suggestion with a failure attribute
     test_failure = PytestFailure(
