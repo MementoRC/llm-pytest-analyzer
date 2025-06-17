@@ -25,20 +25,19 @@ def test_api_direct_usage(sample_json_report, mock_llm_client):
     # Create the analyzer service with mock LLM client
     service = PytestAnalyzerService(settings=settings, llm_client=mock_llm_client)
 
-    # Mock the async suggestion generation
-    with patch.object(
-        service.llm_suggester, "batch_suggest_fixes", new_callable=AsyncMock
-    ) as mock_batch_suggest:
-        # The key of the dict should be the failure ID from the report
-        # Let's create a plausible failure ID. In real code, this is generated.
-        # For this test, we can extract it or just mock it.
-        # The extractor will create a PytestFailure with a generated ID.
-        # The state machine will then use this ID.
-        # We can let the extractor run and then mock what the suggester returns.
-        mock_batch_suggest.return_value = {
-            "some_failure_id": [
+    # Mock the async suggestion generation using a side_effect to handle dynamic IDs
+    async def mock_batch_suggest_side_effect(failures):
+        """Dynamically create suggestions based on actual failure IDs."""
+        if not failures:
+            return {}
+
+        # The sample report has one failure, so we expect one representative failure.
+        rep_failure = failures[0]
+
+        return {
+            rep_failure.id: [
                 FixSuggestion(
-                    failure=MagicMock(),
+                    failure=rep_failure,
                     suggestion="Mocked LLM Suggestion",
                     confidence=0.9,
                     explanation="Mocked explanation",
@@ -46,16 +45,21 @@ def test_api_direct_usage(sample_json_report, mock_llm_client):
             ]
         }
 
+    with patch.object(
+        service.llm_suggester, "batch_suggest_fixes", new_callable=AsyncMock
+    ) as mock_batch_suggest:
+        mock_batch_suggest.side_effect = mock_batch_suggest_side_effect
+
         # Analyze the report
         suggestions = service.analyze_pytest_output(sample_json_report)
 
     # Verify results
     assert suggestions is not None
-    assert len(suggestions) > 0
+    assert len(suggestions) == 1
     assert isinstance(suggestions[0], FixSuggestion)
     assert suggestions[0].failure is not None
-    # The failure object is now part of the suggestion, but it's complex to assert fully here.
-    # Let's check the suggestion content which comes from the mock.
+    # Verify that the suggestion is linked to the correct failure from the report
+    assert suggestions[0].failure.test_name == "test_assertion.py::test_assertion_error"
     assert suggestions[0].suggestion == "Mocked LLM Suggestion"
     assert suggestions[0].confidence == 0.9
 
@@ -67,44 +71,54 @@ def test_api_with_llm(sample_json_report):
     settings = Settings()
     settings.use_llm = True
 
-    # Mock the LLM integration at the suggester level
-    # The service will call batch_suggest_fixes
-    mock_response_suggestions = [
-        FixSuggestion(
-            failure=MagicMock(),
-            suggestion="API LLM suggestion",
-            confidence=0.95,
-            explanation="Mock LLM explanation from API test",
-            code_changes={
-                "fixed_code": 'def test_assertion_error():\\n    x = 1\\n    y = 1\\n    assert x == y, \\"Values are equal\\"'
-            },
-            metadata={"source": "llm"},
-        )
-    ]
-
     # Create the analyzer service
     service = PytestAnalyzerService(settings=settings)
+
+    # Mock the LLM integration at the suggester level using a side_effect
+    async def mock_batch_suggest_side_effect(failures):
+        """Dynamically create suggestions with metadata based on actual failure IDs."""
+        if not failures:
+            return {}
+
+        rep_failure = failures[0]
+
+        mock_response_suggestions = [
+            FixSuggestion(
+                failure=rep_failure,
+                suggestion="API LLM suggestion",
+                confidence=0.95,
+                explanation="Mock LLM explanation from API test",
+                code_changes={
+                    "fixed_code": 'def test_assertion_error():\\n    x = 1\\n    y = 1\\n    assert x == y, \\"Values are equal\\"'
+                },
+                metadata={"source": "llm"},
+            )
+        ]
+        return {rep_failure.id: mock_response_suggestions}
 
     with patch.object(
         service.llm_suggester, "batch_suggest_fixes", new_callable=AsyncMock
     ) as mock_batch_suggest:
-        # The suggester returns a dict mapping failure ID to suggestions
-        mock_batch_suggest.return_value = {"some_id": mock_response_suggestions}
+        mock_batch_suggest.side_effect = mock_batch_suggest_side_effect
 
         # Analyze the report
         suggestions = service.analyze_pytest_output(sample_json_report)
 
     # Verify results
     assert suggestions is not None
-    assert len(suggestions) > 0
+    assert len(suggestions) == 1
 
     # Check for LLM suggestions
     llm_suggestions = [
         s for s in suggestions if s.metadata and s.metadata.get("source") == "llm"
     ]
-    assert len(llm_suggestions) > 0
+    assert len(llm_suggestions) == 1
     assert llm_suggestions[0].suggestion == "API LLM suggestion"
     assert llm_suggestions[0].confidence == 0.95
+    assert (
+        llm_suggestions[0].failure.test_name
+        == "test_assertion.py::test_assertion_error"
+    )
 
 
 @pytest.mark.e2e
