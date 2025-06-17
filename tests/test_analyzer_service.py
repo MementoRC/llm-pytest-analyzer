@@ -58,28 +58,22 @@ def analyzer_service():
 
 
 @patch("pytest_analyzer.analyzer_service.get_extractor")
-@patch("pytest_analyzer.analyzer_service.asyncio.run")
-def test_analyze_pytest_output(
-    mock_asyncio_run, mock_get_extractor, mock_extractor, analyzer_service
-):
+def test_analyze_pytest_output(mock_get_extractor, mock_extractor, analyzer_service):
     """Test analyzing pytest output from a file."""
     # Setup
     mock_get_extractor.return_value = mock_extractor
-    # The service will call the state machine, which calls the suggester.
-    # We can mock the suggester's async method.
+    # Mock the async LLM suggester to return empty suggestions
     analyzer_service.llm_suggester.batch_suggest_fixes = AsyncMock(return_value={})
 
     with tempfile.NamedTemporaryFile(suffix=".json") as tmp:
-        # Execute
+        # Execute - let the async state machine run normally
         with patch("pathlib.Path.exists", return_value=True):
             suggestions = analyzer_service.analyze_pytest_output(tmp.name)
 
         # Assert
         mock_get_extractor.assert_called_once()
         mock_extractor.extract_failures.assert_called_once()
-        # asyncio.run should be called to start the state machine
-        mock_asyncio_run.assert_called_once()
-        # The suggester's async method should be awaited
+        # The suggester's async method should be awaited (since we let asyncio.run execute)
         analyzer_service.llm_suggester.batch_suggest_fixes.assert_awaited()
         assert len(suggestions) == 0  # No suggestions since we mocked an empty response
 
@@ -97,10 +91,7 @@ def test_analyze_pytest_output_nonexistent_file(mock_get_extractor, analyzer_ser
 
 
 @patch("pytest_analyzer.analyzer_service.collect_failures_with_plugin")
-@patch("pytest_analyzer.analyzer_service.asyncio.run")
-def test_run_and_analyze_plugin(
-    mock_asyncio_run, mock_collect, analyzer_service, test_failure
-):
+def test_run_and_analyze_plugin(mock_collect, analyzer_service, test_failure):
     """Test running and analyzing tests with plugin integration."""
     # Setup
     mock_collect.return_value = [test_failure]
@@ -112,16 +103,14 @@ def test_run_and_analyze_plugin(
 
     # Assert
     mock_collect.assert_called_once_with(["test_path", "-s", "--disable-warnings"])
-    mock_asyncio_run.assert_called_once()
     analyzer_service.llm_suggester.batch_suggest_fixes.assert_awaited()
     assert len(suggestions) == 0
 
 
 @patch("subprocess.run")
 @patch("pytest_analyzer.analyzer_service.get_extractor")
-@patch("pytest_analyzer.analyzer_service.asyncio.run")
 def test_run_and_analyze_json(
-    mock_asyncio_run, mock_get_extractor, mock_run, mock_extractor, analyzer_service
+    mock_get_extractor, mock_run, mock_extractor, analyzer_service
 ):
     """Test running and analyzing tests with JSON output."""
     # Setup
@@ -129,24 +118,25 @@ def test_run_and_analyze_json(
     analyzer_service.llm_suggester.batch_suggest_fixes = AsyncMock(return_value={})
     analyzer_service.settings.preferred_format = "json"
 
-    # Execute
-    with patch("tempfile.NamedTemporaryFile"):
-        suggestions = analyzer_service.run_and_analyze("test_path")
+    # Execute - properly mock tempfile to return a real filename
+    with tempfile.NamedTemporaryFile(suffix=".json") as tmp:
+        with patch("tempfile.NamedTemporaryFile") as mock_temp:
+            mock_temp.return_value.__enter__.return_value.name = tmp.name
+            with patch("pathlib.Path.exists", return_value=True):
+                suggestions = analyzer_service.run_and_analyze("test_path")
 
     # Assert
     mock_run.assert_called_once()
     mock_get_extractor.assert_called_once()
     mock_extractor.extract_failures.assert_called_once()
-    mock_asyncio_run.assert_called_once()
     analyzer_service.llm_suggester.batch_suggest_fixes.assert_awaited()
     assert len(suggestions) == 0
 
 
 @patch("subprocess.run")
 @patch("pytest_analyzer.analyzer_service.get_extractor")
-@patch("pytest_analyzer.analyzer_service.asyncio.run")
 def test_run_and_analyze_xml(
-    mock_asyncio_run, mock_get_extractor, mock_run, mock_extractor, analyzer_service
+    mock_get_extractor, mock_run, mock_extractor, analyzer_service
 ):
     """Test running and analyzing tests with XML output."""
     # Setup
@@ -154,16 +144,18 @@ def test_run_and_analyze_xml(
     analyzer_service.llm_suggester.batch_suggest_fixes = AsyncMock(return_value={})
     analyzer_service.settings.preferred_format = "xml"
 
-    # Execute
-    with patch("tempfile.NamedTemporaryFile"):
-        suggestions = analyzer_service.run_and_analyze("test_path")
+    # Execute - properly mock tempfile to return a real filename
+    with tempfile.NamedTemporaryFile(suffix=".xml") as tmp:
+        with patch("tempfile.NamedTemporaryFile") as mock_temp:
+            mock_temp.return_value.__enter__.return_value.name = tmp.name
+            with patch("pathlib.Path.exists", return_value=True):
+                suggestions = analyzer_service.run_and_analyze("test_path")
 
     # Assert
     mock_run.assert_called_once()
     mock_get_extractor.assert_called_once()
     mock_extractor.extract_failures.assert_called_once()
-    mock_asyncio_run.assert_called_once()
-    analyzer_service.llm_suggester.batch__suggest_fixes.assert_awaited()
+    analyzer_service.llm_suggester.batch_suggest_fixes.assert_awaited()
     assert len(suggestions) == 0
 
 
