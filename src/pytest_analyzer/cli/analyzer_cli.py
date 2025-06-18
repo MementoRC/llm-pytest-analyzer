@@ -365,12 +365,11 @@ def display_suggestions(
             else "Rule-based"
         )
 
+        confidence = getattr(
+            suggestion, "confidence_score", getattr(suggestion, "confidence", 0.0)
+        )
         # For minimal verbosity, only show high-confidence or LLM suggestions
-        if (
-            args.verbosity == 0
-            and source == "Rule-based"
-            and suggestion.confidence < 0.7
-        ):
+        if args.verbosity == 0 and source == "Rule-based" and confidence < 0.7:
             continue
 
         filtered_suggestions.append((suggestion, source))
@@ -378,7 +377,10 @@ def display_suggestions(
     # If we filtered everything out, show at least one suggestion
     if not filtered_suggestions and suggestions:
         # Get the highest confidence suggestion
-        best_suggestion = max(suggestions, key=lambda s: s.confidence)
+        best_suggestion = max(
+            suggestions,
+            key=lambda s: getattr(s, "confidence_score", getattr(s, "confidence", 0.0)),
+        )
         source = (
             "LLM"
             if best_suggestion.metadata
@@ -400,7 +402,11 @@ def display_suggestions(
     for suggestion, source in filtered_suggestions:
         # In the new domain model, FixSuggestion doesn't contain the failure object
         # We can group by failure_id or just display them individually
-        key = f"suggestion_{suggestion.failure_id}"
+        failure_id = getattr(suggestion, "failure_id", None)
+        if failure_id is None:
+            failure_obj = getattr(suggestion, "failure", None)
+            failure_id = getattr(failure_obj, "test_name", "unknown_failure")
+        key = f"suggestion_{failure_id}"
         if key not in suggestions_by_fingerprint:
             suggestions_by_fingerprint[key] = []
         suggestions_by_fingerprint[key].append((suggestion, source))
@@ -439,8 +445,15 @@ def display_suggestions(
 
         # --- Basic suggestion information (verbosity >= 1) ---
         if args.verbosity >= 1:
-            console.print(f"[bold cyan]Suggestion ID:[/bold cyan] {suggestion.id}")
-            console.print(f"[bold cyan]Failure ID:[/bold cyan] {suggestion.failure_id}")
+            suggestion_id = getattr(suggestion, "id", "N/A")
+            failure_id = getattr(suggestion, "failure_id", None)
+            if failure_id is None:
+                # Fallback to old model: suggestion.failure.test_name
+                failure_obj = getattr(suggestion, "failure", None)
+                failure_id = getattr(failure_obj, "test_name", "N/A")
+
+            console.print(f"[bold cyan]Suggestion ID:[/bold cyan] {suggestion_id}")
+            console.print(f"[bold cyan]Failure ID:[/bold cyan] {failure_id}")
 
             # Show other suggestions in the same group (verbosity >= 2)
             if args.verbosity >= 2 and len(group) > 1:
@@ -453,30 +466,36 @@ def display_suggestions(
             f"\n[bold {source_color}]Suggested fix ({source}):[/bold {source_color}]"
         )
 
+        suggestion_text = getattr(
+            suggestion, "suggestion_text", getattr(suggestion, "suggestion", "")
+        )
+
         # For minimal verbosity, just show a brief summary
         if args.verbosity == 0:
             # Extract a short description (first line or first 80 chars)
-            lines = suggestion.suggestion_text.strip().split("\n")
-            summary = (
-                lines[0].strip() if lines else suggestion.suggestion_text[:80].strip()
-            )
+            lines = suggestion_text.strip().split("\n")
+            summary = lines[0].strip() if lines else suggestion_text[:80].strip()
             if len(summary) >= 80 and not summary.endswith("..."):
                 summary = summary[:77] + "..."
             console.print(summary)
         else:
             # Show full suggestion text
-            console.print(suggestion.suggestion_text)
+            console.print(suggestion_text)
 
         # --- Confidence score (verbosity >= 2) ---
         if args.verbosity >= 2:
+            confidence_score = getattr(
+                suggestion, "confidence_score", getattr(suggestion, "confidence", 0.0)
+            )
             console.print(
-                f"\n[bold cyan]Confidence:[/bold cyan] {suggestion.confidence:.2f}"
+                f"\n[bold cyan]Confidence:[/bold cyan] {confidence_score:.2f}"
             )
 
         # --- Explanation (verbosity >= 2) ---
-        if args.verbosity >= 2 and suggestion.explanation:
+        explanation = getattr(suggestion, "explanation", "")
+        if args.verbosity >= 2 and explanation:
             console.print("\n[bold cyan]Explanation:[/bold cyan]")
-            console.print(suggestion.explanation)
+            console.print(explanation)
 
         # --- Code Changes (always show) ---
         if suggestion.code_changes:
@@ -781,8 +800,12 @@ def apply_suggestions_interactively(
 
         # Display suggestion header
         console.print(f"\n[bold cyan]Suggestion {i + 1}/{len(suggestions)}[/bold cyan]")
-        console.print(f"[bold]Suggestion ID:[/bold] {suggestion.id}")
-        console.print(f"[bold]Confidence:[/bold] {suggestion.confidence:.2f}")
+        suggestion_id = getattr(suggestion, "id", f"N/A-{i + 1}")
+        confidence_score = getattr(
+            suggestion, "confidence_score", getattr(suggestion, "confidence", 0.0)
+        )
+        console.print(f"[bold]Suggestion ID:[/bold] {suggestion_id}")
+        console.print(f"[bold]Confidence:[/bold] {confidence_score:.2f}")
         console.print(f"[bold]Files to modify:[/bold] {', '.join(file_changes.keys())}")
 
         # Auto-apply or interactive mode
