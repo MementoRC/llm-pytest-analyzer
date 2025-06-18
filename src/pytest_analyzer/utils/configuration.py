@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, Union
 
@@ -11,7 +12,8 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, ValidationError
 
 # Import Settings from the config_types module to avoid circular dependency
-from .config_types import Settings
+from .config_types import Settings, VaultSettings
+from .vault_manager import VaultError, VaultSecretManager
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +53,8 @@ class ConfigurationManager:
     2. Values from a base YAML configuration file (e.g., pytest-analyzer.yaml).
     3. Values from a profile-specific YAML file (e.g., pytest-analyzer.dev.yaml).
     4. Values from environment variables (including .env file).
-    5. Runtime overrides.
+    5. Secrets from HashiCorp Vault (if enabled).
+    6. Runtime overrides.
 
     Supports runtime reload and schema documentation generation.
     """
@@ -95,6 +98,7 @@ class ConfigurationManager:
         self._config: Dict[str, Any] = {}
         self._loaded: bool = False
         self._settings_instance: Optional[Settings] = None
+        self._vault_manager: Optional[VaultSecretManager] = None
 
         if load_dotenv_flag:
             self._load_dotenv()
@@ -132,6 +136,7 @@ class ConfigurationManager:
         """
         self._dotenv_loaded = False
         self._settings_instance = None
+        self._vault_manager = None
         # Re-resolve config file path in case working directory changed
         self._config_file_path = self._resolve_config_file_path(
             self._original_config_file_path
@@ -447,6 +452,88 @@ class ConfigurationManager:
                 f"Unsupported type conversion for {target_type} from string."
             )
 
+    def _init_vault_manager(self, vault_settings: VaultSettings) -> None:
+        """Initialize the VaultSecretManager if not already initialized."""
+        if self._vault_manager is None:
+            logger.debug("Initializing VaultSecretManager.")
+            try:
+                self._vault_manager = VaultSecretManager(settings=vault_settings)
+            except VaultError as e:
+                logger.error(f"Failed to initialize VaultSecretManager: {e}")
+                # We don't re-raise here; let the process continue without Vault.
+                # Errors will be raised if a vault:// URI is encountered.
+
+    def _resolve_vault_secrets(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Recursively traverse the configuration and resolve any Vault secret URIs.
+        """
+        # First, ensure Vault settings are available to initialize the manager
+        vault_config_dict = config.get("vault", {})
+        if not vault_config_dict.get("enabled", False):
+            return config
+
+        try:
+            vault_settings = VaultSettings.model_validate(vault_config_dict)
+            self._init_vault_manager(vault_settings)
+        except ValidationError as e:
+            logger.warning(
+                f"Vault configuration is invalid, skipping Vault integration: {e}"
+            )
+            return config
+        except Exception as e:
+            logger.error(
+                f"An unexpected error occurred during Vault settings validation: {e}"
+            )
+            return config
+
+        if self._vault_manager is None:
+            logger.warning(
+                "Vault is enabled but manager could not be initialized. Skipping secret resolution."
+            )
+            return config
+
+        # Now, recursively resolve secrets
+        return self._recursive_resolve(config)
+
+    def _recursive_resolve(self, item: Any) -> Any:
+        """Helper function to recursively resolve vault URIs."""
+        if isinstance(item, dict):
+            return {k: self._recursive_resolve(v) for k, v in item.items()}
+        elif isinstance(item, list):
+            return [self._recursive_resolve(v) for v in item]
+        elif isinstance(item, str) and item.startswith("vault://"):
+            return self._fetch_vault_secret(item)
+        return item
+
+    def _fetch_vault_secret(self, uri: str) -> Any:
+        """Parse a vault URI and fetch the secret."""
+        # Regex to parse vault://<path>#<key>[@<version>]
+        pattern = re.compile(
+            r"^vault://(?P<path>[^#@]+)#(?P<key>[^@]+)(@(?P<version>\d+))?$"
+        )
+        match = pattern.match(uri)
+
+        if not match:
+            logger.warning(f"Invalid Vault URI format: '{uri}'. Returning as is.")
+            return uri
+
+        if self._vault_manager is None:
+            # This should not happen if called from _resolve_vault_secrets
+            logger.error("Vault manager not initialized, cannot fetch secret.")
+            return uri
+
+        parts = match.groupdict()
+        path = parts["path"]
+        key = parts["key"]
+        version = int(parts["version"]) if parts["version"] else None
+
+        try:
+            return self._vault_manager.get_secret(path=path, key=key, version=version)
+        except VaultError as e:
+            logger.error(f"Failed to fetch Vault secret for URI '{uri}': {e}")
+            # Fallback: return the URI itself to make the error obvious downstream
+            return uri
+
     def get_settings(self, overrides: Optional[Dict[str, Any]] = None) -> Settings:
         """
         Return the final configuration as a validated Pydantic Settings object.
@@ -475,6 +562,15 @@ class ConfigurationManager:
         final_config = self._config.copy()
         if overrides:
             final_config = _deep_merge(overrides, final_config)
+
+        # Resolve Vault secrets before validation
+        try:
+            final_config = self._resolve_vault_secrets(final_config)
+        except Exception as e:
+            logger.error(
+                f"An unhandled error occurred during Vault secret resolution: {e}"
+            )
+            # Continue with unresolved secrets, validation will likely fail but it's better than crashing.
 
         try:
             instance = self.settings_cls.model_validate(final_config)

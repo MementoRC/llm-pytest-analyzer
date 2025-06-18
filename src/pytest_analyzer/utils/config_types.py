@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 from pydantic import (
+    AnyHttpUrl,
     BaseModel,
     Field,
     field_validator,
@@ -167,6 +168,63 @@ class LLMSettings(BaseModel):
     ollama_port: int = 11434  # Ollama port
 
 
+# --- Vault Settings Model ---
+class VaultSettings(BaseModel):
+    """Configuration for HashiCorp Vault integration."""
+
+    enabled: bool = Field(
+        default=False, description="Enable or disable Vault integration."
+    )
+    url: Optional[AnyHttpUrl] = Field(
+        default=None, description="URL of the Vault server."
+    )
+    auth_method: str = Field(
+        default="token",
+        description="Authentication method to use ('token' or 'approle').",
+        pattern="^(token|approle)$",
+    )
+    token: Optional[str] = Field(
+        default=None, description="Vault token for authentication."
+    )
+    role_id: Optional[str] = Field(
+        default=None, description="AppRole RoleID for authentication."
+    )
+    secret_id: Optional[str] = Field(
+        default=None, description="AppRole SecretID for authentication."
+    )
+    mount_point: str = Field(
+        default="secret", description="Mount point for the KV secrets engine."
+    )
+    timeout: int = Field(
+        default=30, gt=0, description="Timeout for Vault client requests in seconds."
+    )
+    cache_ttl: int = Field(
+        default=300,
+        ge=0,
+        description="Time-to-live for cached secrets in seconds. 0 to disable cache.",
+    )
+    unwrap_cubbyhole: bool = Field(
+        default=False,
+        description="Enable cubbyhole response wrapping for AppRole SecretID.",
+    )
+
+    @model_validator(mode="after")
+    def validate_auth_method_requirements(self) -> "VaultSettings":
+        """Validate that required fields for the selected auth method are present."""
+        if self.enabled:
+            if not self.url:
+                raise ValueError("Vault URL ('url') is required when Vault is enabled.")
+            if self.auth_method == "token" and not self.token:
+                raise ValueError(
+                    "Vault token ('token') is required for 'token' auth method."
+                )
+            if self.auth_method == "approle" and not (self.role_id and self.secret_id):
+                raise ValueError(
+                    "Both RoleID ('role_id') and SecretID ('secret_id') are required for 'approle' auth method."
+                )
+        return self
+
+
 # --- Main Settings Model ---
 class Settings(BaseModel):
     """Configuration settings for the pytest analyzer."""
@@ -230,6 +288,9 @@ class Settings(BaseModel):
     environment_manager: Optional[str] = (
         None  # Override environment manager detection (pixi, poetry, hatch, uv, pipenv, pip+venv)
     )
+
+    # Vault integration settings
+    vault: VaultSettings = Field(default_factory=VaultSettings)
 
     # MCP Server settings
     mcp: MCPSettings = Field(default_factory=MCPSettings)  # MCP server configuration
