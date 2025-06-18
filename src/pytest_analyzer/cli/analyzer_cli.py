@@ -369,7 +369,7 @@ def display_suggestions(
         if (
             args.verbosity == 0
             and source == "Rule-based"
-            and suggestion.confidence_score < 0.7
+            and suggestion.confidence < 0.7
         ):
             continue
 
@@ -378,7 +378,7 @@ def display_suggestions(
     # If we filtered everything out, show at least one suggestion
     if not filtered_suggestions and suggestions:
         # Get the highest confidence suggestion
-        best_suggestion = max(suggestions, key=lambda s: s.confidence_score)
+        best_suggestion = max(suggestions, key=lambda s: s.confidence)
         source = (
             "LLM"
             if best_suggestion.metadata
@@ -468,7 +468,7 @@ def display_suggestions(
         # --- Confidence score (verbosity >= 2) ---
         if args.verbosity >= 2:
             console.print(
-                f"\n[bold cyan]Confidence:[/bold cyan] {suggestion.confidence_score:.2f}"
+                f"\n[bold cyan]Confidence:[/bold cyan] {suggestion.confidence:.2f}"
             )
 
         # --- Explanation (verbosity >= 2) ---
@@ -780,7 +780,7 @@ def apply_suggestions_interactively(
         # Display suggestion header
         console.print(f"\n[bold cyan]Suggestion {i + 1}/{len(suggestions)}[/bold cyan]")
         console.print(f"[bold]Suggestion ID:[/bold] {suggestion.id}")
-        console.print(f"[bold]Confidence:[/bold] {suggestion.confidence_score:.2f}")
+        console.print(f"[bold]Confidence:[/bold] {suggestion.confidence:.2f}")
         console.print(f"[bold]Files to modify:[/bold] {', '.join(file_changes.keys())}")
 
         # Auto-apply or interactive mode
