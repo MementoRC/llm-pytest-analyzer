@@ -22,24 +22,23 @@ def _log_access(func):
 
     @wraps(func)
     def wrapper(self, *args, **kwargs):
-        path = kwargs.get("path") or (args[0] if args else "unknown")
-        key = kwargs.get("key") or (args[1] if len(args) > 1 else "unknown")
-        secret_ref = f"{self.settings.mount_point}/{path}#{key}"
+        # Generate a non-sensitive operation ID for auditing without exposing paths/keys
+        operation_id = f"vault_op_{int(time.time() * 1000) % 100000}"
         start_time = time.time()
         try:
             result = func(self, *args, **kwargs)
             duration = (time.time() - start_time) * 1000
-            # Log access without sensitive data
+            # Log access without sensitive data - use operation ID instead of paths/keys
             logger.info(
-                f"Successfully accessed Vault secret '{secret_ref}'. Duration: {duration:.2f}ms"
+                f"Successfully accessed Vault secret (operation {operation_id}). Duration: {duration:.2f}ms"
             )
             return result
         except Exception as e:
             duration = (time.time() - start_time) * 1000
-            # Log error without exposing sensitive data - only log error type and reference
+            # Log error without exposing sensitive data - only log error type and operation ID
             error_type = type(e).__name__
             logger.error(
-                f"Failed to access Vault secret '{secret_ref}'. Duration: {duration:.2f}ms. Error type: {error_type}",
+                f"Failed to access Vault secret (operation {operation_id}). Duration: {duration:.2f}ms. Error type: {error_type}",
                 exc_info=False,  # Disable stack trace to avoid potential sensitive data exposure
             )
             raise
