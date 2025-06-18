@@ -79,6 +79,7 @@ class MCPAnalyzerFacade:
         """Initialize the MCP facade with a core analyzer facade instance."""
         self.analyzer = analyzer_facade
 
+    @staticmethod
     def _measure_execution_time(func):
         """Decorator to measure execution time of MCP operations."""
         import functools

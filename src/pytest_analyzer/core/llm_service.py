@@ -71,7 +71,6 @@ class LLMService:
             )
             raise LLMServiceError(
                 f"Failed to generate LLM response: {e}",
-                error_code="LLM_001",
                 context={
                     "provider": self.provider,
                     "model": self.model,
