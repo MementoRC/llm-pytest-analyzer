@@ -53,12 +53,13 @@ def test_suggestion(test_failure):
 @pytest.fixture
 def llm_suggestion(test_failure):
     """Fixture for an LLM-based suggestion."""
-    return FixSuggestion(
-        failure=test_failure,
-        suggestion="Use assertEqual(1, 2) for better error messages",
-        confidence=0.9,
+    return FixSuggestion.create_from_score(
+        failure_id=test_failure.id,
+        suggestion_text="Use assertEqual(1, 2) for better error messages",
+        confidence_score=0.9,
         explanation="Using assertEqual provides more detailed failure output",
-        code_changes={
+        code_changes=["def test_function():\n    assertEqual(1, 2)"],
+        metadata={
             "source": "llm",
             "test_file.py": "def test_function():\n    assertEqual(1, 2)",
         },
@@ -165,17 +166,20 @@ def test_cli_main_with_debug(mock_display, mock_logging, mock_create_service):
     mock_create_service.return_value = mock_analyzer
 
     # Create a proper suggestion with a failure attribute
-    test_failure = PytestFailure(
+    test_failure = PytestFailure.create(
         test_name="test_file.py::test_function",
-        test_file="test_file.py",
+        file_path="test_file.py",
+        failure_message="assert 1 == 2",
         error_type="AssertionError",
-        error_message="assert 1 == 2",
-        traceback="E       assert 1 == 2\nE       +  where 1 = func()",
+        traceback=["E       assert 1 == 2", "E       +  where 1 = func()"],
         line_number=42,
+        function_name="test_function",
     )
 
-    suggestion = FixSuggestion(
-        failure=test_failure, suggestion="Fix the assertion", confidence=0.8
+    suggestion = FixSuggestion.create_from_score(
+        failure_id=test_failure.id,
+        suggestion_text="Fix the assertion",
+        confidence_score=0.8,
     )
 
     mock_analyzer.run_and_analyze.return_value = [suggestion]
@@ -313,7 +317,7 @@ def test_display_suggestions_with_rule_based(mock_console, test_suggestion, mock
     mock_console.print.assert_any_call(
         "\n[bold green]Suggested fix (Rule-based):[/bold green]"
     )
-    mock_console.print.assert_any_call(test_suggestion.suggestion)
+    mock_console.print.assert_any_call(test_suggestion.suggestion_text)
 
 
 def test_display_suggestions_with_llm(mock_console, llm_suggestion, mock_args):
@@ -328,7 +332,7 @@ def test_display_suggestions_with_llm(mock_console, llm_suggestion, mock_args):
     mock_console.print.assert_any_call(
         "\n[bold yellow]Suggested fix (LLM):[/bold yellow]"
     )
-    mock_console.print.assert_any_call(llm_suggestion.suggestion)
+    mock_console.print.assert_any_call(llm_suggestion.suggestion_text)
 
 
 @patch("pytest_analyzer.cli.analyzer_cli.Syntax")
@@ -336,18 +340,14 @@ def test_display_suggestions_with_code_changes(
     mock_syntax, mock_console, test_suggestion, mock_args
 ):
     """Test displaying suggestions with code changes."""
-    # Add code changes to the suggestion
-    test_suggestion.code_changes = {
-        "test_file.py": "def fixed_test():\n    assert 1 == 1"
-    }
+    # Add code changes to the suggestion (new format is a list)
+    test_suggestion.code_changes = ["def fixed_test():\n    assert 1 == 1"]
 
     # Call the function
     display_suggestions([test_suggestion], mock_args)
 
     # Verify key calls
     mock_console.print.assert_any_call("\n[bold cyan]Code changes:[/bold cyan]")
-    mock_console.print.assert_any_call("\n[bold]File:[/bold] test_file.py")
+    mock_console.print.assert_any_call("- def fixed_test():\n    assert 1 == 1")
 
-    # Verify that Syntax was called at least once
-    # (might be called twice if relevant_code is also displayed)
-    assert mock_syntax.call_count >= 1
+    # Note: Syntax is no longer used for code display in the new implementation

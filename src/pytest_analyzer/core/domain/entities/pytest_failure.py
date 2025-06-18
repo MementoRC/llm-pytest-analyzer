@@ -23,7 +23,7 @@ class PytestFailure:
     location: TestLocation
     failure_message: str
     failure_type: FailureType
-    traceback: str = ""
+    traceback: List[str] = field(default_factory=list)
     source_code: Optional[str] = None
     raw_output_section: Optional[str] = None
     related_project_files: List[str] = field(default_factory=list)
@@ -62,7 +62,7 @@ class PytestFailure:
             location=location,
             failure_message=failure_message,
             failure_type=failure_type,
-            traceback="\n".join(traceback) if traceback else "",
+            traceback=traceback or [],
         )
 
     @property
@@ -104,6 +104,11 @@ class PytestFailure:
     def relevant_code(self) -> Optional[str]:
         """Get the relevant code for backward compatibility."""
         return self.source_code
+
+    @property
+    def traceback_str(self) -> str:
+        """Get the traceback as a joined string for backward compatibility."""
+        return "\n".join(self.traceback) if self.traceback else ""
 
     @property
     def short_error_message(self) -> str:

@@ -361,8 +361,7 @@ def display_suggestions(
     for suggestion in suggestions:
         source = (
             "LLM"
-            if suggestion.code_changes
-            and suggestion.code_changes.get("source") == "llm"
+            if suggestion.metadata and suggestion.metadata.get("source") == "llm"
             else "Rule-based"
         )
 
@@ -370,7 +369,7 @@ def display_suggestions(
         if (
             args.verbosity == 0
             and source == "Rule-based"
-            and suggestion.confidence < 0.7
+            and suggestion.confidence_score < 0.7
         ):
             continue
 
@@ -379,11 +378,11 @@ def display_suggestions(
     # If we filtered everything out, show at least one suggestion
     if not filtered_suggestions and suggestions:
         # Get the highest confidence suggestion
-        best_suggestion = max(suggestions, key=lambda s: s.confidence)
+        best_suggestion = max(suggestions, key=lambda s: s.confidence_score)
         source = (
             "LLM"
-            if best_suggestion.code_changes
-            and best_suggestion.code_changes.get("source") == "llm"
+            if best_suggestion.metadata
+            and best_suggestion.metadata.get("source") == "llm"
             else "Rule-based"
         )
         filtered_suggestions.append((best_suggestion, source))
@@ -399,12 +398,9 @@ def display_suggestions(
     # Organize suggestions by fingerprint for grouped display
     suggestions_by_fingerprint: dict[str, list[tuple[FixSuggestion, str]]] = {}
     for suggestion, source in filtered_suggestions:
-        fingerprint = (
-            suggestion.failure.group_fingerprint
-            if hasattr(suggestion.failure, "group_fingerprint")
-            else None
-        )
-        key = fingerprint or f"unique_{id(suggestion)}"
+        # In the new domain model, FixSuggestion doesn't contain the failure object
+        # We can group by failure_id or just display them individually
+        key = f"suggestion_{suggestion.failure_id}"
         if key not in suggestions_by_fingerprint:
             suggestions_by_fingerprint[key] = []
         suggestions_by_fingerprint[key].append((suggestion, source))
@@ -429,7 +425,6 @@ def display_suggestions(
 
         # Take first suggestion from the group
         suggestion, source = group[0]
-        failure = suggestion.failure
         source_color = "yellow" if source == "LLM" else "green"
 
         # Use different separators based on verbosity
@@ -442,25 +437,15 @@ def display_suggestions(
 
         displayed_count += 1
 
-        # --- Basic test information (verbosity >= 1) ---
+        # --- Basic suggestion information (verbosity >= 1) ---
         if args.verbosity >= 1:
-            console.print(f"[bold cyan]Test:[/bold cyan] {failure.test_name}")
-            console.print(f"[bold cyan]File:[/bold cyan] {failure.test_file}")
-            console.print(
-                f"[bold cyan]Error:[/bold cyan] {failure.error_type}: {failure.error_message}"
-            )
+            console.print(f"[bold cyan]Suggestion ID:[/bold cyan] {suggestion.id}")
+            console.print(f"[bold cyan]Failure ID:[/bold cyan] {suggestion.failure_id}")
 
-            # Show other failures in the same group (verbosity >= 2)
+            # Show other suggestions in the same group (verbosity >= 2)
             if args.verbosity >= 2 and len(group) > 1:
-                affected_tests = [f[0].failure.test_name for f in group[1:]]
                 console.print(
-                    f"[bold cyan]Also affects:[/bold cyan] {', '.join(affected_tests)}"
-                )
-
-            # Line number (verbosity >= 2)
-            if args.verbosity >= 2 and failure.line_number:
-                console.print(
-                    f"[bold cyan]Line number:[/bold cyan] {failure.line_number}"
+                    f"[bold cyan]Group size:[/bold cyan] {len(group)} related suggestions"
                 )
 
         # --- The fix suggestion (all verbosity levels) ---
@@ -471,19 +456,21 @@ def display_suggestions(
         # For minimal verbosity, just show a brief summary
         if args.verbosity == 0:
             # Extract a short description (first line or first 80 chars)
-            lines = suggestion.suggestion.strip().split("\n")
-            summary = lines[0].strip() if lines else suggestion.suggestion[:80].strip()
+            lines = suggestion.suggestion_text.strip().split("\n")
+            summary = (
+                lines[0].strip() if lines else suggestion.suggestion_text[:80].strip()
+            )
             if len(summary) >= 80 and not summary.endswith("..."):
                 summary = summary[:77] + "..."
             console.print(summary)
         else:
             # Show full suggestion text
-            console.print(suggestion.suggestion)
+            console.print(suggestion.suggestion_text)
 
         # --- Confidence score (verbosity >= 2) ---
         if args.verbosity >= 2:
             console.print(
-                f"\n[bold cyan]Confidence:[/bold cyan] {suggestion.confidence:.2f}"
+                f"\n[bold cyan]Confidence:[/bold cyan] {suggestion.confidence_score:.2f}"
             )
 
         # --- Explanation (verbosity >= 2) ---
@@ -496,52 +483,17 @@ def display_suggestions(
             if args.verbosity >= 1:
                 console.print("\n[bold cyan]Code changes:[/bold cyan]")
 
-            # Skip metadata keys
-            metadata_keys = ["source", "fingerprint"]
+            # In the new domain model, code_changes is a list of strings
+            if isinstance(suggestion.code_changes, list):
+                # Display structured changes
+                for change in suggestion.code_changes:
+                    console.print(f"- {change}")
+            else:
+                # Fallback for older format (if any)
+                console.print(str(suggestion.code_changes))
 
-            for file_path, changes in suggestion.code_changes.items():
-                # Skip metadata fields
-                if file_path in metadata_keys:
-                    if args.verbosity >= 2 and file_path == "source":
-                        console.print(f"\n[bold]Source:[/bold] {changes}")
-                    continue
-
-                console.print(f"\n[bold]File:[/bold] {file_path}")
-                if isinstance(changes, str):
-                    # For verbosity 0, only show short code samples
-                    if args.verbosity == 0:
-                        # Try to keep it brief
-                        lines = changes.strip().split("\n")
-                        short_sample = "\n".join(lines[:3])
-                        if len(lines) > 3:
-                            short_sample += "\n..."
-                        console.print(short_sample)
-                    else:
-                        console.print(
-                            Syntax(
-                                changes, "python", theme="monokai", line_numbers=True
-                            )
-                        )
-                else:
-                    # Display structured changes
-                    for change in changes:
-                        console.print(f"- {change}")
-
-        # --- Relevant code (verbosity >= 2) ---
-        if args.verbosity >= 2 and failure.relevant_code:
-            console.print("\n[bold cyan]Relevant code:[/bold cyan]")
-            console.print(
-                Syntax(
-                    failure.relevant_code, "python", theme="monokai", line_numbers=True
-                )
-            )
-
-        # --- Full traceback (verbosity == 3) ---
-        if args.verbosity == 3 and failure.traceback:
-            console.print("\n[bold cyan]Traceback:[/bold cyan]")
-            console.print(
-                Syntax(failure.traceback, "python", theme="monokai", line_numbers=False)
-            )
+        # Note: Relevant code and traceback display removed since failure object
+        # is no longer directly available in FixSuggestion
 
         # Skip showing other failures in the same group that would have the same suggestion
         # We've already listed their names if verbosity >= 2
@@ -829,10 +781,8 @@ def apply_suggestions_interactively(
 
         # Display suggestion header
         console.print(f"\n[bold cyan]Suggestion {i + 1}/{len(suggestions)}[/bold cyan]")
-        console.print(
-            f"[bold]Failure:[/bold] {suggestion.failure.test_name if hasattr(suggestion.failure, 'test_name') else 'Unknown'}"
-        )
-        console.print(f"[bold]Confidence:[/bold] {suggestion.confidence:.2f}")
+        console.print(f"[bold]Suggestion ID:[/bold] {suggestion.id}")
+        console.print(f"[bold]Confidence:[/bold] {suggestion.confidence_score:.2f}")
         console.print(f"[bold]Files to modify:[/bold] {', '.join(file_changes.keys())}")
 
         # Auto-apply or interactive mode
