@@ -144,7 +144,7 @@ class PytestAnalyzerMCPServer:
             for sig in (signal.SIGTERM, signal.SIGINT):
                 signal.signal(sig, self._signal_handler)
 
-    def _signal_handler(self, signum: int, frame: Any) -> None:
+    def _signal_handler(self, signum: int, _frame: Any) -> None:
         """Handle shutdown signals."""
         self.logger.info(f"Received signal {signum}, initiating graceful shutdown")
         asyncio.create_task(self.stop())

@@ -680,8 +680,6 @@ def cmd_analyze(args: argparse.Namespace) -> int:
             logger.exception("Detailed error information:")
         return 2
 
-    return args.func(args)
-
 
 def validate_cli_arguments(
     args: argparse.Namespace, security_manager: SecurityManager
