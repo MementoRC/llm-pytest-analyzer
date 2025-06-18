@@ -456,16 +456,14 @@ def display_suggestions(
         # For minimal verbosity, just show a brief summary
         if args.verbosity == 0:
             # Extract a short description (first line or first 80 chars)
-            lines = suggestion.suggestion_text.strip().split("\n")
-            summary = (
-                lines[0].strip() if lines else suggestion.suggestion_text[:80].strip()
-            )
+            lines = suggestion.suggestion.strip().split("\n")
+            summary = lines[0].strip() if lines else suggestion.suggestion[:80].strip()
             if len(summary) >= 80 and not summary.endswith("..."):
                 summary = summary[:77] + "..."
             console.print(summary)
         else:
             # Show full suggestion text
-            console.print(suggestion.suggestion_text)
+            console.print(suggestion.suggestion)
 
         # --- Confidence score (verbosity >= 2) ---
         if args.verbosity >= 2:
