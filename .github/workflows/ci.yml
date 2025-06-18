@@ -9,7 +9,6 @@ on:
 jobs:
   lint_and_types:
     runs-on: ubuntu-latest
-    # name: lint_and_type (${{ github.event_name }})
 
     steps:
       - uses: actions/checkout@v4
@@ -36,10 +35,93 @@ jobs:
             exit 1
           fi
 
-  test:
+  static_analysis:
+    runs-on: ubuntu-latest
     needs: lint_and_types
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: prefix-dev/setup-pixi@v0.8.8
+        with:
+          pixi-version: latest
+          manifest-path: pyproject.toml
+
+      - name: Install dependencies with Pixi
+        run: pixi install -e dev -v
+
+      - name: Run Pylint
+        run: pixi run -e dev pylint-check-console
+
+      - name: Run Bandit (security static analysis)
+        run: pixi run -e dev security-scan-console
+
+      - name: Run Radon (complexity check)
+        run: pixi run -e dev complexity-check
+
+      - name: Run Vulture (dead code check)
+        run: pixi run -e dev dead-code-check
+
+  dependency_vulnerabilities:
+    runs-on: ubuntu-latest
+    needs: lint_and_types
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: prefix-dev/setup-pixi@v0.8.8
+        with:
+          pixi-version: latest
+          manifest-path: pyproject.toml
+
+      - name: Install dependencies with Pixi
+        run: pixi install -e dev -v
+
+      - name: Run Safety (dependency vulnerability check)
+        run: pixi run -e dev safety-check-console
+
+  security_scan:
+    runs-on: ubuntu-latest
+    needs: lint_and_types
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up OWASP ZAP
+        uses: zaproxy/action-full-scan@v0.10.0
+        with:
+          target: 'http://localhost:8000'
+        continue-on-error: true
+      # Note: You may need to ensure your app is running for ZAP to scan it.
+      # This is a placeholder for ZAP integration.
+
+  performance_test:
+    runs-on: ubuntu-latest
+    needs: lint_and_types
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: prefix-dev/setup-pixi@v0.8.8
+        with:
+          pixi-version: latest
+          manifest-path: pyproject.toml
+
+      - name: Install dependencies with Pixi
+        run: pixi install -e dev -v
+
+      - name: Run performance regression tests
+        run: |
+          echo "TODO: Add performance regression test commands here"
+          # Example: pixi run -e dev performance-test
+
+  test:
+    needs: [lint_and_types, static_analysis, dependency_vulnerabilities, security_scan, performance_test]
     runs-on: ${{ matrix.os }}
-    # name: test-${{ matrix.python-version }} (${{ github.event_name }})
     strategy:
       matrix:
         os: [ubuntu-latest]
