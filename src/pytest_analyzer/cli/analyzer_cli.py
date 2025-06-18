@@ -733,9 +733,11 @@ def validate_cli_arguments(
                     )
 
         # --- Float Arguments Validation ---
-        if not (0.0 <= args.min_confidence <= 1.0):
+        # Only validate min_confidence if it exists (not present in MCP commands)
+        min_confidence = getattr(args, "min_confidence", None)
+        if min_confidence is not None and not (0.0 <= min_confidence <= 1.0):
             raise SecurityError(
-                f"min_confidence must be between 0.0 and 1.0, got {args.min_confidence}"
+                f"min_confidence must be between 0.0 and 1.0, got {min_confidence}"
             )
 
         # --- String Input Sanitization ---
