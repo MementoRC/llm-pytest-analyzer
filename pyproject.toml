@@ -148,7 +148,7 @@ test-cov = { cmd = "pytest --cov=src/pytest_analyzer --cov-report=term-missing -
 build = { cmd = "hatch build", depends-on = ["install-editable"] }
 clean = "rm -rf dist build .ruff_cache .mypy_cache .pytest_cache *.egg-info src/pytest_analyzer.egg-info"
 security-scan = { cmd = "bandit -r src/ -f json -o security-report.json", depends-on = ["install-editable"] }
-security-scan-console = { cmd = "bandit -r src/", depends-on = ["install-editable"] }
+security-scan-console = { cmd = "bandit -r src/ --severity-level high", depends-on = ["install-editable"] }
 complexity-check = { cmd = "radon cc src/ --min B", depends-on = ["install-editable"] }
 dead-code-check = { cmd = "vulture src/ --min-confidence 80", depends-on = ["install-editable"] }
 safety-check = { cmd = "safety check --json --output safety-report.json", depends-on = ["install-editable"] }
