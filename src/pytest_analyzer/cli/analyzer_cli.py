@@ -24,7 +24,11 @@ from rich.table import Table
 from ..core.analyzer_service_di import DIPytestAnalyzerService
 from ..core.factory import create_analyzer_service
 from ..core.models.pytest_failure import FixSuggestion, PytestFailure
+from ..mcp.security import SecurityError, SecurityManager
 from ..utils.settings import Settings, load_settings
+
+# Create security logger locally
+security_logger = logging.getLogger("pytest_analyzer.security")
 
 # Load environment variables from .env file if present
 try:
@@ -676,12 +680,125 @@ def cmd_analyze(args: argparse.Namespace) -> int:
             logger.exception("Detailed error information:")
         return 2
 
+    return args.func(args)
+
+
+def validate_cli_arguments(
+    args: argparse.Namespace, security_manager: SecurityManager
+) -> None:
+    """
+    Validate command-line arguments to prevent security vulnerabilities.
+
+    Args:
+        args: The argparse.Namespace object containing the parsed arguments.
+        security_manager: The SecurityManager instance for validation.
+
+    Raises:
+        SecurityError: If any security validation fails.
+    """
+    try:
+        # --- File Path Validation ---
+        # Note: For CLI usage, we do basic validation but are more permissive than MCP server
+        for path_arg in ["test_path", "output_file", "project_root", "config_file"]:
+            path = getattr(args, path_arg, None)
+            if path:
+                # Basic path validation - check if it's a reasonable path format
+                if not isinstance(path, str):
+                    raise SecurityError(f"{path_arg} must be a string")
+                # Check for obvious injection attempts
+                if any(dangerous in path for dangerous in [";", "|", "&", "`", "$"]):
+                    raise SecurityError(
+                        f"Potentially dangerous characters in {path_arg}: {path}"
+                    )
+                # For CLI, we allow paths outside project root (e.g., test files in /tmp)
+
+        # --- Numeric Arguments Validation ---
+        for int_arg, min_val, max_val in [
+            ("timeout", 1, 3600),
+            ("max_memory", 1, 32768),
+            ("max_failures", 1, 1000),
+            ("max_suggestions", 1, 10),
+            ("max_suggestions_per_failure", 1, 10),
+            ("llm_timeout", 1, 300),
+        ]:
+            value = getattr(args, int_arg, None)
+            if value is not None:
+                if not isinstance(value, int):
+                    raise SecurityError(
+                        f"Invalid type for {int_arg}: {type(value)}. Expected int."
+                    )
+                if not (min_val <= value <= max_val):
+                    raise SecurityError(
+                        f"{int_arg} must be between {min_val} and {max_val}, got {value}"
+                    )
+
+        # --- Float Arguments Validation ---
+        if not (0.0 <= args.min_confidence <= 1.0):
+            raise SecurityError(
+                f"min_confidence must be between 0.0 and 1.0, got {args.min_confidence}"
+            )
+
+        # --- String Input Sanitization ---
+        for string_arg in ["pytest_args", "llm_model"]:
+            value = getattr(args, string_arg, None)
+            if value:
+                sanitized_value = security_manager.sanitize_input(value)
+                setattr(args, string_arg, sanitized_value)  # Update the sanitized value
+
+        # --- API Key Validation (Format Check) ---
+        api_key = getattr(args, "llm_api_key", None)
+        if api_key:
+            if not isinstance(api_key, str):
+                raise SecurityError("llm_api_key must be a string.")
+            # Basic format check (e.g., length, prefix)
+            if len(api_key) < 10:
+                security_logger.warning("llm_api_key is shorter than expected.")
+            # DO NOT LOG THE API KEY ITSELF
+
+    except SecurityError as e:
+        security_logger.error(f"Security validation failed: {e}")
+        raise
+
 
 def main() -> int:
     """Main entry point for the CLI application."""
     # Parse command-line arguments
     parser = setup_parser()
     args = parser.parse_args()
+
+    # Input validation
+    try:
+        # Initialize security manager with project root
+        project_root = args.project_root or os.getcwd()
+        from ..utils.config_types import SecuritySettings
+
+        # Create more permissive security settings for CLI usage
+        cli_security_settings = SecuritySettings(
+            enable_authentication=False,
+            path_allowlist=[],  # Allow all paths for CLI
+            allowed_file_types=[],  # Allow all file types for CLI
+            max_file_size_mb=100,  # Reasonable limit
+            max_requests_per_window=1000,
+            rate_limit_window_seconds=60,
+            abuse_ban_count=10,
+            max_resource_usage_mb=1024,
+            enable_backup=True,
+            require_authentication=False,
+            require_client_certificate=False,
+            role_based_access=False,
+            allowed_roles=[],
+            allowed_client_certs=[],
+            auth_token=None,
+        )
+        security_manager = SecurityManager(
+            settings=cli_security_settings, project_root=project_root
+        )
+
+        # Validate CLI arguments
+        validate_cli_arguments(args, security_manager)
+    except SecurityError as e:
+        logger.error(f"CLI argument validation failed: {e}")
+        return 2
 
     # Handle case where no subcommand is specified (backward compatibility)
     if not hasattr(args, "func"):
