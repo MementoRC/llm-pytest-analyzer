@@ -29,15 +29,18 @@ def _log_access(func):
         try:
             result = func(self, *args, **kwargs)
             duration = (time.time() - start_time) * 1000
+            # Log access without sensitive data
             logger.info(
                 f"Successfully accessed Vault secret '{secret_ref}'. Duration: {duration:.2f}ms"
             )
             return result
         except Exception as e:
             duration = (time.time() - start_time) * 1000
+            # Log error without exposing sensitive data - only log error type and reference
+            error_type = type(e).__name__
             logger.error(
-                f"Failed to access Vault secret '{secret_ref}'. Duration: {duration:.2f}ms. Error: {e}",
-                exc_info=True,
+                f"Failed to access Vault secret '{secret_ref}'. Duration: {duration:.2f}ms. Error type: {error_type}",
+                exc_info=False,  # Disable stack trace to avoid potential sensitive data exposure
             )
             raise
 
