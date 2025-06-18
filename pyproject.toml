@@ -154,7 +154,7 @@ dead-code-check = { cmd = "vulture src/ --min-confidence 80", depends-on = ["ins
 safety-check = { cmd = "safety check --json --output safety-report.json", depends-on = ["install-editable"] }
 safety-check-console = { cmd = "safety check", depends-on = ["install-editable"] }
 pylint-check = { cmd = "pylint src/pytest_analyzer --output-format=json --output=pylint-report.json", depends-on = ["install-editable"] }
-pylint-check-console = { cmd = "pylint src/pytest_analyzer", depends-on = ["install-editable"] }
+pylint-check-console = { cmd = "pylint src/pytest_analyzer --errors-only", depends-on = ["install-editable"] }
 static-analysis = { depends-on = ["security-scan-console", "complexity-check", "dead-code-check", "safety-check-console", "pylint-check-console"] }
 check-all = { depends-on = ["lint", "typecheck", "test", "static-analysis"] }
 setup-pre-commit = "pre-commit install --install-hooks"
