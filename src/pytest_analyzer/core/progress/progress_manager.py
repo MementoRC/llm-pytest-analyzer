@@ -64,7 +64,9 @@ class RichProgressManager(ProgressManager):
             for key, task_id in self.progress_tasks.items():
                 try:
                     task_fn = getattr(self.progress, "get_task", None)
-                    if task_fn and task_fn(task_id):
-                        self.progress.update(task_id, completed=True)
+                    if callable(task_fn):
+                        task = task_fn(task_id)  # pylint: disable=not-callable
+                        if task:
+                            self.progress.update(task_id, completed=True)
                 except Exception as e:
                     logger.debug(f"Error cleaning up progress task {key}: {e}")
