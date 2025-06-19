@@ -29,12 +29,12 @@ def failure_analyzer():
 
 
 def test_init_patterns(failure_analyzer):
-    """Test initialization of error patterns."""
-    assert "AssertionError" in failure_analyzer.error_analyzers
-    assert "AttributeError" in failure_analyzer.error_analyzers
-    assert "ImportError" in failure_analyzer.error_analyzers
-    assert "TypeError" in failure_analyzer.error_analyzers
-    assert callable(failure_analyzer.error_analyzers["AssertionError"])
+    """Test initialization of error strategies."""
+    assert "AssertionError" in failure_analyzer.error_strategies
+    assert "AttributeError" in failure_analyzer.error_strategies
+    assert "ImportError" in failure_analyzer.error_strategies
+    assert "TypeError" in failure_analyzer.error_strategies
+    assert hasattr(failure_analyzer.error_strategies["AssertionError"], "analyze")
 
 
 def test_analyze_failure(failure_analyzer, test_failure):

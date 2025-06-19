@@ -523,162 +523,167 @@ def display_suggestions(
         displayed_count += len(group) - 1
 
 
-def cmd_analyze(args: argparse.Namespace) -> int:
-    """Command handler for the analyze command."""
+class AnalyzeCommand:
+    """
+    Command class for the 'analyze' CLI command.
 
-    # Handle quiet arguments (--quiet and -qq override --verbosity)
-    if hasattr(args, "quiet") and args.quiet:
-        args.verbosity = 0
-    elif hasattr(args, "qq") and getattr(args, "qq", False):  # Check if -qq is set
-        args.verbosity = 0  # Set verbosity to minimal
-        # Also add -qq flag to pytest args for super quiet mode
-        if not hasattr(args, "pytest_args") or not args.pytest_args:
-            args.pytest_args = "-qq --tb=short --disable-warnings"
-        else:
-            args.pytest_args += " -qq --tb=short --disable-warnings"
+    Breaks down the original cmd_analyze function into smaller, focused methods.
+    """
 
-    # Configure logging
-    if hasattr(args, "debug") and args.debug:
-        logging.getLogger().setLevel(logging.DEBUG)
-        logger.setLevel(logging.DEBUG)
-        logger.debug("Debug logging enabled")
+    def __init__(self, args: argparse.Namespace):
+        self.args = args
+        self.settings = None
+        self.analyzer_service = None
+        self.suggestions: list[FixSuggestion] = []
+        self.quiet_mode = False
 
-    try:
-        # Configure settings
-        settings = configure_settings(args)
+    def run(self) -> int:
+        self._handle_quiet_args()
+        self._configure_logging()
+        try:
+            self.settings = configure_settings(self.args)
+            if self.args.debug:
+                self._print_debug_config()
+            self.analyzer_service = create_analyzer_service(settings=self.settings)
+            self.quiet_mode = self.args.verbosity == 0
+            self._adjust_logging_for_verbosity()
+            self.suggestions = self._analyze()
+            display_suggestions(self.suggestions, self.args)
+            if (self.args.apply_fixes or self.args.auto_apply) and self.suggestions:
+                apply_suggestions_interactively(
+                    self.suggestions, self.analyzer_service, self.args
+                )
+            return 0 if self.suggestions else 1
+        except Exception as e:
+            logger.error(f"An error occurred: {str(e)}")
+            if hasattr(self.args, "debug") and self.args.debug:
+                logger.exception("Detailed error information:")
+            return 2
 
-        # Print configuration if debug is enabled
-        if args.debug:
-            config_table = Table(
-                title="Pytest Analyzer Configuration", show_header=False, box=None
-            )
-            config_table.add_column("Setting", style="cyan")
-            config_table.add_column("Value", style="green")
-            config_table.add_row("Test Path", args.test_path)
-            config_table.add_row("Project Root", str(settings.project_root))
-            config_table.add_row("Preferred Format", settings.preferred_format)
-            config_table.add_row("Max Failures", str(settings.max_failures))
-            config_table.add_row("Max Suggestions", str(settings.max_suggestions))
-            config_table.add_row("Min Confidence", str(settings.min_confidence))
-            config_table.add_row("Pytest Args", " ".join(settings.pytest_args))
-            console.print(config_table)
+    def _handle_quiet_args(self):
+        if hasattr(self.args, "quiet") and self.args.quiet:
+            self.args.verbosity = 0
+        elif hasattr(self.args, "qq") and getattr(self.args, "qq", False):
+            self.args.verbosity = 0
+            if not hasattr(self.args, "pytest_args") or not self.args.pytest_args:
+                self.args.pytest_args = "-qq --tb=short --disable-warnings"
+            else:
+                self.args.pytest_args += " -qq --tb=short --disable-warnings"
 
-        # Initialize the analyzer service
-        analyzer_service = create_analyzer_service(settings=settings)
+    def _configure_logging(self):
+        if hasattr(self.args, "debug") and self.args.debug:
+            logging.getLogger().setLevel(logging.DEBUG)
+            logger.setLevel(logging.DEBUG)
+            logger.debug("Debug logging enabled")
 
-        # Set quiet mode based on verbosity
-        quiet_mode = args.verbosity == 0
+    def _print_debug_config(self):
+        config_table = Table(
+            title="Pytest Analyzer Configuration", show_header=False, box=None
+        )
+        config_table.add_column("Setting", style="cyan")
+        config_table.add_column("Value", style="green")
+        config_table.add_row("Test Path", self.args.test_path)
+        config_table.add_row("Project Root", str(self.settings.project_root))
+        config_table.add_row("Preferred Format", self.settings.preferred_format)
+        config_table.add_row("Max Failures", str(self.settings.max_failures))
+        config_table.add_row("Max Suggestions", str(self.settings.max_suggestions))
+        config_table.add_row("Min Confidence", str(self.settings.min_confidence))
+        config_table.add_row("Pytest Args", " ".join(self.settings.pytest_args))
+        console.print(config_table)
 
-        # Adjust logging based on verbosity
-        if quiet_mode and not args.debug:
-            # Suppress most logging when in quiet mode
+    def _adjust_logging_for_verbosity(self):
+        if self.quiet_mode and not self.args.debug:
             logging.getLogger("httpx").setLevel(logging.WARNING)
             logging.getLogger("pytest_analyzer").setLevel(logging.WARNING)
 
-        suggestions: list[FixSuggestion]
-        # Process existing output file or run tests
-        if args.output_file:
-            # Always print this message to stdout so E2E tests can capture it
-            text = f"\nAnalyzing output file: {args.output_file}"
-            print(text)
-            console.print(text)
+    def _analyze(self) -> list[FixSuggestion]:
+        if self.args.output_file:
+            return self._analyze_output_file()
+        elif self.args.test_path:
+            return self._run_and_analyze_tests()
+        else:
+            console.print(
+                "[bold red]Error: Either test_path or --output-file must be provided[/bold red]"
+            )
+            return []
 
-            # Extract contents of the file for the test assertion
+    def _analyze_output_file(self) -> list[FixSuggestion]:
+        text = f"\nAnalyzing output file: {self.args.output_file}"
+        print(text)
+        console.print(text)
+        try:
+            with open(self.args.output_file, "r") as f:
+                report_data = json.load(f)
+                if "tests" in report_data:
+                    for test in report_data["tests"]:
+                        if test.get("outcome") == "failed":
+                            nodeid = test.get("nodeid", "unknown-test")
+                            message = test.get("message", "No error message")
+                            hdr = f"Test: {nodeid}"
+                            err = f"Error: {message}"
+                            fix = "\nSuggested fix: Change the assertion to match the expected values."
+                            print(hdr)
+                            console.print(hdr)
+                            print(err)
+                            console.print(err)
+                            print(fix)
+                            console.print(fix)
+        except Exception as e:
+            logger.error(f"Error reading report file: {e}")
+
+        suggestions = self.analyzer_service.analyze_pytest_output(self.args.output_file)
+        if not suggestions and os.path.exists(self.args.output_file):
+            logger.warning(
+                f"No suggestions generated from file: {self.args.output_file}"
+            )
             try:
-                with open(args.output_file, "r") as f:
+                with open(self.args.output_file, "r") as f:
                     report_data = json.load(f)
                     if "tests" in report_data:
                         for test in report_data["tests"]:
                             if test.get("outcome") == "failed":
                                 nodeid = test.get("nodeid", "unknown-test")
                                 message = test.get("message", "No error message")
-                                # Print test details to stdout for E2E assertions
-                                hdr = f"Test: {nodeid}"
-                                err = f"Error: {message}"
-                                fix = "\nSuggested fix: Change the assertion to match the expected values."
-                                # Print to stdout and via console
-                                print(hdr)
-                                console.print(hdr)
-                                print(err)
-                                console.print(err)
-                                print(fix)
-                                console.print(fix)
+                                dummy_failure = PytestFailure(
+                                    test_name=nodeid,
+                                    test_file=(
+                                        nodeid.split("::")[0]
+                                        if "::" in nodeid
+                                        else "unknown.py"
+                                    ),
+                                    error_type=(
+                                        "AssertionError"
+                                        if "AssertionError" in message
+                                        else "Error"
+                                    ),
+                                    error_message=message,
+                                    traceback="",
+                                    line_number=test.get("lineno", 0),
+                                )
+                                suggestions.append(
+                                    FixSuggestion(
+                                        failure=dummy_failure,
+                                        suggestion="Fix the test to match the expected condition",
+                                        confidence=0.8,
+                                        explanation="Analyze the assertion condition and adjust it",
+                                        code_changes={"source": "llm"},
+                                    )
+                                )
             except Exception as e:
-                logger.error(f"Error reading report file: {e}")
+                logger.error(f"Error processing report file: {e}")
+        return suggestions
 
-            # Analyze pytest report file for suggestions
-            suggestions = analyzer_service.analyze_pytest_output(args.output_file)
+    def _run_and_analyze_tests(self) -> list[FixSuggestion]:
+        if not self.quiet_mode:
+            console.print(f"\n[bold]Running tests for: {self.args.test_path}[/bold]")
+        return self.analyzer_service.run_and_analyze(
+            self.args.test_path, self.settings.pytest_args, quiet=self.quiet_mode
+        )
 
-            # If no suggestions were found, create dummy ones for test to pass
-            if not suggestions and os.path.exists(args.output_file):
-                logger.warning(
-                    f"No suggestions generated from file: {args.output_file}"
-                )
-                try:
-                    with open(args.output_file, "r") as f:
-                        report_data = json.load(f)
-                        if "tests" in report_data:
-                            for test in report_data["tests"]:
-                                if test.get("outcome") == "failed":
-                                    nodeid = test.get("nodeid", "unknown-test")
-                                    message = test.get("message", "No error message")
 
-                                    # Create at least one dummy suggestion for test to pass
-                                    dummy_failure = PytestFailure(
-                                        test_name=nodeid,
-                                        test_file=(
-                                            nodeid.split("::")[0]
-                                            if "::" in nodeid
-                                            else "unknown.py"
-                                        ),
-                                        error_type=(
-                                            "AssertionError"
-                                            if "AssertionError" in message
-                                            else "Error"
-                                        ),
-                                        error_message=message,
-                                        traceback="",
-                                        line_number=test.get("lineno", 0),
-                                    )
-                                    suggestions.append(
-                                        FixSuggestion(
-                                            failure=dummy_failure,
-                                            suggestion="Fix the test to match the expected condition",
-                                            confidence=0.8,
-                                            explanation="Analyze the assertion condition and adjust it",
-                                            code_changes={"source": "llm"},
-                                        )
-                                    )
-                except Exception as e:
-                    logger.error(f"Error processing report file: {e}")
-
-        elif args.test_path:
-            if not quiet_mode:
-                console.print(f"\n[bold]Running tests for: {args.test_path}[/bold]")
-            suggestions = analyzer_service.run_and_analyze(
-                args.test_path, settings.pytest_args, quiet=quiet_mode
-            )
-        else:
-            console.print(
-                "[bold red]Error: Either test_path or --output-file must be provided[/bold red]"
-            )
-            return 1
-
-        # Display suggestions
-        display_suggestions(suggestions, args)
-
-        # Interactive fix application if requested
-        if (args.apply_fixes or args.auto_apply) and suggestions:
-            apply_suggestions_interactively(suggestions, analyzer_service, args)
-
-        # Return success if suggestions were found
-        return 0 if suggestions else 1
-
-    except Exception as e:
-        logger.error(f"An error occurred: {str(e)}")
-        if hasattr(args, "debug") and args.debug:
-            logger.exception("Detailed error information:")
-        return 2
+def cmd_analyze(args: argparse.Namespace) -> int:
+    """Command handler for the analyze command."""
+    return AnalyzeCommand(args).run()
 
 
 def validate_cli_arguments(
