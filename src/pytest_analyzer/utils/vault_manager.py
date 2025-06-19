@@ -92,6 +92,7 @@ class VaultSecretManager:
                     role_id=self.settings.role_id,
                     secret_id=self.settings.secret_id,
                     use_token=True,
+                    unwrap_cubbyhole=self.settings.unwrap_cubbyhole,
                 )
             else:
                 raise VaultError(
