@@ -544,6 +544,18 @@ wheels = [
 ]
 
 [[package]]
+name = "hvac"
+version = "2.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/48/a4/c0b698a7250b7a5c2956427406560701862215c646e079a7907846608f44/hvac-2.3.0.tar.gz", hash = "sha256:1b85e3320e8642dd82f234db63253cda169a817589e823713dc5fca83119b1e2", size = 332660 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0b/34/56facf52e2ea14ce640f434ccf00311af6f3a1df0019d4682ba28ea09948/hvac-2.3.0-py3-none-any.whl", hash = "sha256:a3afc5710760b6ee9b3571769df87a0333da45da05a5f9f963e1d3925a84be7d", size = 155860 },
+]
+
+[[package]]
 name = "identify"
 version = "2.6.12"
 source = { registry = "https://pypi.org/simple" }
@@ -1199,6 +1211,7 @@ name = "pytest-analyzer"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
+    { name = "hvac" },
     { name = "mcp" },
     { name = "openai" },
     { name = "pydantic" },
@@ -1253,6 +1266,7 @@ requires-dist = [
     { name = "clang-format", marker = "extra == 'dev'" },
     { name = "httpx", marker = "extra == 'mcp'", specifier = ">=0.24.0" },
     { name = "httpx-sse", marker = "extra == 'mcp'", specifier = ">=0.3.0" },
+    { name = "hvac", specifier = ">=1.1.0" },
     { name = "isort", marker = "extra == 'dev'" },
     { name = "mcp", specifier = ">=1.9.2" },
     { name = "mkdocs", marker = "extra == 'dev'" },
