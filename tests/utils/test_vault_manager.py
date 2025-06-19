@@ -80,7 +80,6 @@ def test_connect_approle_auth_success(
         role_id=vault_settings_approle.role_id,
         secret_id=vault_settings_approle.secret_id,
         use_token=True,
-        unwrap_cubbyhole=False,
     )
 
 
