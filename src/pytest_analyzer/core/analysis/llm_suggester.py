@@ -14,6 +14,8 @@ import json
 import logging
 import os
 import re
+import threading
+from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
 from ...utils.resource_manager import (
@@ -57,6 +59,8 @@ class LLMSuggester:
         custom_prompt_template: Optional[str] = None,
         batch_size: int = 5,
         max_concurrency: int = 10,
+        llm_cache_size: int = 128,
+        code_context_cache_size: int = 128,
     ):
         """
         Initialize the LLM suggester.
@@ -69,6 +73,8 @@ class LLMSuggester:
         :param custom_prompt_template: Optional custom prompt template
         :param batch_size: Number of failures to process in each batch
         :param max_concurrency: Maximum number of concurrent LLM requests
+        :param llm_cache_size: LRU cache size for LLM prompt/response
+        :param code_context_cache_size: LRU cache size for code context extraction
         """
         self.llm_client = llm_client
         self.min_confidence = min_confidence
@@ -81,6 +87,20 @@ class LLMSuggester:
 
         # Adapter for making LLM requests
         self._llm_adapter = self._get_llm_adapter()
+
+        # LRU cache for LLM responses (thread-safe)
+        self._llm_cache_lock = threading.Lock()
+        self._llm_cache_size = llm_cache_size
+        self._code_context_cache_size = code_context_cache_size
+
+        # LRU cache for code context extraction
+        self._get_code_context_cached = lru_cache(maxsize=code_context_cache_size)(
+            self._get_code_context_uncached
+        )
+        # LRU cache for LLM prompt/response
+        self._llm_request_cached = lru_cache(maxsize=llm_cache_size)(
+            self._llm_request_uncached
+        )
 
     @with_timeout(60)
     def suggest_fixes(self, failure: PytestFailure) -> List[FixSuggestion]:
@@ -96,14 +116,20 @@ class LLMSuggester:
                     logger.warning("No LLM client available for generating suggestions")
                     return []
                 prompt = self._build_prompt(failure)
-                with performance_tracker.track("llm_api_request"):
-                    llm_response = self._llm_adapter.request(prompt)
+                # Use LRU cache for LLM requests
+                with self._llm_cache_lock:
+                    llm_response = self._llm_request_cached(prompt)
                 with performance_tracker.track("parse_llm_response"):
                     suggestions = self._parse_llm_response(llm_response, failure)
                 return [s for s in suggestions if s.confidence >= self.min_confidence]
         except Exception as e:
             logger.error(f"Error generating LLM suggestions: {e}")
             return []
+
+    def _llm_request_uncached(self, prompt: str) -> str:
+        """Uncached LLM request for caching wrapper."""
+        with performance_tracker.track("llm_api_request"):
+            return self._llm_adapter.request(prompt)
 
     @async_with_timeout(60)
     async def async_suggest_fixes(self, failure: PytestFailure) -> List[FixSuggestion]:
@@ -121,8 +147,9 @@ class LLMSuggester:
                     )
                     return []
                 prompt = self._build_prompt(failure)
-                async with performance_tracker.async_track("async_llm_api_request"):
-                    llm_response = await self._llm_adapter.async_request(prompt)
+                # Use LRU cache for async LLM requests (simulate sync cache for now)
+                with self._llm_cache_lock:
+                    llm_response = self._llm_request_cached(prompt)
                 with performance_tracker.track("parse_llm_response"):
                     suggestions = self._parse_llm_response(llm_response, failure)
                 return [s for s in suggestions if s.confidence >= self.min_confidence]
@@ -196,37 +223,44 @@ class LLMSuggester:
         :param failure: PytestFailure object
         :return: Formatted code context or None
         """
+        # Use LRU cache for code context extraction
+        return self._get_code_context_cached(
+            failure.test_file or "",
+            failure.line_number or -1,
+            failure.relevant_code or "",
+            failure.traceback or "",
+        )
+
+    def _get_code_context_uncached(
+        self, test_file: str, line_number: int, relevant_code: str, traceback: str
+    ) -> Optional[str]:
         # First try to use the relevant_code if available
-        if failure.relevant_code:
-            return failure.relevant_code
+        if relevant_code:
+            return relevant_code
 
         # If we have a file path and line number, try to read the file
-        if (
-            failure.test_file
-            and failure.line_number
-            and os.path.exists(failure.test_file)
-        ):
+        if test_file and line_number > 0 and os.path.exists(test_file):
             try:
-                with open(failure.test_file, "r") as f:
-                    lines = f.readlines()
-
-                # Calculate the range of lines to include
-                start_line = max(0, failure.line_number - 10)
-                end_line = min(len(lines), failure.line_number + 10)
-
-                # Extract the relevant lines
-                context_lines = lines[start_line:end_line]
-                context = "".join(context_lines)
-
-                return f"# Code context around line {failure.line_number}:\n{context}"
+                with open(test_file, "r") as f:
+                    # Use generator to avoid loading all lines into memory
+                    context_lines = []
+                    start_line = max(0, line_number - 10)
+                    end_line = line_number + 10
+                    for i, line in enumerate(f):
+                        if start_line <= i < end_line:
+                            context_lines.append(line)
+                        if i >= end_line:
+                            break
+                    context = "".join(context_lines)
+                return f"# Code context around line {line_number}:\n{context}"
             except Exception as e:
                 logger.debug(f"Error extracting code context: {e}")
 
         # If we couldn't get context from the file, try to extract from traceback
-        if failure.traceback:
+        if traceback:
             # Look for code snippets in the traceback (often included by pytest)
             code_pattern = r">\s+(.+)\nE\s+"
-            matches = re.findall(code_pattern, failure.traceback)
+            matches = re.findall(code_pattern, traceback)
             if matches:
                 return "\n".join(matches)
 
