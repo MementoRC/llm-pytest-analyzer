@@ -4,6 +4,18 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from pytest_analyzer.core.analysis.error_strategies import (
+    AssertionErrorStrategy,
+    AttributeErrorStrategy,
+    GenericErrorStrategy,
+    ImportErrorStrategy,
+    IndexErrorStrategy,
+    KeyErrorStrategy,
+    NameErrorStrategy,
+    SyntaxErrorStrategy,
+    TypeErrorStrategy,
+    ValueErrorStrategy,
+)
 from pytest_analyzer.core.analysis.failure_analyzer import FailureAnalyzer
 from pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
 
@@ -98,62 +110,27 @@ def test_get_base_error_type(failure_analyzer):
 
 
 def test_error_type_mapping(failure_analyzer):
-    """Test mapping of error types to analyzer methods."""
-    # Verify all the required methods are in the dictionary
-    assert "AssertionError" in failure_analyzer.error_analyzers
-    assert "AttributeError" in failure_analyzer.error_analyzers
-    assert "ImportError" in failure_analyzer.error_analyzers
-    assert "TypeError" in failure_analyzer.error_analyzers
-    assert "NameError" in failure_analyzer.error_analyzers
-    assert "IndexError" in failure_analyzer.error_analyzers
-    assert "KeyError" in failure_analyzer.error_analyzers
-    assert "ValueError" in failure_analyzer.error_analyzers
-    assert "SyntaxError" in failure_analyzer.error_analyzers
+    """Test mapping of error types to strategy classes."""
+    strategies = failure_analyzer.error_strategies
+    assert isinstance(strategies["AssertionError"], AssertionErrorStrategy)
+    assert isinstance(strategies["AttributeError"], AttributeErrorStrategy)
+    assert isinstance(strategies["ImportError"], ImportErrorStrategy)
+    assert isinstance(strategies["TypeError"], TypeErrorStrategy)
+    assert isinstance(strategies["NameError"], NameErrorStrategy)
+    assert isinstance(strategies["IndexError"], IndexErrorStrategy)
+    assert isinstance(strategies["KeyError"], KeyErrorStrategy)
+    assert isinstance(strategies["ValueError"], ValueErrorStrategy)
+    assert isinstance(strategies["SyntaxError"], SyntaxErrorStrategy)
 
-    # Verify that the method references are correct
-    assert (
-        failure_analyzer.error_analyzers["AssertionError"].__name__
-        == "_analyze_assertion_error"
-    )
-    assert (
-        failure_analyzer.error_analyzers["AttributeError"].__name__
-        == "_analyze_attribute_error"
-    )
-    assert (
-        failure_analyzer.error_analyzers["ImportError"].__name__
-        == "_analyze_import_error"
-    )
-    assert (
-        failure_analyzer.error_analyzers["TypeError"].__name__ == "_analyze_type_error"
-    )
-    assert (
-        failure_analyzer.error_analyzers["NameError"].__name__ == "_analyze_name_error"
-    )
-    assert (
-        failure_analyzer.error_analyzers["IndexError"].__name__
-        == "_analyze_index_error"
-    )
-    assert failure_analyzer.error_analyzers["KeyError"].__name__ == "_analyze_key_error"
-    assert (
-        failure_analyzer.error_analyzers["ValueError"].__name__
-        == "_analyze_value_error"
-    )
-    assert (
-        failure_analyzer.error_analyzers["SyntaxError"].__name__
-        == "_analyze_syntax_error"
-    )
-
-    # Test the fallback mechanism
-    assert (
-        failure_analyzer._get_base_error_type("UnknownError")
-        not in failure_analyzer.error_analyzers
-    )
+    # Test the fallback mechanism for unknown errors
+    assert "UnknownError" not in failure_analyzer.error_strategies
+    assert isinstance(failure_analyzer.generic_strategy, GenericErrorStrategy)
 
 
-def test_analyze_assertion_error(failure_analyzer, test_failure):
+def test_analyze_assertion_error(test_failure):
     """Test analyzing an assertion error."""
-    # Analyze the assertion error
-    suggestions = failure_analyzer._analyze_assertion_error(test_failure)
+    strategy = AssertionErrorStrategy()
+    suggestions = strategy.analyze(test_failure)
 
     # Verify the results
     assert isinstance(suggestions, list)
@@ -161,81 +138,105 @@ def test_analyze_assertion_error(failure_analyzer, test_failure):
     assert all(isinstance(suggestion, FixSuggestion) for suggestion in suggestions)
 
 
-def test_analyze_assert_statement(failure_analyzer, test_failure):
+def test_analyze_assert_statement(test_failure):
     """Test analyzing an assert statement."""
+    strategy = AssertionErrorStrategy()
     # Set up a traceback with an equality assertion
     test_failure.traceback = "E       assert first_value == second_value"
 
     # Analyze the assert statement
-    suggestion, confidence = failure_analyzer._analyze_assert_statement(test_failure)
+    suggestions = strategy.analyze(test_failure)
 
     # Verify the results
-    assert isinstance(suggestion, str)
-    assert len(suggestion) > 0
-    assert isinstance(confidence, float)
-    assert 0.0 <= confidence <= 1.0
+    assert len(suggestions) == 1
+    suggestion = suggestions[0]
+    assert isinstance(suggestion, FixSuggestion)
+    assert (
+        "Change the test to expect first_value instead of second_value, or fix the code to return second_value."
+        == suggestion.suggestion
+    )
+    assert suggestion.confidence == 0.8
 
 
-def test_analyze_assert_statement_with_expected_actual(failure_analyzer, test_failure):
+def test_analyze_assert_statement_with_expected_actual(test_failure):
     """Test analyzing an assert statement with expected vs. actual values."""
+    strategy = AssertionErrorStrategy()
     # Set up a traceback with expected vs. actual values
-    test_failure.traceback = "E       assert actual_value == expected_value\nE         +  where actual_value = func()"
+    test_failure.traceback = (
+        "E       assert actual_value == expected_value\n"
+        "E         +  where actual_value = func()"
+    )
 
     # Analyze the assert statement
-    suggestion, confidence = failure_analyzer._analyze_assert_statement(test_failure)
+    suggestions = strategy.analyze(test_failure)
 
     # Verify the results
-    assert isinstance(suggestion, str)
-    assert len(suggestion) > 0
-    assert isinstance(confidence, float)
-    assert 0.0 <= confidence <= 1.0
+    assert len(suggestions) == 1
+    suggestion = suggestions[0]
+    assert isinstance(suggestion, FixSuggestion)
+    assert (
+        "Change the test to expect actual_value instead of expected_value"
+        in suggestion.suggestion
+    )
+    assert suggestion.confidence == 0.8
 
 
-def test_analyze_assert_statement_in_operator(failure_analyzer, test_failure):
+def test_analyze_assert_statement_in_operator(test_failure):
     """Test analyzing an assert statement with the 'in' operator."""
+    strategy = AssertionErrorStrategy()
     # Set up a traceback with an 'in' assertion
     test_failure.traceback = "E       assert item in container"
 
     # Analyze the assert statement
-    suggestion, confidence = failure_analyzer._analyze_assert_statement(test_failure)
+    suggestions = strategy.analyze(test_failure)
 
     # Verify the results
-    assert isinstance(suggestion, str)
-    assert len(suggestion) > 0
-    assert isinstance(confidence, float)
-    assert 0.0 <= confidence <= 1.0
+    assert len(suggestions) == 1
+    suggestion = suggestions[0]
+    assert isinstance(suggestion, FixSuggestion)
+    assert "Ensure that item is present in container." in suggestion.suggestion
+    assert suggestion.confidence == 0.7
 
 
-def test_analyze_assert_statement_is_true(failure_analyzer, test_failure):
+def test_analyze_assert_statement_is_true(test_failure):
     """Test analyzing an assert statement checking for True."""
+    strategy = AssertionErrorStrategy()
     # Set up a traceback with a True assertion
     test_failure.traceback = "E       assert condition is True"
 
     # Analyze the assert statement
-    suggestion, confidence = failure_analyzer._analyze_assert_statement(test_failure)
+    suggestions = strategy.analyze(test_failure)
 
     # Verify the results
-    assert isinstance(suggestion, str)
-    assert len(suggestion) > 0
-    assert isinstance(confidence, float)
-    assert 0.0 <= confidence <= 1.0
+    assert len(suggestions) == 1
+    suggestion = suggestions[0]
+    assert isinstance(suggestion, FixSuggestion)
+    assert "Ensure that condition is True evaluates to True." == suggestion.suggestion
+    assert suggestion.confidence == 0.6
 
 
-def test_analyze_assert_statement_no_match(failure_analyzer, test_failure):
+def test_analyze_assert_statement_no_match(test_failure):
     """Test analyzing an assert statement with no recognizable pattern."""
+    strategy = AssertionErrorStrategy()
     # Set up a traceback with no recognizable pattern
     test_failure.traceback = "E       some random text"
 
     # Analyze the assert statement
-    suggestion, confidence = failure_analyzer._analyze_assert_statement(test_failure)
+    suggestions = strategy.analyze(test_failure)
 
     # Verify the results
-    assert suggestion == ""
-    assert confidence == 0.0
+    assert len(suggestions) == 1
+    suggestion = suggestions[0]
+    assert (
+        "Review the expected vs. actual values in the assertion."
+        in suggestion.suggestion
+    )
+    assert suggestion.confidence == 0.5
 
 
-def test_analyze_attribute_error(failure_analyzer):
+def test_analyze_attribute_error():
     """Test analyzing an attribute error."""
+    strategy = AttributeErrorStrategy()
     # Create a test failure with an attribute error
     failure = PytestFailure(
         test_name="test_file.py::test_function",
@@ -247,7 +248,7 @@ def test_analyze_attribute_error(failure_analyzer):
     )
 
     # Analyze the attribute error
-    suggestions = failure_analyzer._analyze_attribute_error(failure)
+    suggestions = strategy.analyze(failure)
 
     # Verify the results
     assert isinstance(suggestions, list)
@@ -256,13 +257,14 @@ def test_analyze_attribute_error(failure_analyzer):
 
     # Test with a different attribute error message format
     failure.error_message = "Something went wrong with an attribute"
-    suggestions = failure_analyzer._analyze_attribute_error(failure)
+    suggestions = strategy.analyze(failure)
     assert isinstance(suggestions, list)
     assert len(suggestions) > 0
 
 
-def test_analyze_import_error(failure_analyzer):
+def test_analyze_import_error():
     """Test analyzing an import error."""
+    strategy = ImportErrorStrategy()
     # Create a test failure with an import error
     failure = PytestFailure(
         test_name="test_file.py::test_function",
@@ -274,7 +276,7 @@ def test_analyze_import_error(failure_analyzer):
     )
 
     # Analyze the import error
-    suggestions = failure_analyzer._analyze_import_error(failure)
+    suggestions = strategy.analyze(failure)
 
     # Verify the results
     assert isinstance(suggestions, list)
@@ -283,19 +285,20 @@ def test_analyze_import_error(failure_analyzer):
 
     # Test with a package import
     failure.error_message = "No module named 'package.submodule'"
-    suggestions = failure_analyzer._analyze_import_error(failure)
+    suggestions = strategy.analyze(failure)
     assert isinstance(suggestions, list)
     assert len(suggestions) > 0
 
     # Test with a different import error message format
     failure.error_message = "Something went wrong with an import"
-    suggestions = failure_analyzer._analyze_import_error(failure)
+    suggestions = strategy.analyze(failure)
     assert isinstance(suggestions, list)
     assert len(suggestions) > 0
 
 
-def test_analyze_type_error(failure_analyzer):
+def test_analyze_type_error():
     """Test analyzing a type error."""
+    strategy = TypeErrorStrategy()
     # Create a test failure with a type error (incorrect argument count)
     failure = PytestFailure(
         test_name="test_file.py::test_function",
@@ -307,7 +310,7 @@ def test_analyze_type_error(failure_analyzer):
     )
 
     # Analyze the type error
-    suggestions = failure_analyzer._analyze_type_error(failure)
+    suggestions = strategy.analyze(failure)
 
     # Verify the results
     assert isinstance(suggestions, list)
@@ -316,25 +319,26 @@ def test_analyze_type_error(failure_analyzer):
 
     # Test with unexpected keyword argument
     failure.error_message = "got an unexpected keyword argument 'invalid_param'"
-    suggestions = failure_analyzer._analyze_type_error(failure)
+    suggestions = strategy.analyze(failure)
     assert isinstance(suggestions, list)
     assert len(suggestions) > 0
 
     # Test with sequence multiplication error
     failure.error_message = "can't multiply sequence by non-int of type 'float'"
-    suggestions = failure_analyzer._analyze_type_error(failure)
+    suggestions = strategy.analyze(failure)
     assert isinstance(suggestions, list)
     assert len(suggestions) > 0
 
     # Test with a different type error message format
     failure.error_message = "Something went wrong with a type"
-    suggestions = failure_analyzer._analyze_type_error(failure)
+    suggestions = strategy.analyze(failure)
     assert isinstance(suggestions, list)
     assert len(suggestions) > 0
 
 
-def test_analyze_name_error(failure_analyzer):
+def test_analyze_name_error():
     """Test analyzing a name error."""
+    strategy = NameErrorStrategy()
     # Create a test failure with a name error
     failure = PytestFailure(
         test_name="test_file.py::test_function",
@@ -346,7 +350,7 @@ def test_analyze_name_error(failure_analyzer):
     )
 
     # Analyze the name error
-    suggestions = failure_analyzer._analyze_name_error(failure)
+    suggestions = strategy.analyze(failure)
 
     # Verify the results
     assert isinstance(suggestions, list)
@@ -355,13 +359,14 @@ def test_analyze_name_error(failure_analyzer):
 
     # Test with a different name error message format
     failure.error_message = "Something went wrong with a name"
-    suggestions = failure_analyzer._analyze_name_error(failure)
+    suggestions = strategy.analyze(failure)
     assert isinstance(suggestions, list)
     assert len(suggestions) > 0
 
 
-def test_analyze_index_error(failure_analyzer):
+def test_analyze_index_error():
     """Test analyzing an index error."""
+    strategy = IndexErrorStrategy()
     # Create a test failure with an index error
     failure = PytestFailure(
         test_name="test_file.py::test_function",
@@ -373,7 +378,7 @@ def test_analyze_index_error(failure_analyzer):
     )
 
     # Analyze the index error
-    suggestions = failure_analyzer._analyze_index_error(failure)
+    suggestions = strategy.analyze(failure)
 
     # Verify the results
     assert isinstance(suggestions, list)
@@ -382,13 +387,14 @@ def test_analyze_index_error(failure_analyzer):
 
     # Test with a different index error message format
     failure.error_message = "Something went wrong with an index"
-    suggestions = failure_analyzer._analyze_index_error(failure)
+    suggestions = strategy.analyze(failure)
     assert isinstance(suggestions, list)
     assert len(suggestions) > 0
 
 
-def test_analyze_key_error(failure_analyzer):
+def test_analyze_key_error():
     """Test analyzing a key error."""
+    strategy = KeyErrorStrategy()
     # Create a test failure with a key error
     failure = PytestFailure(
         test_name="test_file.py::test_function",
@@ -400,7 +406,7 @@ def test_analyze_key_error(failure_analyzer):
     )
 
     # Analyze the key error
-    suggestions = failure_analyzer._analyze_key_error(failure)
+    suggestions = strategy.analyze(failure)
 
     # Verify the results
     assert isinstance(suggestions, list)
@@ -409,19 +415,20 @@ def test_analyze_key_error(failure_analyzer):
 
     # Test with a different key error message format (without quotes)
     failure.error_message = "KeyError: missing_key"
-    suggestions = failure_analyzer._analyze_key_error(failure)
+    suggestions = strategy.analyze(failure)
     assert isinstance(suggestions, list)
     assert len(suggestions) > 0
 
     # Test with a different key error message format (not matched)
     failure.error_message = "Something went wrong with a key"
-    suggestions = failure_analyzer._analyze_key_error(failure)
+    suggestions = strategy.analyze(failure)
     assert isinstance(suggestions, list)
     assert len(suggestions) > 0
 
 
-def test_analyze_value_error(failure_analyzer):
+def test_analyze_value_error():
     """Test analyzing a value error."""
+    strategy = ValueErrorStrategy()
     # Create a test failure with a value error (invalid int conversion)
     failure = PytestFailure(
         test_name="test_file.py::test_function",
@@ -433,7 +440,7 @@ def test_analyze_value_error(failure_analyzer):
     )
 
     # Analyze the value error
-    suggestions = failure_analyzer._analyze_value_error(failure)
+    suggestions = strategy.analyze(failure)
 
     # Verify the results
     assert isinstance(suggestions, list)
@@ -442,13 +449,14 @@ def test_analyze_value_error(failure_analyzer):
 
     # Test with a different value error message format
     failure.error_message = "Something went wrong with a value"
-    suggestions = failure_analyzer._analyze_value_error(failure)
+    suggestions = strategy.analyze(failure)
     assert isinstance(suggestions, list)
     assert len(suggestions) > 0
 
 
-def test_analyze_syntax_error(failure_analyzer):
+def test_analyze_syntax_error():
     """Test analyzing a syntax error."""
+    strategy = SyntaxErrorStrategy()
     # Create a test failure with a syntax error
     failure = PytestFailure(
         test_name="test_file.py::test_function",
@@ -460,7 +468,7 @@ def test_analyze_syntax_error(failure_analyzer):
     )
 
     # Analyze the syntax error
-    suggestions = failure_analyzer._analyze_syntax_error(failure)
+    suggestions = strategy.analyze(failure)
 
     # Verify the results
     assert isinstance(suggestions, list)
@@ -471,37 +479,38 @@ def test_analyze_syntax_error(failure_analyzer):
 
     # Missing closing parenthesis
     failure.relevant_code = "def function(x, y:"
-    suggestions = failure_analyzer._analyze_syntax_error(failure)
+    suggestions = strategy.analyze(failure)
     assert isinstance(suggestions, list)
     assert len(suggestions) > 0
 
     # Missing closing bracket
     failure.relevant_code = "items = [1, 2, 3"
-    suggestions = failure_analyzer._analyze_syntax_error(failure)
+    suggestions = strategy.analyze(failure)
     assert isinstance(suggestions, list)
     assert len(suggestions) > 0
 
     # Missing closing brace
     failure.relevant_code = "data = {'key': 'value'"
-    suggestions = failure_analyzer._analyze_syntax_error(failure)
+    suggestions = strategy.analyze(failure)
     assert isinstance(suggestions, list)
     assert len(suggestions) > 0
 
     # Missing colon in if statement
     failure.relevant_code = "if condition"
-    suggestions = failure_analyzer._analyze_syntax_error(failure)
+    suggestions = strategy.analyze(failure)
     assert isinstance(suggestions, list)
     assert len(suggestions) > 0
 
     # No relevant code
     failure.relevant_code = None
-    suggestions = failure_analyzer._analyze_syntax_error(failure)
+    suggestions = strategy.analyze(failure)
     assert isinstance(suggestions, list)
     assert len(suggestions) > 0
 
 
-def test_analyze_generic_error(failure_analyzer):
+def test_analyze_generic_error():
     """Test analyzing a generic error."""
+    strategy = GenericErrorStrategy()
     # Create a test failure with a generic error
     failure = PytestFailure(
         test_name="test_file.py::test_function",
@@ -513,7 +522,7 @@ def test_analyze_generic_error(failure_analyzer):
     )
 
     # Analyze the generic error
-    suggestions = failure_analyzer._analyze_generic_error(failure)
+    suggestions = strategy.analyze(failure)
 
     # Verify the results
     assert isinstance(suggestions, list)
@@ -522,7 +531,7 @@ def test_analyze_generic_error(failure_analyzer):
 
     # Test without a line number
     failure.line_number = None
-    suggestions = failure_analyzer._analyze_generic_error(failure)
+    suggestions = strategy.analyze(failure)
     assert isinstance(suggestions, list)
     assert len(suggestions) > 0
 
@@ -530,13 +539,13 @@ def test_analyze_generic_error(failure_analyzer):
     failure.relevant_code = (
         "def function():\n    raise CustomError('Something went wrong')"
     )
-    suggestions = failure_analyzer._analyze_generic_error(failure)
+    suggestions = strategy.analyze(failure)
     assert isinstance(suggestions, list)
     assert len(suggestions) > 0
 
     # Test without relevant code
     failure.relevant_code = None
-    suggestions = failure_analyzer._analyze_generic_error(failure)
+    suggestions = strategy.analyze(failure)
     assert isinstance(suggestions, list)
     assert len(suggestions) > 0
 
