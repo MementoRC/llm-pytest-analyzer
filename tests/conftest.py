@@ -336,14 +336,19 @@ def mock_llm_client():
 @pytest.fixture
 def mock_llm_suggester():
     """Provides a patched LLMSuggester that uses a mock client."""
+    from unittest.mock import MagicMock
+
+    from pytest_analyzer.core.analysis.llm_adapters import GenericAdapter
+
     with patch(
-        "pytest_analyzer.core.analysis.llm_suggester.LLMSuggester._get_llm_request_function"
+        "pytest_analyzer.core.analysis.llm_suggester.LLMSuggester._get_llm_adapter"
     ) as mock_func:
-        mock_func.return_value = (
-            lambda prompt: "LLM Suggestion: This is a mock LLM response for: "
-            + prompt[:20]
-            + "..."
+        # Create a mock adapter that mimics the GenericAdapter behavior
+        mock_adapter = MagicMock(spec=GenericAdapter)
+        mock_adapter.request = MagicMock(
+            return_value="LLM Suggestion: This is a mock LLM response"
         )
+        mock_func.return_value = mock_adapter
         yield
 
 
