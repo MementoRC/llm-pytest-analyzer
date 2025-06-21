@@ -31,6 +31,7 @@ classifiers = [
 dependencies = [
     "anthropic",
     "hvac>=1.1.0",
+    "injector==0.20.1",
     "mcp>=1.9.2",
     "openai",
     "pydantic>=2.0.0",
