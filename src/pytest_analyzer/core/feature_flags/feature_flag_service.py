@@ -125,12 +125,17 @@ class FlagsmithFeatureFlagService(FeatureFlagServiceProtocol):
             else:
                 flags = self._flagsmith_client.get_environment_flags()
 
+            # The Flagsmith SDK returns an iterable Flags object, but to satisfy
+            # static analysis (pylint E1133), we explicitly handle cases where
+            # the returned object might not be iterable by using a fallback.
+            iterable_flags = flags if hasattr(flags, "__iter__") else []
+
             return {
                 flag.feature.name: {
                     "enabled": flag.enabled,
                     "value": flag.feature_state_value,
                 }
-                for flag in flags
+                for flag in iterable_flags
             }
         except Exception as e:
             logger.warning(f"Error getting all feature flags: {e}")
