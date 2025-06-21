@@ -128,9 +128,11 @@ platforms = ["linux-64"]
 "pyyaml" = "*"
 "rich" = ">=12.0.0"
 python-dotenv = ">=1.1.0,<2"
+psutil = ">=5.9.0"
 
 [tool.pixi.pypi-dependencies]
 pytest-analyzer = { path = ".", editable = true }
+prometheus-client = ">=0.16.0"
 
 [tool.pixi.environments]
 default = { solve-group = "default" }
