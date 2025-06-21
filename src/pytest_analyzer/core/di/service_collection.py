@@ -43,6 +43,8 @@ from ..analyzer_service_di import DIPytestAnalyzerService
 from ..environment.detector import EnvironmentManagerDetector
 from ..environment.protocol import EnvironmentManager
 from ..factories.analyzer_factory import create_llm_suggester
+from ..feature_flags.feature_flag_service import FlagsmithFeatureFlagService
+from ..feature_flags.protocols import FeatureFlagServiceProtocol
 from ..interfaces.protocols import Applier, Orchestrator
 from ..llm.llm_service_protocol import LLMServiceProtocol
 from ..orchestration.analyzer_orchestrator import AnalyzerOrchestrator
@@ -246,6 +248,12 @@ def configure_services(
         PathResolver, lambda: PathResolver(settings_instance.project_root)
     )
 
+    # Register Feature Flag Service
+    container.register_factory(
+        FeatureFlagServiceProtocol,
+        lambda: FlagsmithFeatureFlagService(settings=settings_instance.feature_flags),
+    )
+
     # Register EnvironmentManagerDetector and EnvironmentManager
     container.register_factory(
         EnvironmentManagerDetector,
@@ -408,42 +416,64 @@ def _create_llm_service_with_provider(
 
 def _create_llm_service(container: Container) -> LLMServiceProtocol:
     """
-    Create an LLM service using container resolution (for backward compatibility).
+    Create an LLM service using container resolution.
+
+    This function demonstrates feature flag usage for:
+    - A/B testing LLM providers.
+    - Remotely configuring the preferred provider.
 
     Args:
-        container: The DI container
+        container: The DI container.
 
     Returns:
-        LLM service instance
+        An LLM service instance.
     """
     from ..llm.backward_compat import LLMService
 
     try:
         settings = container.resolve(Settings)
+        feature_flag_service = container.resolve(FeatureFlagServiceProtocol)
     except Exception:
-        # If settings not available, create default settings
         settings = Settings()
+        # This is a fallback if the container is not fully configured, e.g. in tests
+        feature_flag_service = FlagsmithFeatureFlagService(settings.feature_flags)
 
-    # Always try LLM detection for default case (not fallback)
-    if not settings.use_llm:
+    # A feature flag can globally enable/disable this feature, overriding local settings
+    if not settings.use_llm or not feature_flag_service.is_feature_enabled(
+        "use_llm_analysis"
+    ):
+        logger.info("LLM analysis is disabled by settings or feature flag.")
         return LLMService(
             llm_client=None,
             timeout_seconds=settings.llm_timeout,
             disable_auto_detection=True,
         )
 
+    # Feature flag for provider selection (A/B test or remote config)
+    # The value of this flag could be "openai", "anthropic", etc.
+    llm_provider_ff_value = feature_flag_service.get_feature_value(
+        "llm_provider_strategy"
+    )
+    preferred_provider = (
+        llm_provider_ff_value
+        if isinstance(llm_provider_ff_value, str)
+        else settings.llm_provider
+    )
+    if llm_provider_ff_value:
+        logger.info(f"Using LLM provider from feature flag: '{preferred_provider}'")
+
     try:
         from ..llm.llm_service_factory import detect_llm_client
 
         llm_client, provider = detect_llm_client(
             settings=settings,
-            preferred_provider=settings.llm_provider,
+            preferred_provider=preferred_provider,
             fallback=settings.use_fallback,
         )
 
         if llm_client:
             logger.info(
-                f"Created LLM service with detected client: {type(llm_client).__name__}"
+                f"Created LLM service with detected client: {type(llm_client).__name__} (provider: {provider})"
             )
         else:
             logger.warning("No LLM client detected, creating service with no client.")

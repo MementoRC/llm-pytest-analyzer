@@ -225,6 +225,29 @@ class VaultSettings(BaseModel):
         return self
 
 
+# --- Feature Flag Settings Model ---
+class FeatureFlagSettings(BaseModel):
+    """Configuration for the feature flag system (Flagsmith)."""
+
+    enabled: bool = Field(default=False, description="Enable or disable feature flags.")
+    environment_key: Optional[str] = Field(
+        default=None, description="Flagsmith environment key."
+    )
+    api_url: str = Field(
+        default="https://edge.api.flagsmith.com/api/v1/",
+        description="Flagsmith API URL.",
+    )
+    enable_local_evaluation: bool = Field(
+        default=True, description="Enable local evaluation of feature flags."
+    )
+    environment_refresh_interval_seconds: int = Field(
+        default=60, description="How often to refresh the environment from the API."
+    )
+    enable_analytics: bool = Field(
+        default=False, description="Enable sending analytics data to Flagsmith."
+    )
+
+
 # --- Main Settings Model ---
 class Settings(BaseModel):
     """Configuration settings for the pytest analyzer."""
@@ -291,6 +314,11 @@ class Settings(BaseModel):
 
     # Vault integration settings
     vault: VaultSettings = Field(default_factory=VaultSettings)
+
+    # Feature Flag settings
+    feature_flags: "FeatureFlagSettings" = Field(
+        default_factory=lambda: FeatureFlagSettings()
+    )
 
     # MCP Server settings
     mcp: MCPSettings = Field(default_factory=MCPSettings)  # MCP server configuration
