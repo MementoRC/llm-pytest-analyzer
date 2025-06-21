@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 
-from pytest_analyzer.core.analyzer_service import PytestAnalyzerService
+from pytest_analyzer.core.backward_compat import PytestAnalyzerService
 from pytest_analyzer.core.llm.llm_service import LLMService
 from pytest_analyzer.utils.settings import Settings
 
@@ -45,16 +45,7 @@ def test_debug_integration():
 
     # Debug: Check what's being replaced
     print(f"service.llm_service: {service.llm_service}")
-    print(f"service.llm_suggester: {service.llm_suggester}")
-    print(f"service.llm_suggester.llm_client: {service.llm_suggester.llm_client}")
-
-    # We need to also update the suggester's reference
-    service.llm_suggester.llm_client = mock_llm_service
-
-    # Now check again
-    print(
-        f"After update - service.llm_suggester.llm_client: {service.llm_suggester.llm_client}"
-    )
+    print("Service created successfully with LLM enabled")
 
     # Create a sample failure
     sample_json_path = (
@@ -70,13 +61,11 @@ def test_debug_integration():
 
     if suggestions:
         llm_suggestions = [
-            s
-            for s in suggestions
-            if s.code_changes and s.code_changes.get("source") == "llm"
+            s for s in suggestions if s.metadata and s.metadata.get("source") == "llm"
         ]
         print(f"LLM suggestions count: {len(llm_suggestions)}")
         if llm_suggestions:
-            print(f"First LLM suggestion: {llm_suggestions[0].suggestion}")
+            print(f"First LLM suggestion: {llm_suggestions[0].suggestion_text}")
 
 
 if __name__ == "__main__":

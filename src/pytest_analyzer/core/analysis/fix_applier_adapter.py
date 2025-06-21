@@ -15,12 +15,12 @@ The adapter follows the adapter pattern to:
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 from pytest_analyzer.core.analysis.fix_applier import FixApplicationResult, FixApplier
 from pytest_analyzer.core.errors import FixApplicationError
+from pytest_analyzer.core.interfaces.protocols import Applier
 from pytest_analyzer.core.models.pytest_failure import FixSuggestion
-from pytest_analyzer.core.protocols import Applier
 
 logger = logging.getLogger(__name__)
 
@@ -60,14 +60,14 @@ class FixApplierAdapter(Applier):
         )
 
     def apply(
-        self, changes: Dict[str, str], validation_tests: Optional[List[str]] = None
-    ) -> Dict[str, Any]:
+        self, code_changes: Dict[str, str], tests_to_validate: List[str]
+    ) -> FixApplicationResult:
         """
         Apply code changes to fix test failures.
 
         Args:
-            changes: Dictionary mapping file paths to new content
-            validation_tests: Optional list of tests to run for validation
+            code_changes: Dictionary mapping file paths to new content
+            tests_to_validate: List of tests to run for validation
 
         Returns:
             Results of the application including success status
@@ -76,34 +76,26 @@ class FixApplierAdapter(Applier):
             FixApplicationError: If application fails
         """
         try:
-            # Clean validation_tests
+            # Clean tests_to_validate
             cleaned_tests = []
-            if validation_tests:
-                cleaned_tests = [test for test in validation_tests if test]
+            if tests_to_validate:
+                cleaned_tests = [test for test in tests_to_validate if test]
 
             # Call the internal FixApplier
             result: FixApplicationResult = self._fix_applier.apply_fix(
-                code_changes=changes,
+                code_changes=code_changes,
                 tests_to_validate=cleaned_tests,
             )
 
-            # Convert result to protocol-expected dictionary
-            applied_files = [str(path) for path in result.applied_files]
-            rolled_back_files = [str(path) for path in result.rolled_back_files]
-
-            return {
-                "success": result.success,
-                "message": result.message,
-                "applied_files": applied_files,
-                "rolled_back_files": rolled_back_files,
-            }
+            # Return the FixApplicationResult directly (as expected by the protocol)
+            return result
 
         except Exception as e:
             error_message = f"Error applying fixes: {str(e)}"
             logger.error(error_message)
             raise FixApplicationError(error_message) from e
 
-    def apply_fix_suggestion(self, suggestion: FixSuggestion) -> Dict[str, Any]:
+    def apply_suggestion(self, suggestion: FixSuggestion) -> FixApplicationResult:
         """
         Apply a specific fix suggestion.
 
@@ -117,53 +109,32 @@ class FixApplierAdapter(Applier):
             FixApplicationError: If application fails
         """
         try:
-            # Check if suggestion has code changes
-            if not suggestion.code_changes:
-                return {
-                    "success": False,
-                    "message": "Cannot apply fix: No code changes provided in suggestion.",
-                    "applied_files": [],
-                    "rolled_back_files": [],
-                }
-
-            # Filter code_changes to include only file paths (not metadata)
-            code_changes_to_apply = {}
-            for key, value in suggestion.code_changes.items():
-                # Skip metadata keys like 'source' and 'fingerprint'
-                if not isinstance(key, str) or ("/" not in key and "\\" not in key):
-                    continue
-                # Skip empty values
-                if not value:
-                    continue
-                # Include valid file paths with content
-                code_changes_to_apply[key] = value
-
-            if not code_changes_to_apply:
-                return {
-                    "success": False,
-                    "message": "Cannot apply fix: No valid file changes found in suggestion.",
-                    "applied_files": [],
-                    "rolled_back_files": [],
-                }
-
-            # Determine which tests to run for validation
-            tests_to_validate = []
-            if hasattr(suggestion, "validation_tests") and suggestion.validation_tests:
-                tests_to_validate = suggestion.validation_tests
-            elif (
-                hasattr(suggestion.failure, "test_name")
-                and suggestion.failure.test_name
-            ):
-                # Use the original failing test for validation
-                tests_to_validate = [suggestion.failure.test_name]
-
-            # Apply the fix
-            return self.apply(code_changes_to_apply, tests_to_validate)
+            # Delegate directly to the underlying FixApplier's apply_fix_suggestion method
+            return self._fix_applier.apply_fix_suggestion(suggestion)
 
         except Exception as e:
             error_message = f"Error applying fix suggestion: {str(e)}"
             logger.error(error_message)
             raise FixApplicationError(error_message) from e
+
+    def apply_fix_suggestion(self, suggestion: FixSuggestion) -> FixApplicationResult:
+        """
+        Apply a specific fix suggestion (alias for apply_suggestion).
+
+        This method provides compatibility with the core.protocols.Applier interface
+        which expects apply_fix_suggestion instead of apply_suggestion.
+
+        Args:
+            suggestion: The fix suggestion to apply
+
+        Returns:
+            Results of the application including success status
+
+        Raises:
+            FixApplicationError: If application fails
+        """
+        # Delegate to apply_suggestion to avoid code duplication
+        return self.apply_suggestion(suggestion)
 
     def show_diff(self, file_path: Union[str, Path], new_content: str) -> str:
         """

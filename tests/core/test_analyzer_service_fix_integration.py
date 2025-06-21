@@ -23,10 +23,22 @@ class TestAnalyzerServiceFixIntegration:
 
     @pytest.fixture
     def analyzer_service(self, tmp_path):
-        """Create a PytestAnalyzerService with a mocked project root."""
+        """Create a PytestAnalyzerService with all dependencies via DI container."""
+        # Import DI components
+        from pytest_analyzer.core.di.service_collection import ServiceCollection
+
+        # Create settings and set project_root
         settings = Settings()
         settings.project_root = tmp_path
-        return PytestAnalyzerService(settings=settings)
+
+        # Build DI container with all services
+        services = ServiceCollection()
+        services.add_singleton(Settings, settings)
+        services.configure_core_services()
+        container = services.build_container()
+
+        # Resolve PytestAnalyzerService from the container
+        return container.resolve(PytestAnalyzerService)
 
     @pytest.fixture
     def failure(self):
@@ -79,8 +91,10 @@ class TestAnalyzerServiceFixIntegration:
 
             # Check that FixApplier was called correctly
             mock_apply_fix.assert_called_once()
-            code_changes_arg = mock_apply_fix.call_args[0][0]
-            tests_arg = mock_apply_fix.call_args[0][1]
+            # Extract keyword arguments since apply_fix is called with keyword args
+            call_kwargs = mock_apply_fix.call_args.kwargs
+            code_changes_arg = call_kwargs["code_changes"]
+            tests_arg = call_kwargs["tests_to_validate"]
 
             # Check arguments passed to FixApplier
             assert str(source_file) in code_changes_arg, (
@@ -139,12 +153,29 @@ class TestAnalyzerServiceFixIntegration:
             code_changes={"/path/to/file.py": "code"},
         )
 
-        # Apply suggestion
-        result = analyzer_service.apply_suggestion(suggestion)
+        # Patch FixApplier.apply_fix to check arguments
+        with patch.object(FixApplier, "apply_fix") as mock_apply_fix:
+            mock_apply_fix.return_value = FixApplicationResult(
+                success=False,
+                message="Missing original failure information",
+                applied_files=[],
+                rolled_back_files=[],
+            )
 
-        # Check result
-        assert not result.success, "Should fail when suggestion has no failure info"
-        assert "Missing original failure information" in result.message
+            # Apply suggestion
+            result = analyzer_service.apply_suggestion(suggestion)
+
+            # Check that FixApplier was called correctly
+            call_kwargs = mock_apply_fix.call_args.kwargs
+            code_changes_arg = call_kwargs["code_changes"]
+            tests_arg = call_kwargs["tests_to_validate"]
+
+            assert "/path/to/file.py" in code_changes_arg
+            assert tests_arg == []
+
+            # Check result
+            assert not result.success, "Should fail when suggestion has no failure info"
+            assert "Missing original failure information" in result.message
 
     def test_apply_suggestion_no_code_changes(self, analyzer_service, failure):
         """Test handling of suggestion without code changes."""
@@ -207,7 +238,8 @@ class TestAnalyzerServiceFixIntegration:
             analyzer_service.apply_suggestion(fix_suggestion)
 
             # Check that custom tests were used
-            tests_arg = mock_apply_fix.call_args[0][1]
+            call_kwargs = mock_apply_fix.call_args.kwargs
+            tests_arg = call_kwargs["tests_to_validate"]
             assert tests_arg == [
                 "custom_test1",
                 "custom_test2",

@@ -29,19 +29,21 @@ class TestMCPLogger:
         assert isinstance(logger.metrics, dict)
 
     def test_sanitize_message(self, mcp_logger):
-        """Test message sanitization."""
+        """Test message sanitization with enhanced masking."""
         sensitive_data = {
             "username": "test",
             "password": "secret123",
             "token": "abc123",
-            "data": {"key": "sensitive"},
+            "data": {"safe_field": "safe_value"},
         }
 
         sanitized = json.loads(mcp_logger.sanitize_message(sensitive_data))
 
-        assert sanitized["password"] == "***"
-        assert sanitized["token"] == "***"
-        assert sanitized["data"]["key"] == "***"
+        # Enhanced masking uses "***MASKED***" instead of "***"
+        assert sanitized["password"] == "***MASKED***"
+        assert sanitized["token"] == "***MASKED***"
+        # "safe_field" doesn't match sensitive patterns, so should be preserved
+        assert sanitized["data"]["safe_field"] == "safe_value"
         assert sanitized["username"] == "test"
 
     def test_log_protocol_message(self, mcp_logger, captured_logs):
@@ -140,9 +142,19 @@ class TestMCPLogger:
         with pytest.raises(ValueError):
             await failing_tool()
 
-        assert len(captured_logs.records) == 1
-        assert "failing_tool" in captured_logs.records[0].message
-        assert "Test error" in captured_logs.records[0].message
+        # Enhanced decorator logs both performance and MCP tool execution
+        assert len(captured_logs.records) >= 1
+
+        # Find the MCP tool execution log record
+        mcp_log_record = None
+        for record in captured_logs.records:
+            if "Tool execution:" in record.message and "failing_tool" in record.message:
+                mcp_log_record = record
+                break
+
+        assert mcp_log_record is not None
+        assert "failing_tool" in mcp_log_record.message
+        assert "Test error" in mcp_log_record.message
 
         metrics = mcp_logger.get_metrics()
         assert "failing_tool" in metrics

@@ -11,7 +11,7 @@ from pytest_analyzer.core.cross_cutting.error_handling import (
 from pytest_analyzer.core.cross_cutting.error_handling import (
     module_logger as error_handling_module_logger,  # For testing default logger
 )
-from pytest_analyzer.core.interfaces.errors import BaseError
+from pytest_analyzer.core.errors import BaseError
 
 # --- Test Fixtures and Helper Classes ---
 
@@ -40,7 +40,10 @@ def test_base_error_instantiation_and_attributes():
     err = BaseError("Test message", original_exception=original_exc)
     assert err.message == "Test message"
     assert err.original_exception == original_exc
-    assert str(err) == "Test message: Original issue"
+    assert (
+        str(err)
+        == f"Test message --> Caused by: {type(original_exc).__name__}: {original_exc}"
+    )
 
 
 def test_base_error_without_original_exception():
@@ -71,11 +74,12 @@ def test_error_context_catches_and_reraises_base_error_subclass(caplog):
         with error_context(op_name, test_logger, MyCustomError):
             raise original_exc
 
-    assert str(exc_info.value) == f"{op_name} failed: {original_exc}"
+    assert exc_info.value.message == f"{op_name} failed"
     assert exc_info.value.__cause__ is original_exc
     assert isinstance(exc_info.value, MyCustomError)
     # For BaseError subclasses, original_exception should now be set
     assert exc_info.value.original_exception is original_exc
+    assert exc_info.value.context == {"operation": op_name}
     assert f"Error during operation '{op_name}': {original_exc}" in caplog.text
 
 
@@ -142,7 +146,7 @@ def test_error_handler_success(caplog):
     assert my_sync_func(1, 2) == 3
     assert f"Calling function 'my_sync_func' for operation: {op_name}" in caplog.text
     assert (
-        f"Function 'my_sync_func' for operation '{op_name}' completed successfully."
+        f"Function 'my_sync_func' for '{op_name}' completed successfully."
         in caplog.text
     )
 
@@ -159,15 +163,13 @@ def test_error_handler_catches_and_reraises_wrapped(caplog):
     with pytest.raises(MyCustomError) as exc_info:
         my_sync_func_raises()
 
-    expected_message = (
-        f"Operation '{op_name}' (function: my_sync_func_raises) failed: {original_exc}"
-    )
-    assert str(exc_info.value) == expected_message
+    assert exc_info.value.message == f"Operation '{op_name}' failed"
     assert exc_info.value.__cause__ is original_exc
     assert isinstance(exc_info.value, MyCustomError)
     assert exc_info.value.original_exception is original_exc  # For BaseError subclass
+    assert exc_info.value.context == {"function": "my_sync_func_raises"}
     assert (
-        f"Error in function 'my_sync_func_raises' during operation '{op_name}': {original_exc}"
+        f"Error in 'my_sync_func_raises' during '{op_name}': {original_exc}"
         in caplog.text
     )
 
@@ -187,7 +189,7 @@ def test_error_handler_does_not_double_wrap(caplog):
     assert exc_info.value is original_custom_exc
     assert str(exc_info.value) == "Original custom message for sync"
     assert (
-        f"Error in function 'my_sync_func_raises_custom' during operation '{op_name}': {original_custom_exc}"
+        f"Error in 'my_sync_func_raises_custom' during '{op_name}': {original_custom_exc}"
         in caplog.text
     )
 
@@ -206,7 +208,7 @@ def test_error_handler_suppresses_error_and_returns_none_if_reraise_false(caplog
     result = my_sync_func_error_suppressed(fail=True)
     assert result is None
     assert (
-        f"Error in function 'my_sync_func_error_suppressed' during operation '{op_name}': {original_exc}"
+        f"Error in 'my_sync_func_error_suppressed' during '{op_name}': {original_exc}"
         in caplog.text
     )
 
@@ -214,7 +216,7 @@ def test_error_handler_suppresses_error_and_returns_none_if_reraise_false(caplog
     result_success = my_sync_func_error_suppressed(fail=False)
     assert result_success == "success"
     assert (
-        f"Function 'my_sync_func_error_suppressed' for operation '{op_name}' completed successfully."
+        f"Function 'my_sync_func_error_suppressed' for '{op_name}' completed successfully."
         in caplog.text
     )
 
@@ -255,41 +257,12 @@ def sample_op_failure(
     fail_on: Optional[Any] = None,
     error_to_raise: Exception = ValueError("Simulated failure"),
 ) -> str:
-    # Debugging prints to understand behavior in different environments
-    print(
-        f"[DEBUG] sample_op_failure: item={repr(item)} (type: {type(item)}), fail_on={repr(fail_on)}"
-    )
-
-    condition1_met = fail_on is not None and item == fail_on
-    if condition1_met:
-        print(
-            f"[DEBUG] sample_op_failure: item={repr(item)} matches fail_on={repr(fail_on)}. Raising error."
-        )
+    if fail_on is not None and item == fail_on:
         raise error_to_raise
 
-    is_str_and_starts_with_fail = False
-    if isinstance(item, str):
-        # Explicitly capture the result of startswith for debugging
-        item_starts_with_fail = item.startswith("fail")
-        print(
-            f"[DEBUG] sample_op_failure: item={repr(item)} is str. item.startswith('fail') -> {item_starts_with_fail}"
-        )
-        if item_starts_with_fail:
-            is_str_and_starts_with_fail = True
-    else:
-        print(
-            f"[DEBUG] sample_op_failure: item={repr(item)} is not str (type: {type(item)})."
-        )
-
-    if is_str_and_starts_with_fail:
-        print(
-            f"[DEBUG] sample_op_failure: item={repr(item)} is str and starts with 'fail'. Raising error."
-        )
+    if isinstance(item, str) and item.startswith("fail"):
         raise error_to_raise
 
-    print(
-        f"[DEBUG] sample_op_failure: item={repr(item)} did not meet failure conditions (cond1_met: {condition1_met}, is_str_and_starts_with_fail: {is_str_and_starts_with_fail}). Returning success."
-    )
     return f"Processed {item}"
 
 
@@ -315,31 +288,18 @@ def test_batch_operation_some_failures_continue_on_error_true(caplog):
     items = [1, "fail_item", 3, "fail_another"]
     op_name = "BatchSomeFail"
 
-    # Make failure conditions explicit for this test to improve robustness
-    # This avoids relying on the potentially environment-sensitive `startswith("fail")`
-    # in the generic sample_op_failure for these specific items.
     items_expected_to_fail = {"fail_item", "fail_another"}
 
     def op_func(item: Any) -> str:
-        print(
-            f"[DEBUG] test_batch_op (continue_on_error=True): op_func processing item={repr(item)} (type: {type(item)})"
-        )
         if item in items_expected_to_fail:
-            print(
-                f"[DEBUG] test_batch_op (continue_on_error=True): item={repr(item)} is in items_expected_to_fail. Raising error."
-            )
             raise ValueError(f"Explicit failure on {item}")
-        # For items not in items_expected_to_fail, process them successfully.
-        print(
-            f"[DEBUG] test_batch_op (continue_on_error=True): item={repr(item)} not in items_expected_to_fail. Processing as success."
-        )
         return f"Processed {item}"
 
     results, errors = batch_operation(
         items,
         op_func,
         op_name,
-        continue_on_error=True,  # Explicitly True
+        continue_on_error=True,
         logger=test_logger,
     )
 
@@ -395,7 +355,7 @@ def test_batch_operation_stops_on_first_error_if_continue_on_error_false(caplog)
         in caplog.text
     )
     # Item 3 and 'another_fail' should not have been processed
-    assert "Processing item '3'" not in caplog.text
+    assert "Processing item 3" not in caplog.text
     assert "Error processing item 'another_fail'" not in caplog.text
     assert (
         f"Batch operation '{op_name}' completed. Successful: 1, Failed: 1."

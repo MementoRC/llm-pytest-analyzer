@@ -199,7 +199,14 @@ def extract_failure_fingerprint(
     affected_component = ""
     if failure.traceback:
         # Look for import related file paths in traceback
-        file_matches = re.findall(r'File "([^"]+)"', failure.traceback)
+        traceback_str = (
+            failure.traceback_str
+            if hasattr(failure, "traceback_str")
+            else "\n".join(failure.traceback)
+            if isinstance(failure.traceback, list)
+            else str(failure.traceback)
+        )
+        file_matches = re.findall(r'File "([^"]+)"', traceback_str)
         if file_matches:
             for file_path in file_matches:
                 # Focus on the affected module/file, not the test file
@@ -274,7 +281,15 @@ def select_representative_failure(
     # Sort by traceback length (descending) - longer tracebacks usually have more context
     sorted_failures = sorted(
         failure_group,
-        key=lambda f: len(f.traceback or "")
+        key=lambda f: len(
+            f.traceback_str
+            if hasattr(f, "traceback_str")
+            else (
+                "\n".join(f.traceback)
+                if isinstance(f.traceback, list)
+                else str(f.traceback or "")
+            )
+        )
         + (len(f.relevant_code or "") * 2),  # Prioritize code context
         reverse=True,
     )

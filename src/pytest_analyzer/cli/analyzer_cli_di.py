@@ -381,7 +381,7 @@ def main() -> int:
 
                 return 0
             except Exception as e:
-                logger.error(f"An error occurred: {e}")
+                logger.error("An error occurred: %s", e)
                 if args.debug:
                     logger.exception("Debug traceback:")
                 return 1
@@ -411,7 +411,7 @@ def main() -> int:
             return 0
 
     except Exception as e:
-        logger.error(f"An error occurred: {e}")
+        logger.error("An error occurred: %s", e)
         if args.debug:
             logger.exception("Debug traceback:")
         return 1

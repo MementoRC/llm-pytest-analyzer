@@ -45,7 +45,7 @@ class Analyzer(Protocol):
     to determine their root causes and patterns.
     """
 
-    def analyze(self, extraction_results: Dict[str, Any]) -> Dict[str, Any]:
+    def analyze(self, _extraction_results: Dict[str, Any]) -> Dict[str, Any]:
         """
         Analyze test failures to determine root causes.
 

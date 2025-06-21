@@ -190,7 +190,8 @@ class TestAnalyzerCLIDI:
     def test_cli_error_handling(self, di_cli_invoke, mock_analyzer_service):
         """Test that the CLI correctly handles errors."""
         # Make the service raise an exception
-        mock_analyzer_service.run_and_analyze.side_effect = Exception("Test error")
+        test_exception = Exception("Test error")
+        mock_analyzer_service.run_and_analyze.side_effect = test_exception
 
         # Invoke the CLI
         with patch("pytest_analyzer.cli.analyzer_cli_di.console"):
@@ -202,7 +203,7 @@ class TestAnalyzerCLIDI:
                     result = di_cli_invoke("test_path")
 
         # Check that error was logged and non-zero exit code returned
-        mock_error.assert_called_with("An error occurred: Test error")
+        mock_error.assert_called_with("An error occurred: %s", test_exception)
         assert result != 0
 
 

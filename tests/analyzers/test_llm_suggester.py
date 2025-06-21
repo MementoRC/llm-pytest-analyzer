@@ -4,8 +4,38 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from pytest_analyzer.core.analysis.llm_adapters import (
+    AnthropicAdapter,
+    GenericAdapter,
+    OpenAIAdapter,
+)
 from pytest_analyzer.core.analysis.llm_suggester import LLMSuggester
 from pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
+
+
+# Helper classes for mocking clients with correct module attributes
+class _MockOpenAIClient:
+    __module__ = "openai"
+
+    def __init__(self):
+        self.chat = MagicMock()
+        self.chat.completions = MagicMock()
+        self.chat.completions.create = MagicMock()
+
+
+class _MockAnthropicClient:
+    __module__ = "anthropic"
+
+    def __init__(self):
+        self.messages = MagicMock()
+        self.messages.create = MagicMock()
+
+
+class _MockGenericClient:
+    __module__ = "generic_llm"
+
+    def __init__(self):
+        self.generate = MagicMock()
 
 
 @pytest.fixture
@@ -39,31 +69,19 @@ def name_error_test_failure():
 @pytest.fixture
 def mock_openai_client():
     """Fixture for a mocked OpenAI client."""
-    client = MagicMock()
-    client.chat.completions.create = MagicMock()
-    # Add a marker to identify this as an OpenAI client in tests
-    client.__module__ = "openai"
-    return client
+    return _MockOpenAIClient()
 
 
 @pytest.fixture
 def mock_anthropic_client():
     """Fixture for a mocked Anthropic client."""
-    client = MagicMock()
-    client.messages.create = MagicMock()
-    # Add a marker to identify this as an Anthropic client in tests
-    client.__module__ = "anthropic"
-    return client
+    return _MockAnthropicClient()
 
 
 @pytest.fixture
 def mock_generic_client():
     """Fixture for a mocked generic LLM client."""
-    client = MagicMock()
-    client.generate = MagicMock()
-    # Generic client with no specific module
-    client.__module__ = "generic_llm"
-    return client
+    return _MockGenericClient()
 
 
 @pytest.fixture
@@ -84,7 +102,7 @@ class TestLLMSuggester:
         assert suggester.max_context_lines == 20
         assert suggester.timeout_seconds == 60
         assert suggester.prompt_template is not None
-        assert suggester._llm_request_func is not None
+        assert isinstance(suggester._llm_adapter, OpenAIAdapter)
 
     def test_init_custom_params(self, mock_openai_client):
         """Test initialization with custom parameters."""
@@ -103,39 +121,30 @@ class TestLLMSuggester:
         assert suggester.max_context_lines == 5
         assert suggester.timeout_seconds == 30
         assert suggester.prompt_template == custom_template
-        assert suggester._llm_request_func is not None
+        assert suggester._llm_adapter is not None
 
-    def test_get_llm_request_function_openai(self, mock_openai_client):
-        """Test getting the request function for OpenAI client."""
+    def test_get_llm_adapter_openai(self, mock_openai_client):
+        """Test getting the adapter for OpenAI client."""
         suggester = LLMSuggester(llm_client=mock_openai_client)
-        func = suggester._get_llm_request_function()
-        assert func is not None
-        # Instead of checking __self__, check that the function exists
-        assert callable(func)
+        assert isinstance(suggester._llm_adapter, OpenAIAdapter)
 
-    def test_get_llm_request_function_anthropic(self, mock_anthropic_client):
-        """Test getting the request function for Anthropic client."""
+    def test_get_llm_adapter_anthropic(self, mock_anthropic_client):
+        """Test getting the adapter for Anthropic client."""
         suggester = LLMSuggester(llm_client=mock_anthropic_client)
-        func = suggester._get_llm_request_function()
-        assert func is not None
-        assert callable(func)
+        assert isinstance(suggester._llm_adapter, AnthropicAdapter)
 
-    def test_get_llm_request_function_generic(self, mock_generic_client):
-        """Test getting the request function for a generic client."""
+    def test_get_llm_adapter_generic(self, mock_generic_client):
+        """Test getting the adapter for a generic client."""
         suggester = LLMSuggester(llm_client=mock_generic_client)
-        func = suggester._get_llm_request_function()
-        assert func is not None
-        assert callable(func)
+        assert isinstance(suggester._llm_adapter, GenericAdapter)
 
     def test_suggest_fixes_no_llm_client(self, test_failure):
         """Test suggest_fixes when no LLM client is available."""
-        suggester = LLMSuggester(llm_client=None)
-        # Explicitly set the request function to None to simulate no client
-        suggester._llm_request_func = None
-
-        suggestions = suggester.suggest_fixes(test_failure)
-
-        assert suggestions == []
+        with patch.dict("sys.modules", {"anthropic": None, "openai": None}):
+            suggester = LLMSuggester(llm_client=None)
+            assert suggester._llm_adapter is None
+            suggestions = suggester.suggest_fixes(test_failure)
+            assert suggestions == []
 
     @patch.object(LLMSuggester, "_build_prompt")
     def test_suggest_fixes_exception(
@@ -159,7 +168,7 @@ class TestLLMSuggester:
     ):
         """Test successful fix suggestion."""
         # Set up the mocks
-        llm_suggester._llm_request_func = MagicMock(return_value="Test response")
+        llm_suggester._llm_adapter.request = MagicMock(return_value="Test response")
 
         # Mock the parsed suggestions
         expected_suggestions = [
@@ -173,7 +182,7 @@ class TestLLMSuggester:
         # Verify the results
         assert suggestions == expected_suggestions
         mock_build_prompt.assert_called_once_with(test_failure)
-        llm_suggester._llm_request_func.assert_called_once_with("Test prompt")
+        llm_suggester._llm_adapter.request.assert_called_once_with("Test prompt")
         mock_parse.assert_called_once_with("Test response", test_failure)
 
     def test_build_prompt(self, llm_suggester, test_failure):
@@ -431,110 +440,3 @@ class TestLLMSuggester:
         assert len(suggestions) == 1  # Should create a generic suggestion
         assert suggestions[0].suggestion == text_without_suggestions.strip()
         assert suggestions[0].failure == test_failure
-
-    @patch.object(LLMSuggester, "_request_with_openai")
-    def test_make_request_with_client_openai(self, mock_request_openai, llm_suggester):
-        """Test making a request with an OpenAI client."""
-        # Set up the mock to return a response
-        mock_request_openai.return_value = "OpenAI response"
-
-        # Mock the client type detection
-        with patch.object(llm_suggester.llm_client.__class__, "__module__", "openai"):
-            response = llm_suggester._make_request_with_client("Test prompt")
-
-            mock_request_openai.assert_called_once_with(
-                "Test prompt", llm_suggester.llm_client
-            )
-            assert response == "OpenAI response"
-
-    @patch.object(LLMSuggester, "_request_with_anthropic")
-    def test_make_request_with_client_anthropic(
-        self, mock_request_anthropic, mock_anthropic_client
-    ):
-        """Test making a request with an Anthropic client."""
-        # Create suggester with Anthropic client
-        suggester = LLMSuggester(llm_client=mock_anthropic_client)
-
-        # Set up the mock to return a response
-        mock_request_anthropic.return_value = "Anthropic response"
-
-        # Mock the client type detection
-        with patch.object(suggester.llm_client.__class__, "__module__", "anthropic"):
-            response = suggester._make_request_with_client("Test prompt")
-
-            mock_request_anthropic.assert_called_once_with(
-                "Test prompt", suggester.llm_client
-            )
-            assert response == "Anthropic response"
-
-    def test_request_with_openai(self, llm_suggester, mock_openai_client):
-        """Test making a request with the OpenAI API."""
-        # Set up the mock to return a response
-        mock_openai_client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="OpenAI API response"))]
-        )
-
-        response = llm_suggester._request_with_openai("Test prompt", mock_openai_client)
-
-        mock_openai_client.chat.completions.create.assert_called_once_with(
-            model="gpt-3.5-turbo",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert Python developer helping to fix pytest failures.",
-                },
-                {"role": "user", "content": "Test prompt"},
-            ],
-            max_tokens=1000,
-        )
-        assert response == "OpenAI API response"
-
-    def test_request_with_anthropic(self, mock_anthropic_client):
-        """Test making a request with the Anthropic API."""
-        # Create suggester with Anthropic client
-        suggester = LLMSuggester(llm_client=mock_anthropic_client)
-
-        # Set up the mock to return a response
-        mock_anthropic_client.messages.create.return_value = MagicMock(
-            content=[MagicMock(text="Anthropic API response")]
-        )
-
-        response = suggester._request_with_anthropic(
-            "Test prompt", mock_anthropic_client
-        )
-
-        mock_anthropic_client.messages.create.assert_called_once_with(
-            model="claude-3-haiku-20240307",
-            max_tokens=1000,
-            messages=[{"role": "user", "content": "Test prompt"}],
-        )
-        assert response == "Anthropic API response"
-
-    def test_request_with_openai_exception_handling(
-        self, llm_suggester, mock_openai_client
-    ):
-        """Test handling of API errors with OpenAI."""
-        # Setup mock to raise an exception
-        mock_openai_client.chat.completions.create.side_effect = Exception("API error")
-
-        # The method should catch the exception and return an empty string
-        response = llm_suggester._request_with_openai("Test prompt", mock_openai_client)
-
-        assert response == ""  # Should return empty string on error
-        mock_openai_client.chat.completions.create.assert_called_once()
-
-    def test_request_with_anthropic_exception_handling(self, mock_anthropic_client):
-        """Test handling of API errors with Anthropic."""
-        # Create suggester with Anthropic client
-        suggester = LLMSuggester(llm_client=mock_anthropic_client)
-
-        # Setup mock to raise an exception
-        mock_anthropic_client.messages.create.side_effect = Exception("API error")
-
-        # The method should catch the exception and return an empty string
-        response = suggester._request_with_anthropic(
-            "Test prompt", mock_anthropic_client
-        )
-
-        assert response == ""  # Should return empty string on error
-        mock_anthropic_client.messages.create.assert_called_once()

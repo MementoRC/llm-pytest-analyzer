@@ -1,3 +1,4 @@
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -11,6 +12,7 @@ class PytestFailure:
     error_type: str
     error_message: str
     traceback: str
+    id: str = field(default_factory=lambda: str(uuid.uuid4()), init=False)
     line_number: int | None = None
     relevant_code: str | None = None
     raw_output_section: str | None = None
@@ -31,3 +33,6 @@ class FixSuggestion:
     confidence: float
     code_changes: Optional[Dict[str, Any]] = None
     explanation: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    failure_id: Optional[str] = None

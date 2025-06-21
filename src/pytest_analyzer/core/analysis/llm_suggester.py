@@ -9,13 +9,14 @@ The module now includes asynchronous processing capabilities for improved perfor
 when handling multiple test failures in parallel.
 """
 
-import asyncio
 import hashlib
 import json
 import logging
 import os
 import re
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+import threading
+from functools import lru_cache
+from typing import Any, Dict, List, Optional
 
 from ...utils.resource_manager import (
     async_with_timeout,
@@ -24,6 +25,12 @@ from ...utils.resource_manager import (
     with_timeout,
 )
 from ..models.pytest_failure import FixSuggestion, PytestFailure
+from .llm_adapters import (
+    AnthropicAdapter,
+    GenericAdapter,
+    LLMClientAdapter,
+    OpenAIAdapter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +45,8 @@ class LLMSuggester:
 
     It now supports both synchronous and asynchronous operations for better
     performance when processing multiple failures.
+
+    Uses LLMClientAdapter subclasses to abstract client-specific logic.
     """
 
     def __init__(
@@ -50,6 +59,8 @@ class LLMSuggester:
         custom_prompt_template: Optional[str] = None,
         batch_size: int = 5,
         max_concurrency: int = 10,
+        llm_cache_size: int = 128,
+        code_context_cache_size: int = 128,
     ):
         """
         Initialize the LLM suggester.
@@ -62,6 +73,8 @@ class LLMSuggester:
         :param custom_prompt_template: Optional custom prompt template
         :param batch_size: Number of failures to process in each batch
         :param max_concurrency: Maximum number of concurrent LLM requests
+        :param llm_cache_size: LRU cache size for LLM prompt/response
+        :param code_context_cache_size: LRU cache size for code context extraction
         """
         self.llm_client = llm_client
         self.min_confidence = min_confidence
@@ -72,9 +85,22 @@ class LLMSuggester:
         self.batch_size = batch_size
         self.max_concurrency = max_concurrency
 
-        # Functions to use for making LLM requests
-        self._llm_request_func = self._get_llm_request_function()
-        self._async_llm_request_func = self._get_async_llm_request_function()
+        # Adapter for making LLM requests
+        self._llm_adapter = self._get_llm_adapter()
+
+        # LRU cache for LLM responses (thread-safe)
+        self._llm_cache_lock = threading.Lock()
+        self._llm_cache_size = llm_cache_size
+        self._code_context_cache_size = code_context_cache_size
+
+        # LRU cache for code context extraction
+        self._get_code_context_cached = lru_cache(maxsize=code_context_cache_size)(
+            self._get_code_context_uncached
+        )
+        # LRU cache for LLM prompt/response
+        self._llm_request_cached = lru_cache(maxsize=llm_cache_size)(
+            self._llm_request_uncached
+        )
 
     @with_timeout(60)
     def suggest_fixes(self, failure: PytestFailure) -> List[FixSuggestion]:
@@ -86,28 +112,24 @@ class LLMSuggester:
         """
         try:
             with performance_tracker.track("llm_suggest_fixes"):
-                # Check if we have an LLM client or request function
-                if not self._llm_request_func:
+                if not self._llm_adapter:
                     logger.warning("No LLM client available for generating suggestions")
                     return []
-
-                # Build the prompt
                 prompt = self._build_prompt(failure)
-
-                # Get LLM response
-                with performance_tracker.track("llm_api_request"):
-                    llm_response = self._llm_request_func(prompt)
-
-                # Parse the response
+                # Use LRU cache for LLM requests
+                with self._llm_cache_lock:
+                    llm_response = self._llm_request_cached(prompt)
                 with performance_tracker.track("parse_llm_response"):
                     suggestions = self._parse_llm_response(llm_response, failure)
-
-                # Filter suggestions by confidence
                 return [s for s in suggestions if s.confidence >= self.min_confidence]
-
         except Exception as e:
             logger.error(f"Error generating LLM suggestions: {e}")
             return []
+
+    def _llm_request_uncached(self, prompt: str) -> str:
+        """Uncached LLM request for caching wrapper."""
+        with performance_tracker.track("llm_api_request"):
+            return self._llm_adapter.request(prompt)
 
     @async_with_timeout(60)
     async def async_suggest_fixes(self, failure: PytestFailure) -> List[FixSuggestion]:
@@ -119,27 +141,18 @@ class LLMSuggester:
         """
         try:
             async with performance_tracker.async_track("async_llm_suggest_fixes"):
-                # Check if we have an async LLM client or request function
-                if not self._async_llm_request_func:
+                if not self._llm_adapter:
                     logger.warning(
                         "No async LLM client available for generating suggestions"
                     )
                     return []
-
-                # Build the prompt
                 prompt = self._build_prompt(failure)
-
-                # Get LLM response asynchronously
-                async with performance_tracker.async_track("async_llm_api_request"):
-                    llm_response = await self._async_llm_request_func(prompt)
-
-                # Parse the response
+                # Use LRU cache for async LLM requests (simulate sync cache for now)
+                with self._llm_cache_lock:
+                    llm_response = self._llm_request_cached(prompt)
                 with performance_tracker.track("parse_llm_response"):
                     suggestions = self._parse_llm_response(llm_response, failure)
-
-                # Filter suggestions by confidence
                 return [s for s in suggestions if s.confidence >= self.min_confidence]
-
         except Exception as e:
             logger.error(f"Error generating async LLM suggestions: {e}")
             return []
@@ -210,37 +223,44 @@ class LLMSuggester:
         :param failure: PytestFailure object
         :return: Formatted code context or None
         """
+        # Use LRU cache for code context extraction
+        return self._get_code_context_cached(
+            failure.test_file or "",
+            failure.line_number or -1,
+            failure.relevant_code or "",
+            failure.traceback or "",
+        )
+
+    def _get_code_context_uncached(
+        self, test_file: str, line_number: int, relevant_code: str, traceback: str
+    ) -> Optional[str]:
         # First try to use the relevant_code if available
-        if failure.relevant_code:
-            return failure.relevant_code
+        if relevant_code:
+            return relevant_code
 
         # If we have a file path and line number, try to read the file
-        if (
-            failure.test_file
-            and failure.line_number
-            and os.path.exists(failure.test_file)
-        ):
+        if test_file and line_number > 0 and os.path.exists(test_file):
             try:
-                with open(failure.test_file, "r") as f:
-                    lines = f.readlines()
-
-                # Calculate the range of lines to include
-                start_line = max(0, failure.line_number - 10)
-                end_line = min(len(lines), failure.line_number + 10)
-
-                # Extract the relevant lines
-                context_lines = lines[start_line:end_line]
-                context = "".join(context_lines)
-
-                return f"# Code context around line {failure.line_number}:\n{context}"
+                with open(test_file, "r") as f:
+                    # Use generator to avoid loading all lines into memory
+                    context_lines = []
+                    start_line = max(0, line_number - 10)
+                    end_line = line_number + 10
+                    for i, line in enumerate(f):
+                        if start_line <= i < end_line:
+                            context_lines.append(line)
+                        if i >= end_line:
+                            break
+                    context = "".join(context_lines)
+                return f"# Code context around line {line_number}:\n{context}"
             except Exception as e:
                 logger.debug(f"Error extracting code context: {e}")
 
         # If we couldn't get context from the file, try to extract from traceback
-        if failure.traceback:
+        if traceback:
             # Look for code snippets in the traceback (often included by pytest)
             code_pattern = r">\s+(.+)\nE\s+"
-            matches = re.findall(code_pattern, failure.traceback)
+            matches = re.findall(code_pattern, traceback)
             if matches:
                 return "\n".join(matches)
 
@@ -605,284 +625,44 @@ Error Message: {error_message}
 Provide your analysis:
 """
 
-    def _get_llm_request_function(self) -> Optional[Callable[[str], str]]:
+    def _get_llm_adapter(self) -> Optional[LLMClientAdapter]:
         """
-        Get the appropriate function for making LLM requests.
+        Detect and return the appropriate LLM client adapter.
 
-        This method detects available LLM clients and returns the
-        appropriate function for making requests.
-
-        :return: Function for making LLM requests or None if not available
+        Returns:
+            An instance of LLMClientAdapter or None if not available.
         """
-        # If explicit client is provided, use it
         if self.llm_client:
-            return lambda prompt: self._make_request_with_client(prompt)
-
-        # Try to detect available clients
-        client: Any
+            # Try to detect type of provided client
+            client_module = self.llm_client.__class__.__module__
+            if "anthropic" in client_module:
+                return AnthropicAdapter(self.llm_client)
+            elif "openai" in client_module:
+                return OpenAIAdapter(self.llm_client)
+            else:
+                return GenericAdapter(self.llm_client)
+        # Try to auto-detect available clients
         try:
-            # Check for Claude API access
             from anthropic import Anthropic
 
             try:
                 client = Anthropic()
-                return lambda prompt: self._request_with_anthropic(prompt, client)
+                return AnthropicAdapter(client)
             except Exception:
                 pass
-
-            # Check for OpenAI API access
             import openai
 
             try:
                 client = openai.OpenAI()
-                return lambda prompt: self._request_with_openai(prompt, client)
+                return OpenAIAdapter(client)
             except Exception:
                 pass
-
-            # Could add more client checks here
-
         except ImportError:
-            # No API clients available
             pass
-
-        # No suitable client found
         logger.warning(
             "No language model clients found. Install 'anthropic' or 'openai' packages to enable LLM suggestions."
         )
         return None
-
-    def _get_async_llm_request_function(
-        self,
-    ) -> Optional[Callable[[str], Awaitable[str]]]:
-        """
-        Get the appropriate function for making asynchronous LLM requests.
-
-        This method detects available async LLM clients and returns the
-        appropriate function for making async requests.
-
-        :return: Async function for making LLM requests or None if not available
-        """
-        # If explicit client is provided, use it
-        if self.llm_client:
-            return lambda prompt: self._async_make_request_with_client(prompt)
-
-        # Try to detect available clients
-        client: Any
-        try:
-            # Check for Claude API access
-            from anthropic import AsyncAnthropic
-
-            try:
-                client = AsyncAnthropic()
-                return lambda prompt: self._async_request_with_anthropic(prompt, client)
-            except Exception:
-                pass
-
-            # Check for OpenAI API access
-            import openai
-
-            try:
-                client = openai.AsyncOpenAI()
-                return lambda prompt: self._async_request_with_openai(prompt, client)
-            except Exception:
-                pass
-
-            # Could add more client checks here
-
-        except ImportError:
-            # No API clients available
-            pass
-
-        # No suitable client found
-        logger.warning(
-            "No async language model clients found. Install 'anthropic' or 'openai' packages to enable async LLM suggestions."
-        )
-        return None
-
-    def _make_request_with_client(self, prompt: str) -> str:
-        """
-        Make a request with the provided client.
-
-        :param prompt: Prompt to send
-        :return: Model response
-        """
-        # Determine the type of client and use appropriate method
-        client_module = self.llm_client.__class__.__module__
-
-        if "anthropic" in client_module:
-            return self._request_with_anthropic(prompt, self.llm_client)
-        elif "openai" in client_module:
-            return self._request_with_openai(prompt, self.llm_client)
-        else:
-            # Generic approach - assume client has a completion method
-            try:
-                response = self.llm_client.generate(prompt=prompt, max_tokens=1000)
-                return str(response)
-            except Exception as e:
-                logger.error(f"Error making request with client: {e}")
-                return ""
-
-    async def _async_make_request_with_client(self, prompt: str) -> str:
-        """
-        Make an asynchronous request with the provided client.
-
-        :param prompt: Prompt to send
-        :return: Model response
-        """
-        # Determine the type of client and use appropriate method
-        client_module = self.llm_client.__class__.__module__
-        async_client: Any
-
-        if "anthropic" in client_module:
-            # Check if it's already an async client
-            if hasattr(self.llm_client, "messages") and hasattr(
-                self.llm_client.messages, "create"
-            ):
-                if asyncio.iscoroutinefunction(self.llm_client.messages.create):
-                    return await self._async_request_with_anthropic(
-                        prompt, self.llm_client
-                    )
-                else:
-                    # Create an async client if possible
-                    try:
-                        from anthropic import AsyncAnthropic
-
-                        async_client = AsyncAnthropic(api_key=self.llm_client.api_key)
-                        return await self._async_request_with_anthropic(
-                            prompt, async_client
-                        )
-                    except (ImportError, AttributeError):
-                        # Fall back to sync client in async wrapper
-                        return await asyncio.to_thread(
-                            self._request_with_anthropic, prompt, self.llm_client
-                        )
-            else:
-                # Fall back to sync client in async wrapper
-                return await asyncio.to_thread(
-                    self._request_with_anthropic, prompt, self.llm_client
-                )
-        elif "openai" in client_module:
-            # Check if it's already an async client
-            if hasattr(self.llm_client, "chat") and hasattr(
-                self.llm_client.chat, "completions"
-            ):
-                if asyncio.iscoroutinefunction(self.llm_client.chat.completions.create):
-                    return await self._async_request_with_openai(
-                        prompt, self.llm_client
-                    )
-                else:
-                    # Create an async client if possible
-                    try:
-                        import openai
-
-                        async_client = openai.AsyncOpenAI(
-                            api_key=self.llm_client.api_key
-                        )
-                        return await self._async_request_with_openai(
-                            prompt, async_client
-                        )
-                    except (ImportError, AttributeError):
-                        # Fall back to sync client in async wrapper
-                        return await asyncio.to_thread(
-                            self._request_with_openai, prompt, self.llm_client
-                        )
-            else:
-                # Fall back to sync client in async wrapper
-                return await asyncio.to_thread(
-                    self._request_with_openai, prompt, self.llm_client
-                )
-        else:
-            # Generic approach - assume client has a completion method
-            # Wrap synchronous method in asyncio.to_thread
-            return await asyncio.to_thread(self._make_request_with_client, prompt)
-
-    def _request_with_anthropic(self, prompt: str, client) -> str:
-        """
-        Make a request with the Anthropic Claude API.
-
-        :param prompt: Prompt to send
-        :param client: Anthropic client
-        :return: Model response
-        """
-        try:
-            message = client.messages.create(
-                model="claude-3-haiku-20240307",
-                max_tokens=1000,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            return message.content[0].text
-        except Exception as e:
-            logger.error(f"Error making request with Anthropic API: {e}")
-            return ""
-
-    async def _async_request_with_anthropic(self, prompt: str, client) -> str:
-        """
-        Make an asynchronous request with the Anthropic Claude API.
-
-        :param prompt: Prompt to send
-        :param client: Async Anthropic client
-        :return: Model response
-        """
-        try:
-            message = await client.messages.create(
-                model="claude-3-haiku-20240307",
-                max_tokens=1000,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            return message.content[0].text
-        except Exception as e:
-            logger.error(f"Error making async request with Anthropic API: {e}")
-            return ""
-
-    def _request_with_openai(self, prompt: str, client) -> str:
-        """
-        Make a request with the OpenAI API.
-
-        :param prompt: Prompt to send
-        :param client: OpenAI client
-        :return: Model response
-        """
-        try:
-            completion = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert Python developer helping to fix pytest failures.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                max_tokens=1000,
-            )
-            return completion.choices[0].message.content
-        except Exception as e:
-            logger.error(f"Error making request with OpenAI API: {e}")
-            return ""
-
-    async def _async_request_with_openai(self, prompt: str, client) -> str:
-        """
-        Make an asynchronous request with the OpenAI API.
-
-        :param prompt: Prompt to send
-        :param client: Async OpenAI client
-        :return: Model response
-        """
-        try:
-            completion = await client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert Python developer helping to fix pytest failures.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                max_tokens=1000,
-            )
-            return completion.choices[0].message.content
-        except Exception as e:
-            logger.error(f"Error making async request with OpenAI API: {e}")
-            return ""
 
     def _generate_suggestion_fingerprint(
         self, suggestion_text: str, explanation: str, code_changes: Dict

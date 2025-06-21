@@ -43,25 +43,44 @@ class JsonResultExtractor:
         Raises:
             ExtractionError: If extraction fails
         """
+        from ...utils.logging_config import set_correlation_id
         from ..errors import ExtractionError
 
         failures = []
         source = ""
 
+        # Set or get correlation ID for structured logging
+        correlation_id = set_correlation_id()
+
         try:
             if isinstance(json_input, (str, Path)):
                 path = Path(json_input)
-                # Check for nonexistent file and raise ExtractionError directly
                 if not path.exists():
-                    logger.error(f"JSON report file not found: {path}")
-                    raise ExtractionError(f"JSON report file not found: {path}")
+                    logger.error(
+                        f"JSON report file not found: {path}",
+                        extra={"extra_data": {"correlation_id": correlation_id}},
+                    )
+                    raise ExtractionError(
+                        f"JSON report file not found: {path}",
+                        context={"path": str(path), "correlation_id": correlation_id},
+                    )
                 failures = self.extract_failures(path)
                 source = str(path)
             elif isinstance(json_input, dict):
                 failures = self._parse_json_data(json_input)
                 source = "dict"
             else:
-                raise TypeError(f"Unsupported input type: {type(json_input)}")
+                logger.error(
+                    f"Unsupported input type: {type(json_input)}",
+                    extra={"extra_data": {"correlation_id": correlation_id}},
+                )
+                raise ExtractionError(
+                    f"Unsupported input type: {type(json_input)}",
+                    context={
+                        "input_type": str(type(json_input)),
+                        "correlation_id": correlation_id,
+                    },
+                )
 
             return {
                 "failures": failures,
@@ -69,9 +88,18 @@ class JsonResultExtractor:
                 "count": len(failures),
                 "source": source,
             }
+        except ExtractionError:
+            raise
         except Exception as e:
-            logger.error(f"Error extracting from JSON: {e}")
-            raise ExtractionError(f"Failed to extract from JSON: {e}") from e
+            logger.error(
+                f"Error extracting from JSON: {e}",
+                extra={"extra_data": {"correlation_id": correlation_id}},
+            )
+            raise ExtractionError(
+                f"Failed to extract from JSON: {e}",
+                context={"correlation_id": correlation_id},
+                original_exception=e,
+            ) from e
 
     @with_timeout(30)
     def extract_failures(self, json_path: Path) -> List[PytestFailure]:

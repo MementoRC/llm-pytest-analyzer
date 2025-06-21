@@ -39,7 +39,7 @@ class MemoryLimitError(Exception):
 def timeout_context(seconds: float) -> Iterator[None]:
     """Context manager for timing out operations"""
 
-    def handler(signum, frame):
+    def handler(signum, _frame):
         raise TimeoutError(f"Operation exceeded time limit of {seconds} seconds")
 
     # Check for negative timeout
@@ -136,7 +136,7 @@ class ResourceMonitor:
         self.start_time = time.time()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, _exc_tb):
         if exc_type is not None:
             logger.error(f"Operation failed with {exc_type.__name__}: {exc_val}")
 
@@ -182,7 +182,7 @@ class AsyncResourceMonitor:
         self.start_time = time.time()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, _exc_tb):
         if exc_type is not None:
             logger.error(f"Async operation failed with {exc_type.__name__}: {exc_val}")
 

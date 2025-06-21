@@ -1,0 +1,20 @@
+pytest_timeout: 150
+pytest_args: []
+max_failures: 100
+max_suggestions: 8
+max_suggestions_per_failure: 3
+min_confidence: 0.5
+use_llm: true
+llm_model: auto
+mcp:
+  transport_type: stdio
+  http_host: 127.0.0.1
+  http_port: 8000
+  tool_timeout_seconds: 30
+  security:
+    require_authentication: false
+    path_allowlist: []
+    restrict_to_project_dir: true
+llm:
+  llm_timeout: 600
+test_key: test_value

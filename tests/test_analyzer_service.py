@@ -2,11 +2,12 @@
 
 import subprocess
 import tempfile
-from unittest.mock import MagicMock, patch
+import uuid
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from pytest_analyzer.core.analyzer_service import PytestAnalyzerService
+from pytest_analyzer.analyzer_service import PytestAnalyzerService
 from pytest_analyzer.core.models.pytest_failure import PytestFailure
 from pytest_analyzer.utils.settings import Settings
 
@@ -14,7 +15,7 @@ from pytest_analyzer.utils.settings import Settings
 @pytest.fixture
 def test_failure():
     """Create a test failure for testing."""
-    return PytestFailure(
+    failure = PytestFailure(
         test_name="test_function",
         test_file="test_file.py",
         error_type="AssertionError",
@@ -23,6 +24,9 @@ def test_failure():
         line_number=42,
         relevant_code="def test_function():\n    assert 1 == 2",
     )
+    # The orchestrator expects an 'id' on the failure object.
+    failure.id = str(uuid.uuid4())
+    return failure
 
 
 @pytest.fixture
@@ -48,33 +52,33 @@ def analyzer_service():
         max_failures=10,
         max_suggestions=3,
         min_confidence=0.5,
+        use_llm=True,  # Enable LLM for tests
     )
     return PytestAnalyzerService(settings=settings)
 
 
-@patch("pytest_analyzer.core.analyzer_service.get_extractor")
-@patch("pytest_analyzer.core.analyzer_service.LLMSuggester.suggest_fixes")
-def test_analyze_pytest_output(
-    mock_suggest_fixes, mock_get_extractor, mock_extractor, analyzer_service
-):
+@patch("pytest_analyzer.analyzer_service.get_extractor")
+def test_analyze_pytest_output(mock_get_extractor, mock_extractor, analyzer_service):
     """Test analyzing pytest output from a file."""
     # Setup
     mock_get_extractor.return_value = mock_extractor
-    mock_suggest_fixes.return_value = []  # Mock suggest_fixes to return empty list
+    # Mock the async LLM suggester to return empty suggestions
+    analyzer_service.llm_suggester.batch_suggest_fixes = AsyncMock(return_value={})
 
     with tempfile.NamedTemporaryFile(suffix=".json") as tmp:
-        # Execute
+        # Execute - let the async state machine run normally
         with patch("pathlib.Path.exists", return_value=True):
             suggestions = analyzer_service.analyze_pytest_output(tmp.name)
 
         # Assert
         mock_get_extractor.assert_called_once()
         mock_extractor.extract_failures.assert_called_once()
-        mock_suggest_fixes.assert_called()
-        assert len(suggestions) == 0  # No suggestions since we mocked the suggester
+        # The suggester's async method should be awaited (since we let asyncio.run execute)
+        analyzer_service.llm_suggester.batch_suggest_fixes.assert_awaited()
+        assert len(suggestions) == 0  # No suggestions since we mocked an empty response
 
 
-@patch("pytest_analyzer.core.extraction.extractor_factory.get_extractor")
+@patch("pytest_analyzer.analyzer_service.get_extractor")
 def test_analyze_pytest_output_nonexistent_file(mock_get_extractor, analyzer_service):
     """Test analyzing a nonexistent pytest output file."""
     # Execute
@@ -86,82 +90,73 @@ def test_analyze_pytest_output_nonexistent_file(mock_get_extractor, analyzer_ser
     assert len(suggestions) == 0
 
 
-@patch("pytest_analyzer.core.analyzer_service.collect_failures_with_plugin")
-@patch("pytest_analyzer.core.analyzer_service.LLMSuggester.suggest_fixes")
-def test_run_and_analyze_plugin(mock_suggest_fixes, mock_collect, analyzer_service):
+@patch("pytest_analyzer.analyzer_service.collect_failures_with_plugin")
+def test_run_and_analyze_plugin(mock_collect, analyzer_service, test_failure):
     """Test running and analyzing tests with plugin integration."""
     # Setup
-    mock_collect.return_value = [
-        PytestFailure(
-            test_name="test_function",
-            test_file="test_file.py",
-            error_type="AssertionError",
-            error_message="assert 1 == 2",
-            traceback="Traceback...",
-        )
-    ]
-    mock_suggest_fixes.return_value = []  # Mock suggest_fixes to return empty list
-
+    mock_collect.return_value = [test_failure]
+    analyzer_service.llm_suggester.batch_suggest_fixes = AsyncMock(return_value={})
     analyzer_service.settings.preferred_format = "plugin"
 
     # Execute
     suggestions = analyzer_service.run_and_analyze("test_path")
 
     # Assert
-    # Expect the call with additional flags added by the service
     mock_collect.assert_called_once_with(["test_path", "-s", "--disable-warnings"])
-    mock_suggest_fixes.assert_called()
-    assert len(suggestions) == 0  # No suggestions since we mocked the suggester
+    analyzer_service.llm_suggester.batch_suggest_fixes.assert_awaited()
+    assert len(suggestions) == 0
 
 
 @patch("subprocess.run")
-@patch("pytest_analyzer.core.analyzer_service.get_extractor")
-@patch("pytest_analyzer.core.analyzer_service.LLMSuggester.suggest_fixes")
+@patch("pytest_analyzer.analyzer_service.get_extractor")
 def test_run_and_analyze_json(
-    mock_suggest_fixes, mock_get_extractor, mock_run, mock_extractor, analyzer_service
+    mock_get_extractor, mock_run, mock_extractor, analyzer_service
 ):
     """Test running and analyzing tests with JSON output."""
     # Setup
     mock_get_extractor.return_value = mock_extractor
-    mock_suggest_fixes.return_value = []  # Mock suggest_fixes to return empty list
-
+    analyzer_service.llm_suggester.batch_suggest_fixes = AsyncMock(return_value={})
     analyzer_service.settings.preferred_format = "json"
 
-    # Execute
-    with patch("tempfile.NamedTemporaryFile"):
-        suggestions = analyzer_service.run_and_analyze("test_path")
+    # Execute - properly mock tempfile to return a real filename
+    with tempfile.NamedTemporaryFile(suffix=".json") as tmp:
+        with patch("tempfile.NamedTemporaryFile") as mock_temp:
+            mock_temp.return_value.__enter__.return_value.name = tmp.name
+            with patch("pathlib.Path.exists", return_value=True):
+                suggestions = analyzer_service.run_and_analyze("test_path")
 
     # Assert
     mock_run.assert_called_once()
     mock_get_extractor.assert_called_once()
     mock_extractor.extract_failures.assert_called_once()
-    mock_suggest_fixes.assert_called()
-    assert len(suggestions) == 0  # No suggestions since we mocked the suggester
+    analyzer_service.llm_suggester.batch_suggest_fixes.assert_awaited()
+    assert len(suggestions) == 0
 
 
 @patch("subprocess.run")
-@patch("pytest_analyzer.core.analyzer_service.get_extractor")
-@patch("pytest_analyzer.core.analyzer_service.LLMSuggester.suggest_fixes")
+@patch("pytest_analyzer.analyzer_service.get_extractor")
 def test_run_and_analyze_xml(
-    mock_suggest_fixes, mock_get_extractor, mock_run, mock_extractor, analyzer_service
+    mock_get_extractor, mock_run, mock_extractor, analyzer_service
 ):
     """Test running and analyzing tests with XML output."""
     # Setup
     mock_get_extractor.return_value = mock_extractor
-    mock_suggest_fixes.return_value = []  # Mock suggest_fixes to return empty list
-
+    analyzer_service.llm_suggester.batch_suggest_fixes = AsyncMock(return_value={})
     analyzer_service.settings.preferred_format = "xml"
 
-    # Execute
-    with patch("tempfile.NamedTemporaryFile"):
-        suggestions = analyzer_service.run_and_analyze("test_path")
+    # Execute - properly mock tempfile to return a real filename
+    with tempfile.NamedTemporaryFile(suffix=".xml") as tmp:
+        with patch("tempfile.NamedTemporaryFile") as mock_temp:
+            mock_temp.return_value.__enter__.return_value.name = tmp.name
+            with patch("pathlib.Path.exists", return_value=True):
+                suggestions = analyzer_service.run_and_analyze("test_path")
 
     # Assert
     mock_run.assert_called_once()
     mock_get_extractor.assert_called_once()
     mock_extractor.extract_failures.assert_called_once()
-    mock_suggest_fixes.assert_called()
-    assert len(suggestions) == 0  # No suggestions since we mocked the suggester
+    analyzer_service.llm_suggester.batch_suggest_fixes.assert_awaited()
+    assert len(suggestions) == 0
 
 
 @patch("subprocess.run")

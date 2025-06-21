@@ -8,7 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
+from pytest_analyzer.core.domain.entities.fix_suggestion import FixSuggestion
+from pytest_analyzer.core.domain.entities.pytest_failure import PytestFailure
 
 
 # Helper function to identify pytest's caplog handler
@@ -28,26 +29,29 @@ def pytest_configure(config):
 
 
 @pytest.fixture(autouse=True)
-def isolate_logging():
-    """Ensure logger isolation between tests to prevent shared state issues."""
+def isolate_logging(caplog):
+    """Ensure logger isolation between tests to prevent shared state issues and proper caplog capture."""
     # Store original logging state
     original_handlers = {}
     original_levels = {}
+
+    # Set root logger and all loggers to NOTSET to ensure caplog can capture all levels
+    logging.getLogger().setLevel(logging.NOTSET)
+    caplog.set_level(logging.NOTSET)
 
     # Capture state of all existing loggers
     for name, logger in logging.Logger.manager.loggerDict.items():
         if isinstance(logger, logging.Logger):
             original_handlers[name] = logger.handlers.copy()
             original_levels[name] = logger.level
+            logger.setLevel(logging.NOTSET)
 
     yield
 
     # Restore original logging state
     for name, logger_from_dict in logging.Logger.manager.loggerDict.items():
         if isinstance(logger_from_dict, logging.Logger):
-            logger = (
-                logger_from_dict  # Use 'logger' consistently as the Logger instance
-            )
+            logger = logger_from_dict
 
             # Preserve pytest's caplog handlers that were on the logger
             caplog_handlers_on_logger = [
@@ -55,21 +59,17 @@ def isolate_logging():
             ]
 
             # Get the original handlers for this logger from setup time.
-            # These are assumed to be application-specific or non-caplog handlers.
             initial_handlers_for_logger = original_handlers.get(name, [])
 
             # Clear all current handlers from the logger
             logger.handlers.clear()
 
             # Add back the initial handlers (e.g., application's default handlers).
-            # Safeguard: ensure not to re-add a caplog handler if it was somehow in initial_handlers_for_logger.
             for handler_to_restore in initial_handlers_for_logger:
                 if not _is_pytest_caplog_handler(handler_to_restore):
                     logger.addHandler(handler_to_restore)
 
             # Add back the caplog handlers that were present on the logger just before clearing.
-            # This ensures caplog continues to function for this logger.
-            # Add only if not already present (e.g. if a caplog handler was also an initial handler - unlikely but safe).
             for caplog_handler_to_add_back in caplog_handlers_on_logger:
                 if caplog_handler_to_add_back not in logger.handlers:
                     logger.addHandler(caplog_handler_to_add_back)
@@ -77,9 +77,6 @@ def isolate_logging():
             # Restore original level for this logger
             if name in original_levels:
                 logger.level = original_levels[name]
-            # If a logger was created during the test (i.e., name not in original_levels),
-            # its level remains as set during the test or its default (NOTSET).
-            # This is consistent with the original fixture's behavior regarding levels.
 
 
 @pytest.fixture(scope="function")
@@ -339,14 +336,19 @@ def mock_llm_client():
 @pytest.fixture
 def mock_llm_suggester():
     """Provides a patched LLMSuggester that uses a mock client."""
+    from unittest.mock import MagicMock
+
+    from pytest_analyzer.core.analysis.llm_adapters import GenericAdapter
+
     with patch(
-        "pytest_analyzer.core.analysis.llm_suggester.LLMSuggester._get_llm_request_function"
+        "pytest_analyzer.core.analysis.llm_suggester.LLMSuggester._get_llm_adapter"
     ) as mock_func:
-        mock_func.return_value = (
-            lambda prompt: "LLM Suggestion: This is a mock LLM response for: "
-            + prompt[:20]
-            + "..."
+        # Create a mock adapter that mimics the GenericAdapter behavior
+        mock_adapter = MagicMock(spec=GenericAdapter)
+        mock_adapter.request = MagicMock(
+            return_value="LLM Suggestion: This is a mock LLM response"
         )
+        mock_func.return_value = mock_adapter
         yield
 
 
@@ -354,24 +356,25 @@ def mock_llm_suggester():
 @pytest.fixture
 def test_failure():
     """Provide a PytestFailure instance for testing."""
-    return PytestFailure(
+    return PytestFailure.create(
         test_name="test_file.py::test_function",
-        test_file="test_file.py",
+        file_path="test_file.py",
+        failure_message="assert 1 == 2",
         error_type="AssertionError",
-        error_message="assert 1 == 2",
-        traceback="E       assert 1 == 2\nE       +  where 1 = func()",
+        traceback=["E       assert 1 == 2", "E       +  where 1 = func()"],
         line_number=42,
-        relevant_code="def test_function():\n    assert 1 == 2",
+        function_name="test_function",
+        class_name=None,
     )
 
 
 @pytest.fixture
 def test_suggestion(test_failure):
     """Fixture for a test suggestion."""
-    return FixSuggestion(
-        failure=test_failure,
-        suggestion="Fix the assertion to expect 1 instead of 2",
-        confidence=0.8,
+    return FixSuggestion.create_from_score(
+        failure_id=test_failure.id,
+        suggestion_text="Fix the assertion to expect 1 instead of 2",
+        confidence_score=0.8,
         explanation="The test expected 2 but got 1",
     )
 
@@ -379,12 +382,13 @@ def test_suggestion(test_failure):
 @pytest.fixture
 def llm_suggestion(test_failure):
     """Fixture for an LLM-based suggestion."""
-    return FixSuggestion(
-        failure=test_failure,
-        suggestion="Use assertEqual(1, 2) for better error messages",
-        confidence=0.9,
+    return FixSuggestion.create_from_score(
+        failure_id=test_failure.id,
+        suggestion_text="Use assertEqual(1, 2) for better error messages",
+        confidence_score=0.9,
         explanation="Using assertEqual provides more detailed failure output",
-        code_changes={
+        code_changes=["def test_function():\n    assertEqual(1, 2)"],
+        metadata={
             "source": "llm",
             "fixed_code": "def test_function():\n    assertEqual(1, 2)",
         },
