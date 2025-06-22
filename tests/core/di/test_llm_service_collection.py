@@ -8,6 +8,7 @@ functionality in the ServiceCollection class.
 from unittest.mock import MagicMock, patch
 
 from src.pytest_analyzer.core.di.service_collection import ServiceCollection
+from src.pytest_analyzer.core.feature_flags.protocols import FeatureFlagServiceProtocol
 from src.pytest_analyzer.core.llm.backward_compat import LLMService
 from src.pytest_analyzer.core.llm.llm_service_protocol import LLMServiceProtocol
 from src.pytest_analyzer.utils.settings import Settings
@@ -70,10 +71,16 @@ class TestLLMServiceCollection:
             # Create settings with a preferred provider
             settings = Settings()
             settings.llm_provider = "openai"
+            settings.use_llm = True  # Be explicit that LLM is enabled
+
+            # Mock feature flag service to enable LLM analysis
+            mock_ff_service = MagicMock(spec=FeatureFlagServiceProtocol)
+            mock_ff_service.is_feature_enabled.return_value = True
 
             # Create a service collection with those settings
             services = ServiceCollection()
             services.add_singleton(Settings, settings)
+            services.add_singleton(FeatureFlagServiceProtocol, mock_ff_service)
 
             # Configure LLM services
             services.configure_llm_services()
@@ -101,10 +108,16 @@ class TestLLMServiceCollection:
             settings = Settings()
             settings.llm_provider = "anthropic"
             settings.use_fallback = False
+            settings.use_llm = True  # Be explicit that LLM is enabled
+
+            # Mock feature flag service to enable LLM analysis
+            mock_ff_service = MagicMock(spec=FeatureFlagServiceProtocol)
+            mock_ff_service.is_feature_enabled.return_value = True
 
             # Create a service collection with those settings
             services = ServiceCollection()
             services.add_singleton(Settings, settings)
+            services.add_singleton(FeatureFlagServiceProtocol, mock_ff_service)
 
             # Configure LLM services
             services.configure_llm_services()
@@ -135,7 +148,14 @@ class TestLLMServiceCollection:
             settings = Settings()
             settings.llm_provider = "anthropic"
             settings.llm_timeout = 90
+            settings.use_llm = True  # Be explicit that LLM is enabled
+
+            # Mock feature flag service to enable LLM analysis
+            mock_ff_service = MagicMock(spec=FeatureFlagServiceProtocol)
+            mock_ff_service.is_feature_enabled.return_value = True
+
             services.add_singleton(Settings, settings)
+            services.add_singleton(FeatureFlagServiceProtocol, mock_ff_service)
             container = services.build_container()
 
             # Call the factory function and verify service creation
@@ -150,9 +170,15 @@ class TestLLMServiceCollection:
     def test_integration_with_core_services(self):
         """Test integration of LLM services with core services configuration."""
         # Use a direct patch approach to avoid issues with import paths
-        with patch(
-            "src.pytest_analyzer.core.llm.llm_service_factory.detect_llm_client"
-        ) as mock_detect:
+        with (
+            patch(
+                "src.pytest_analyzer.core.llm.llm_service_factory.detect_llm_client"
+            ) as mock_detect,
+            patch(
+                "src.pytest_analyzer.core.di.service_collection.FlagsmithFeatureFlagService.is_feature_enabled",
+                return_value=True,
+            ) as mock_is_enabled,
+        ):
             # Setup mock to return a client
             mock_client = MagicMock()
             mock_detect.return_value = (mock_client, MagicMock())
@@ -165,6 +191,10 @@ class TestLLMServiceCollection:
             llm_service = services.container.resolve(LLMServiceProtocol)
             assert isinstance(llm_service, LLMService)
 
+            # Verify feature flag was checked and client detection was called
+            mock_is_enabled.assert_called_once_with("use_llm_analysis")
+            mock_detect.assert_called_once()
+
     def test_handling_no_client_detected(self):
         """Test behavior when no LLM client could be detected."""
         # Use a direct patch approach to avoid issues with import paths
@@ -174,8 +204,14 @@ class TestLLMServiceCollection:
             # Setup mock to return no client
             mock_detect.return_value = (None, None)
 
+            # Mock feature flag service to enable LLM analysis
+            mock_ff_service = MagicMock(spec=FeatureFlagServiceProtocol)
+            mock_ff_service.is_feature_enabled.return_value = True
+
             # Create and configure services
             services = ServiceCollection()
+            services.add_singleton(Settings, Settings())
+            services.add_singleton(FeatureFlagServiceProtocol, mock_ff_service)
             services.configure_llm_services()
 
             # Resolve and verify service
@@ -195,8 +231,14 @@ class TestLLMServiceCollection:
             # Setup mock to raise an exception
             mock_detect.side_effect = RuntimeError("Connection error")
 
+            # Mock feature flag service to enable LLM analysis
+            mock_ff_service = MagicMock(spec=FeatureFlagServiceProtocol)
+            mock_ff_service.is_feature_enabled.return_value = True
+
             # Create and configure services - should not raise exception
             services = ServiceCollection()
+            services.add_singleton(Settings, Settings())
+            services.add_singleton(FeatureFlagServiceProtocol, mock_ff_service)
             services.configure_llm_services()
 
             # Resolve and verify service
