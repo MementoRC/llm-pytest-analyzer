@@ -38,6 +38,7 @@ class TestLLMServiceDI:
 
         # Test with explicit client
         service_collection = ServiceCollection()
+        service_collection.configure_core_services()
         explicit_client = MagicMock()
         service_collection.configure_llm_services(llm_client=explicit_client)
 
@@ -71,6 +72,7 @@ class TestLLMServiceDI:
 
         # Create service collection with provider override
         service_collection = ServiceCollection()
+        service_collection.configure_core_services()
         service_collection.configure_llm_services(override_provider="openai")
         service_collection.build_container().resolve(LLMServiceProtocol)
 
@@ -89,6 +91,7 @@ class TestLLMServiceDI:
 
         service_collection = ServiceCollection()
         service_collection.container = container
+        service_collection.configure_core_services()
         service_collection.configure_llm_services()
         service_collection.build_container().resolve(LLMServiceProtocol)
 
@@ -101,6 +104,7 @@ class TestLLMServiceDI:
         # Test override takes precedence over settings
         service_collection = ServiceCollection()
         service_collection.container = container
+        service_collection.configure_core_services()
         service_collection.configure_llm_services(override_provider="azure")
         service_collection.build_container().resolve(LLMServiceProtocol)
 
@@ -131,6 +135,7 @@ class TestLLMServiceDI:
 
         service_collection = ServiceCollection()
         service_collection.container = container
+        service_collection.configure_core_services()
         service_collection.configure_llm_services()
         service_collection.build_container().resolve(LLMServiceProtocol)
 
@@ -148,6 +153,7 @@ class TestLLMServiceDI:
 
         service_collection = ServiceCollection()
         service_collection.container = container
+        service_collection.configure_core_services()
         service_collection.configure_llm_services()
         service_collection.build_container().resolve(LLMServiceProtocol)
 
@@ -165,6 +171,7 @@ class TestLLMServiceDI:
 
         service_collection = ServiceCollection()
         service_collection.container = container
+        service_collection.configure_core_services()
         service_collection.configure_llm_services(override_provider="azure")
         service_collection.build_container().resolve(LLMServiceProtocol)
 
