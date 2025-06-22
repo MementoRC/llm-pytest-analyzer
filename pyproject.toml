@@ -137,6 +137,10 @@ psutil = ">=5.9.0"
 [tool.pixi.pypi-dependencies]
 pytest-analyzer = { path = ".", editable = true }
 prometheus-client = ">=0.16.0"
+pytest = ">=7.0.0"
+pytest-asyncio = "*"
+pytest-cov = "*"
+pytest-json-report = ">=1.5.0"
 
 [tool.pixi.environments]
 default = { solve-group = "default" }
