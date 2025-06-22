@@ -89,9 +89,9 @@ mcp = [
 pytest-analyzer = "pytest_analyzer.cli.analyzer_cli:main"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/pytest_analyzer"
-Repository = "https://github.com/yourusername/pytest_analyzer"
-Issues = "https://github.com/yourusername/pytest_analyzer/issues"
+Homepage = "https://github.com/MementoRC/llm-pytest-analyzer"
+Repository = "https://github.com/MementoRC/llm-pytest-analyzer"
+Issues = "https://github.com/MementoRC/llm-pytest-analyzer/issues"
 
 [tool.hatch.version]
 path = "src/pytest_analyzer/__version__.py"
@@ -159,7 +159,7 @@ security-scan-console = { cmd = "bandit -r src/ --severity-level high", depends-
 complexity-check = { cmd = "radon cc src/ --min B", depends-on = ["install-editable"] }
 dead-code-check = { cmd = "vulture src/ --min-confidence 80", depends-on = ["install-editable"] }
 safety-check = { cmd = "safety check --json --output safety-report.json", depends-on = ["install-editable"] }
-safety-check-console = { cmd = "safety check", depends-on = ["install-editable"] }
+safety-check-console = { cmd = "echo 'Running safety check with debug output...' && pip list | head -10 && safety check || (echo '::warning::Safety check failed - this may be due to network connectivity' && safety check)", depends-on = ["install-editable"] }
 pylint-check = { cmd = "pylint src/pytest_analyzer --output-format=json --output=pylint-report.json", depends-on = ["install-editable"] }
 pylint-check-console = { cmd = "pylint src/pytest_analyzer --errors-only", depends-on = ["install-editable"] }
 static-analysis = { depends-on = ["security-scan-console", "complexity-check", "dead-code-check", "safety-check-console", "pylint-check-console"] }
