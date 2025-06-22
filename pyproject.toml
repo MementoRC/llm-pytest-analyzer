@@ -107,7 +107,6 @@ pythonpath = ["src"]
 log_cli = true
 log_cli_level = "INFO"
 filterwarnings = ["ignore::DeprecationWarning", "ignore::pytest.PytestDeprecationWarning"]
-addopts = "--quiet --cov=src/pytest_analyzer --cov-report=term-missing"
 markers = [
     "e2e: mark test as an end-to-end test",
     "ci_timeout: mark test as potentially timing out in CI",
