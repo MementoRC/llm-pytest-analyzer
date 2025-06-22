@@ -19,10 +19,20 @@ from pytest_analyzer.utils.settings import Settings
 class TestLLMServiceDI:
     """Test suite for LLM service integration with the DI container."""
 
+    @patch(
+        "pytest_analyzer.core.feature_flags.feature_flag_service.FlagsmithFeatureFlagService.get_feature_value"
+    )
+    @patch(
+        "pytest_analyzer.core.feature_flags.feature_flag_service.FlagsmithFeatureFlagService.is_feature_enabled"
+    )
     @patch("pytest_analyzer.core.llm.llm_service_factory.detect_llm_client")
-    def test_service_collection_llm_services(self, mock_detect_client):
+    def test_service_collection_llm_services(
+        self, mock_detect_client, mock_is_feature_enabled, mock_get_feature_value
+    ):
         """Test that ServiceCollection configures LLM services correctly."""
         # Set up mocks
+        mock_is_feature_enabled.return_value = True
+        mock_get_feature_value.return_value = None
         mock_client = MagicMock()
         mock_detect_client.return_value = (mock_client, LLMProvider.ANTHROPIC)
 
@@ -42,10 +52,20 @@ class TestLLMServiceDI:
         # Verify client detection was called
         mock_detect_client.assert_called_once()
 
+    @patch(
+        "pytest_analyzer.core.feature_flags.feature_flag_service.FlagsmithFeatureFlagService.get_feature_value"
+    )
+    @patch(
+        "pytest_analyzer.core.feature_flags.feature_flag_service.FlagsmithFeatureFlagService.is_feature_enabled"
+    )
     @patch("pytest_analyzer.core.llm.llm_service_factory.detect_llm_client")
-    def test_custom_provider_override(self, mock_detect_client):
+    def test_custom_provider_override(
+        self, mock_detect_client, mock_is_feature_enabled, mock_get_feature_value
+    ):
         """Test ServiceCollection with provider override."""
         # Set up mocks
+        mock_is_feature_enabled.return_value = True
+        mock_get_feature_value.return_value = None
         mock_client = MagicMock()
         mock_detect_client.return_value = (mock_client, LLMProvider.OPENAI)
 
@@ -87,10 +107,20 @@ class TestLLMServiceDI:
         # Verify override trumps settings
         assert mock_detect_client.call_args[1]["preferred_provider"] == "azure"
 
+    @patch(
+        "pytest_analyzer.core.feature_flags.feature_flag_service.FlagsmithFeatureFlagService.get_feature_value"
+    )
+    @patch(
+        "pytest_analyzer.core.feature_flags.feature_flag_service.FlagsmithFeatureFlagService.is_feature_enabled"
+    )
     @patch("pytest_analyzer.core.llm.llm_service_factory.detect_llm_client")
-    def test_fallback_settings_respected(self, mock_detect_client):
+    def test_fallback_settings_respected(
+        self, mock_detect_client, mock_is_feature_enabled, mock_get_feature_value
+    ):
         """Test that fallback settings are respected."""
         # Set up mocks
+        mock_is_feature_enabled.return_value = True
+        mock_get_feature_value.return_value = None
         mock_detect_client.return_value = (MagicMock(), LLMProvider.OPENAI)
 
         # Test with fallback enabled in settings
@@ -222,10 +252,20 @@ class TestLLMServiceDI:
                 # Verify attempt was made to handle the error
                 mock_detect_client.assert_called_once()
 
+    @patch(
+        "pytest_analyzer.core.feature_flags.feature_flag_service.FlagsmithFeatureFlagService.get_feature_value"
+    )
+    @patch(
+        "pytest_analyzer.core.feature_flags.feature_flag_service.FlagsmithFeatureFlagService.is_feature_enabled"
+    )
     @patch("pytest_analyzer.core.llm.llm_service_factory.detect_llm_client")
-    def test_container_initialization_with_llm(self, mock_detect_client):
+    def test_container_initialization_with_llm(
+        self, mock_detect_client, mock_is_feature_enabled, mock_get_feature_value
+    ):
         """Test initialization of the container with LLM services."""
         # Set up mocks
+        mock_is_feature_enabled.return_value = True
+        mock_get_feature_value.return_value = None
         mock_client = MagicMock()
         mock_client.__class__.__module__ = "anthropic.client"
         mock_detect_client.return_value = (mock_client, LLMProvider.ANTHROPIC)
