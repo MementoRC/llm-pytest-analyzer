@@ -71,6 +71,11 @@ test = [
     "pytest-cov",
     "pytest-json-report>=1.5.0",
     "prometheus-client>=0.16.0",
+    "setuptools>=65.0.0",
+    "wheel>=0.37.0",
+    "build>=0.8.0",
+    "marshmallow==3.26.1",
+    "injector==0.20.1",
 ]
 
 mcp = [
