@@ -184,7 +184,7 @@ jobs:
           echo "PYTHONPATH in CI: $PYTHONPATH"
           echo "Current directory: $(pwd)"
           echo "Python path resolution:"
-          pixi run -e test python -c "import sys; print('Python paths:'); [print(f'  {p}') for p in sys.path]"
+          pixi run -e test python -c 'import sys; print("Python paths:"); [print("  " + p) for p in sys.path]'
           pixi run -e test test-cov
 
       - name: Upload coverage to Codecov
