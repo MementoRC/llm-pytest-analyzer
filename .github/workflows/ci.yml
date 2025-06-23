@@ -170,13 +170,13 @@ jobs:
           pixi run -e test pip list
           echo "::endgroup::"
           echo "::group::Checking for dependency conflicts"
-          pixi run -e test pip check || echo "::warning::'pip check' found some issues."
+          pixi run -e test pip check
           echo "::endgroup::"
 
       - name: Run tests with coverage
         run: |
           echo "Running tests with coverage..."
-          pixi run -e test test-cov || (echo "::warning::First test run failed. Retrying in 5 seconds..." && sleep 5 && echo "Retrying tests..." && pixi run -e test test-cov)
+          pixi run -e test test-cov
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
