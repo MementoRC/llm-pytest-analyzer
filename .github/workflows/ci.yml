@@ -21,7 +21,7 @@ jobs:
           manifest-path: pyproject.toml
 
       - name: Install dependencies with Pixi
-        run: pixi install -e dev -v
+        run: pixi install -e dev -v || (echo "::error::Failed to install dev dependencies with Pixi." && exit 1)
 
       - name: Install pre-commit hooks
         run: pixi run -e dev setup-pre-commit
@@ -49,19 +49,19 @@ jobs:
           manifest-path: pyproject.toml
 
       - name: Install dependencies with Pixi
-        run: pixi install -e dev -v
+        run: pixi install -e dev -v || (echo "::error::Failed to install dev dependencies with Pixi." && exit 1)
 
       - name: Run Pylint
-        run: pixi run -e dev pylint-check-console
+        run: pixi run -e dev pylint-check-console || (echo "::error::Pylint check failed." && exit 1)
 
       - name: Run Bandit (security static analysis)
-        run: pixi run -e dev security-scan-console
+        run: pixi run -e dev security-scan-console || (echo "::error::Bandit scan failed." && exit 1)
 
       - name: Run Radon (complexity check)
-        run: pixi run -e dev complexity-check
+        run: pixi run -e dev complexity-check || (echo "::error::Radon complexity check failed." && exit 1)
 
       - name: Run Vulture (dead code check)
-        run: pixi run -e dev dead-code-check
+        run: pixi run -e dev dead-code-check || (echo "::error::Vulture dead code check failed." && exit 1)
 
   dependency_vulnerabilities:
     runs-on: ubuntu-latest
@@ -77,7 +77,7 @@ jobs:
           manifest-path: pyproject.toml
 
       - name: Install dependencies with Pixi
-        run: pixi install -e dev -v
+        run: pixi install -e dev -v || (echo "::error::Failed to install dev dependencies with Pixi." && exit 1)
 
       - name: Run Safety (dependency vulnerability check)
         run: pixi run -e dev safety-check-console
@@ -112,7 +112,7 @@ jobs:
           manifest-path: pyproject.toml
 
       - name: Install dependencies with Pixi
-        run: pixi install -e dev -v
+        run: pixi install -e dev -v || (echo "::error::Failed to install dev dependencies with Pixi." && exit 1)
 
       - name: Run performance regression tests
         run: |
@@ -148,19 +148,24 @@ jobs:
       - name: Install test dependencies with Pixi
         run: |
           echo "::group::Installing test dependencies with Pixi"
-          pixi install -e test -v
+          pixi install -e test -v || (echo "::error::Failed to install test dependencies with Pixi. This could be a network issue or a problem with dependency resolution." && exit 1)
           echo "::endgroup::"
 
       - name: Pre-test validation and environment logging
         run: |
           echo "::group::Environment Details"
+          echo "Runner OS: ${{ runner.os }}"
           echo "Python version: $(python --version)"
+          echo "Python path: $(which python)"
+          echo "Pip version: $(pip --version)"
+          echo "Pip path: $(which pip)"
           echo "PYTHONPATH: $PYTHONPATH"
           echo "CI: $CI"
           echo "Project root contents:"
           ls -la
           echo "::endgroup::"
           echo "::group::Pixi Environment Info"
+          pixi --version
           pixi info
           echo "::endgroup::"
 
@@ -170,18 +175,17 @@ jobs:
           pixi run -e test pip list
           echo "::endgroup::"
           echo "::group::Checking for dependency conflicts"
-          pixi run -e test pip check
+          pixi run -e test pip check || (echo "::error::'pip check' found dependency conflicts." && exit 1)
           echo "::endgroup::"
 
       - name: Run tests with coverage
         run: |
-          echo "Running tests with coverage..."
+          echo "Running tests with coverage using the 'test-cov' pixi task..."
           echo "PYTHONPATH in CI: $PYTHONPATH"
           echo "Current directory: $(pwd)"
           echo "Python path resolution:"
           pixi run -e test python -c "import sys; print('Python paths:'); [print(f'  {p}') for p in sys.path]"
-          echo "Testing direct pytest command..."
-          pixi run -e test python -m pytest --cov=src/pytest_analyzer --cov-report=term-missing --cov-report=xml tests
+          pixi run -e test test-cov
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
