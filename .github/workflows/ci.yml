@@ -176,7 +176,12 @@ jobs:
       - name: Run tests with coverage
         run: |
           echo "Running tests with coverage..."
-          pixi run -e test test-cov
+          echo "PYTHONPATH in CI: $PYTHONPATH"
+          echo "Current directory: $(pwd)"
+          echo "Python path resolution:"
+          pixi run -e test python -c "import sys; print('Python paths:'); [print(f'  {p}') for p in sys.path]"
+          echo "Testing direct pytest command..."
+          pixi run -e test python -m pytest --cov=src/pytest_analyzer --cov-report=term-missing --cov-report=xml tests
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
