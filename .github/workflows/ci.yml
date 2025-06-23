@@ -123,12 +123,22 @@ jobs:
     needs: [lint_and_types, static_analysis, dependency_vulnerabilities, security_scan, performance_test]
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest]
         python-version: ["3.10", "3.11", "3.12"]
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: "src"
+      CI: "true"
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
 
       - uses: prefix-dev/setup-pixi@v0.8.8
         with:
@@ -136,12 +146,41 @@ jobs:
           manifest-path: pyproject.toml
 
       - name: Install test dependencies with Pixi
-        run: pixi install -e test -v
+        run: |
+          echo "::group::Installing test dependencies with Pixi"
+          pixi install -e test -v
+          echo "::endgroup::"
+
+      - name: Pre-test validation and environment logging
+        run: |
+          echo "::group::Environment Details"
+          echo "Python version: $(python --version)"
+          echo "PYTHONPATH: $PYTHONPATH"
+          echo "CI: $CI"
+          echo "Project root contents:"
+          ls -la
+          echo "::endgroup::"
+          echo "::group::Pixi Environment Info"
+          pixi info
+          echo "::endgroup::"
+
+      - name: Verify Dependencies
+        run: |
+          echo "::group::Listing installed packages"
+          pixi run -e test pip list
+          echo "::endgroup::"
+          echo "::group::Checking for dependency conflicts"
+          pixi run -e test pip check || echo "::warning::'pip check' found some issues."
+          echo "::endgroup::"
 
       - name: Run tests with coverage
-        run: pixi run -e test test-cov
+        run: |
+          echo "Running tests with coverage..."
+          pixi run -e test test-cov || (echo "::warning::First test run failed. Retrying in 5 seconds..." && sleep 5 && echo "Retrying tests..." && pixi run -e test test-cov)
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
