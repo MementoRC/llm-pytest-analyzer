@@ -71,10 +71,10 @@ class MCPSettings(BaseModel):
     # Security settings
     security: SecuritySettings = Field(default_factory=SecuritySettings)
     enable_authentication: bool = Field(
-        default=False, deprecated="Use security.require_authentication"
+        default=False, description="Deprecated: Use security.require_authentication"
     )
     auth_token: Optional[str] = Field(
-        default=None, deprecated="Use security.auth_token"
+        default=None, description="Deprecated: Use security.auth_token"
     )
     max_request_size_mb: int = Field(default=10, gt=0)  # Maximum request size in MB
 
