@@ -65,8 +65,8 @@ This guide summarizes the security practices for developers and operators of `py
 
 ## References
 
-- [Security Audit Report](../security_audit_report.md)
-- [Final Security Audit](../analysis_reports/final_security_audit_20250624_104937.json)
+- Security Audit Report (in project repository)
+- Final Security Audit (in project analysis_reports directory)
 - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
 - [CWE/SANS Top 25](https://cwe.mitre.org/top25/archive/2023/2023_cwe_top25.html)
 - [NIST Cybersecurity Framework](https://www.nist.gov/cyberframework)
