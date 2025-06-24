@@ -34,7 +34,7 @@ class TestCIEnvironmentDetector:
         assert isinstance(env.missing_tools, list)
         assert isinstance(env.tool_install_commands, dict)
 
-    @patch.dict(os.environ, {"GITHUB_ACTIONS": "true"})
+    @patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}, clear=True)
     def test_detect_github_actions(self):
         """Test detection of GitHub Actions environment"""
         detector = CIEnvironmentDetector()
@@ -43,7 +43,7 @@ class TestCIEnvironmentDetector:
         assert env.name == "github"
         assert env.detected is True
 
-    @patch.dict(os.environ, {"GITLAB_CI": "true"})
+    @patch.dict(os.environ, {"GITLAB_CI": "true", "GITHUB_ACTIONS": ""}, clear=True)
     def test_detect_gitlab_ci(self):
         """Test detection of GitLab CI environment"""
         detector = CIEnvironmentDetector()
