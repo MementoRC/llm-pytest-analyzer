@@ -9,6 +9,7 @@ import os
 import re
 import threading
 import time
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -21,6 +22,14 @@ class SecurityError(Exception):
     pass
 
 
+class CircuitBreakerState(Enum):
+    """States for the circuit breaker."""
+
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half-open"
+
+
 class SecurityManager:
     """Main security manager for the MCP server."""
 
@@ -30,6 +39,8 @@ class SecurityManager:
         self._rate_limit_lock = threading.Lock()
         self._request_timestamps: Dict[str, List[float]] = {}
         self._abuse_counts: Dict[str, int] = {}
+        self._circuit_breakers: Dict[str, Dict[str, Any]] = {}
+        self._circuit_breaker_lock = threading.Lock()
 
     # --- Input Validation ---
 
@@ -130,32 +141,115 @@ class SecurityManager:
 
     # --- Rate Limiting ---
 
-    def check_rate_limit(self, client_id: str) -> None:
-        """Check and enforce rate limiting for a client."""
+    def check_rate_limit(self, client_id: str, tool_name: Optional[str] = None) -> None:
+        """Check and enforce rate limiting for a client, with per-tool overrides."""
         now = time.time()
+
+        # Determine rate limit
+        limit = self.settings.max_requests_per_window
+        if tool_name:
+            if "llm" in tool_name.lower() and self.settings.llm_rate_limit is not None:
+                limit = self.settings.llm_rate_limit
+            elif tool_name in self.settings.per_tool_rate_limits:
+                limit = self.settings.per_tool_rate_limits[tool_name]
+
         with self._rate_limit_lock:
-            timestamps = self._request_timestamps.setdefault(client_id, [])
+            # Use a composite key for per-tool rate limiting, but track abuse per client
+            request_key = f"{client_id}:{tool_name}" if tool_name else client_id
+            timestamps = self._request_timestamps.setdefault(request_key, [])
+
             # Remove old timestamps
             window = self.settings.rate_limit_window_seconds
             timestamps = [t for t in timestamps if now - t < window]
-            self._request_timestamps[client_id] = timestamps
+            self._request_timestamps[request_key] = timestamps
 
-            # Abuse detection: count how many times the client has exceeded the threshold in the window
+            # Abuse detection (per client_id)
             abuse_count = self._abuse_counts.get(client_id, 0)
             if abuse_count >= self.settings.abuse_ban_count:
-                raise SecurityError("Client temporarily banned due to abuse.")
+                raise SecurityError(
+                    f"Client '{client_id}' temporarily banned due to abuse."
+                )
 
-            if len(timestamps) >= self.settings.max_requests_per_window:
+            if len(timestamps) >= limit:
                 # Increment abuse count if over the window
                 self._abuse_counts[client_id] = abuse_count + 1
-                raise SecurityError("Rate limit exceeded.")
+                raise SecurityError(
+                    f"Rate limit of {limit} req/window exceeded for key '{request_key}'."
+                )
 
             timestamps.append(now)
-            self._request_timestamps[client_id] = timestamps
+            self._request_timestamps[request_key] = timestamps
 
             # Reset abuse count if window is empty (client is behaving)
             if not timestamps:
                 self._abuse_counts[client_id] = 0
+
+    # --- Circuit Breaker ---
+
+    def _get_breaker(self, tool_name: str) -> Dict[str, Any]:
+        """Get or create a circuit breaker for a tool."""
+        with self._circuit_breaker_lock:
+            if tool_name not in self._circuit_breakers:
+                self._circuit_breakers[tool_name] = {
+                    "state": CircuitBreakerState.CLOSED,
+                    "failures": 0,
+                    "successes": 0,
+                    "opened_at": 0.0,
+                }
+            return self._circuit_breakers[tool_name]
+
+    def check_circuit_breaker(self, tool_name: str) -> None:
+        """Check the state of the circuit breaker for a tool."""
+        if not self.settings.enable_circuit_breaker:
+            return
+
+        breaker = self._get_breaker(tool_name)
+        state = breaker["state"]
+
+        if state == CircuitBreakerState.OPEN:
+            timeout = self.settings.circuit_breaker_timeout_seconds
+            if time.time() - breaker["opened_at"] > timeout:
+                breaker["state"] = CircuitBreakerState.HALF_OPEN
+                breaker["successes"] = 0  # Reset successes for half-open state
+            else:
+                raise SecurityError(f"Circuit breaker for tool '{tool_name}' is open.")
+
+    def record_failure(self, tool_name: str) -> None:
+        """Record a failure for a tool, potentially opening the circuit."""
+        if not self.settings.enable_circuit_breaker:
+            return
+
+        breaker = self._get_breaker(tool_name)
+
+        if breaker["state"] == CircuitBreakerState.HALF_OPEN:
+            # Failure in half-open state re-opens the circuit
+            breaker["state"] = CircuitBreakerState.OPEN
+            breaker["opened_at"] = time.time()
+            breaker["failures"] = 0  # Reset failures
+        elif breaker["state"] == CircuitBreakerState.CLOSED:
+            breaker["failures"] += 1
+            if breaker["failures"] >= self.settings.circuit_breaker_failures:
+                breaker["state"] = CircuitBreakerState.OPEN
+                breaker["opened_at"] = time.time()
+
+    def record_success(self, tool_name: str) -> None:
+        """Record a success for a tool, potentially closing the circuit."""
+        if not self.settings.enable_circuit_breaker:
+            return
+
+        breaker = self._get_breaker(tool_name)
+
+        if breaker["state"] == CircuitBreakerState.HALF_OPEN:
+            breaker["successes"] += 1
+            if breaker["successes"] >= self.settings.circuit_breaker_successes_to_close:
+                # Close the circuit
+                breaker["state"] = CircuitBreakerState.CLOSED
+                breaker["failures"] = 0
+                breaker["successes"] = 0
+        elif breaker["state"] == CircuitBreakerState.CLOSED:
+            # Reset failures on success in closed state to prevent flapping
+            if breaker["failures"] > 0:
+                breaker["failures"] = 0
 
     def monitor_resource_usage(self, usage_mb: float) -> None:
         """Monitor resource usage and enforce limits."""

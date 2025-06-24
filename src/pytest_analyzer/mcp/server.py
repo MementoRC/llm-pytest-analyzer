@@ -21,7 +21,7 @@ from .prompts.templates import (
     initialize_default_prompts,
 )
 from .resources import ResourceManager, SessionManager
-from .security import SecurityManager
+from .security import SecurityError, SecurityManager
 
 
 class PytestAnalyzerMCPServer:
@@ -232,6 +232,30 @@ class PytestAnalyzerMCPServer:
         async def call_tool(name: str, arguments: dict) -> Any:
             """Route tool call to the correct handler."""
             self.logger.info(f"MCP: call_tool invoked for '{name}'")
+
+            # Define a client ID. For stdio, it's a single client.
+            # For HTTP, this would come from the request (e.g., IP address).
+            client_id = "stdio_client"
+
+            try:
+                # --- Security Checks ---
+                self.security_manager.check_rate_limit(client_id, tool_name=name)
+                self.security_manager.check_circuit_breaker(tool_name=name)
+
+                # Sanitize and validate inputs AFTER rate limiting to prevent
+                # expensive validation on denied requests.
+                sanitized_args = self.security_manager.validate_tool_input(
+                    name,
+                    arguments,
+                    read_only=True,  # Assume most tools are read-only
+                )
+
+            except SecurityError as e:
+                self.logger.warning(f"Security violation for tool '{name}': {e}")
+                from mcp.types import TextContent
+
+                return [TextContent(type="text", text=f"Security error: {e}")]
+
             handler = self._registered_handlers.get(name)
             if not handler:
                 self.logger.error(f"Unknown tool requested: {name}")
@@ -241,9 +265,13 @@ class PytestAnalyzerMCPServer:
             try:
                 # Handler may be async or sync
                 if asyncio.iscoroutinefunction(handler):
-                    result = await handler(arguments)
+                    result = await handler(sanitized_args)
                 else:
-                    result = handler(arguments)
+                    result = handler(sanitized_args)
+
+                # Record success for circuit breaker
+                self.security_manager.record_success(tool_name=name)
+
                 # Try to extract .content if present (CallToolResult pattern)
                 if hasattr(result, "content"):
                     return result.content
@@ -263,6 +291,10 @@ class PytestAnalyzerMCPServer:
                     return [TextContent(type="text", text=response_text)]
             except Exception as e:
                 self.logger.error(f"Error executing tool '{name}': {e}", exc_info=True)
+
+                # Record failure for circuit breaker
+                self.security_manager.record_failure(tool_name=name)
+
                 from mcp.types import TextContent
 
                 return [

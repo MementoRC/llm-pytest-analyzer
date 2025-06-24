@@ -42,8 +42,34 @@ class SecuritySettings(BaseModel):
     # Rate limiting
     max_requests_per_window: int = Field(default=100, gt=0)
     rate_limit_window_seconds: int = Field(default=60, gt=0)
+    per_tool_rate_limits: Dict[str, int] = Field(
+        default_factory=dict,
+        description="Specific rate limits (requests per window) for individual tools.",
+    )
+    llm_rate_limit: Optional[int] = Field(
+        default=None,
+        gt=0,
+        description="Specific rate limit for LLM-related tools.",
+    )
+
+    # Abuse detection
     abuse_threshold: int = Field(default=200, ge=0)
     abuse_ban_count: int = Field(default=3, ge=0)
+
+    # Circuit Breaker
+    enable_circuit_breaker: bool = Field(
+        default=True, description="Enable circuit breaker for failing tools."
+    )
+    circuit_breaker_failures: int = Field(
+        default=5, gt=0, description="Failures to open the circuit."
+    )
+    circuit_breaker_timeout_seconds: int = Field(
+        default=30, gt=0, description="Seconds to keep the circuit open."
+    )
+    circuit_breaker_successes_to_close: int = Field(
+        default=2, gt=0, description="Successes to close a half-open circuit."
+    )
+
     max_resource_usage_mb: float = Field(default=100.0, gt=0)
 
     # Misc
