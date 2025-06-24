@@ -22,6 +22,8 @@ Outputs:
 """
 
 import json
+import os
+import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -29,7 +31,12 @@ from pathlib import Path
 # --- Utility functions ---
 
 
-def run_subprocess(cmd, cwd=None, capture_output=True):
+def is_tool_available(tool_name):
+    """Check if a tool is available in the current environment."""
+    return shutil.which(tool_name) is not None
+
+
+def run_subprocess(cmd, cwd=None, capture_output=True, env=None):
     """Run a subprocess and return (success, output)."""
     try:
         result = subprocess.run(
@@ -38,8 +45,11 @@ def run_subprocess(cmd, cwd=None, capture_output=True):
             capture_output=capture_output,
             text=True,
             check=True,
+            env=env,
         )
         return True, result.stdout
+    except FileNotFoundError:
+        return False, f"Tool not found: {cmd[0]}"
     except subprocess.CalledProcessError as e:
         return False, e.stdout + "\n" + e.stderr if e.stdout or e.stderr else str(e)
 
@@ -88,9 +98,38 @@ def check_task_improvements():
     return improvements, details
 
 
+def get_pixi_env():
+    """Return a copy of the current environment with pixi's .pixi/env/bin prepended to PATH, if available."""
+    pixi_env_path = Path(".pixi/env/bin")
+    if pixi_env_path.exists():
+        env = os.environ.copy()
+        env["PATH"] = str(pixi_env_path) + os.pathsep + env.get("PATH", "")
+        return env
+    return None
+
+
 def run_bandit_scan():
-    """Run Bandit static analysis and return results."""
-    success, output = run_subprocess(["bandit", "-r", "src/pytest_analyzer"])
+    """Run Bandit static analysis and return results, handling missing tool gracefully."""
+    # Try to use bandit from current env, or from pixi if available
+    env = get_pixi_env()
+    if is_tool_available("bandit"):
+        success, output = run_subprocess(
+            ["bandit", "-r", "src/pytest_analyzer"], env=env
+        )
+    elif env and (Path(env["PATH"].split(os.pathsep)[0]) / "bandit").exists():
+        success, output = run_subprocess(
+            [
+                str(Path(env["PATH"].split(os.pathsep)[0]) / "bandit"),
+                "-r",
+                "src/pytest_analyzer",
+            ],
+            env=env,
+        )
+    else:
+        return {
+            "success": False,
+            "output": "Bandit not available in this environment. Skipping static analysis.",
+        }
     return {
         "success": success,
         "output": output,
@@ -98,8 +137,21 @@ def run_bandit_scan():
 
 
 def run_safety_check():
-    """Run Safety dependency vulnerability check and return results."""
-    success, output = run_subprocess(["safety", "check", "--json"])
+    """Run Safety dependency vulnerability check and return results, handling missing tool gracefully."""
+    env = get_pixi_env()
+    if is_tool_available("safety"):
+        success, output = run_subprocess(["safety", "check", "--json"], env=env)
+    elif env and (Path(env["PATH"].split(os.pathsep)[0]) / "safety").exists():
+        success, output = run_subprocess(
+            [str(Path(env["PATH"].split(os.pathsep)[0]) / "safety"), "check", "--json"],
+            env=env,
+        )
+    else:
+        return {
+            "success": False,
+            "output": "Safety not available in this environment. Skipping dependency check.",
+            "vulnerabilities": [],
+        }
     if success:
         try:
             vulnerabilities = json.loads(output)

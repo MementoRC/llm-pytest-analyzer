@@ -39,3 +39,28 @@ def test_final_security_audit_script_runs(tmp_path):
     assert "executive_summary" in report
     assert "recommendations" in report
     assert isinstance(report["recommendations"], list)
+
+    # Accept that static analysis and dependency checks may be skipped if tools are missing
+    static_analysis = report.get("static_analysis", {})
+    dependency_security = report.get("dependency_security", {})
+
+    # Check if static analysis ran (either successfully or with tool issues)
+    if "static_analysis" in report:
+        # If bandit is not available, the output will mention this
+        if not static_analysis.get("success", False):
+            output = static_analysis.get("output", "")
+            # Either the tool is missing or bandit found issues (which is expected)
+            assert (
+                "Bandit not available" in output
+                or "Skipping static analysis" in output
+                or "Issue:" in output
+            )  # Bandit found security issues
+
+    # Check if dependency check ran
+    if "dependency_security" in report:
+        if not dependency_security.get("success", False):
+            output = dependency_security.get("output", "")
+            assert (
+                "Safety not available" in output
+                or "Skipping dependency check" in output
+            )
