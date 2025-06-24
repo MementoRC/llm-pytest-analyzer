@@ -64,7 +64,7 @@ class BaseEnvironmentManager(ABC):
         self.logger.debug("Environment deactivation not required")
 
     @abstractmethod
-    def build_command(self, base_command: List[str]) -> List[str]:
+    def build_command(self, _base_command: List[str]) -> List[str]:
         """Manager-specific command building logic to be implemented by subclasses.
 
         This method must be implemented by each environment manager to define

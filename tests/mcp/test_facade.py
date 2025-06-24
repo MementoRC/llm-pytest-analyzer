@@ -6,9 +6,12 @@ from unittest.mock import MagicMock
 import pytest
 
 from pytest_analyzer.core.analyzer_facade import PytestAnalyzerFacade
-from pytest_analyzer.core.interfaces.errors import BaseError
+from pytest_analyzer.core.errors import (
+    AnalysisError,
+    ExtractionError,
+    LLMServiceError,
+)
 from pytest_analyzer.mcp.facade import MCPAnalyzerFacade
-from pytest_analyzer.mcp.schemas import MCPError
 from pytest_analyzer.mcp.schemas.analyze_pytest_output import AnalyzePytestOutputRequest
 from pytest_analyzer.mcp.schemas.apply_suggestion import ApplySuggestionRequest
 from pytest_analyzer.mcp.schemas.get_config import GetConfigRequest
@@ -191,7 +194,10 @@ class TestMCPAnalyzerFacade:
         """Test successful config update."""
         request = UpdateConfigRequest(
             tool_name="update_config",
-            config_updates={"pytest_timeout": 200, "max_suggestions": 5},
+            config_updates={
+                "pytest_timeout": 180,
+                "max_suggestions": 8,
+            },  # Use unique values
         )
 
         response = await mcp_facade.update_config(request)
@@ -199,23 +205,93 @@ class TestMCPAnalyzerFacade:
         assert response.success is True
         assert isinstance(response.updated_fields, list)
 
+    async def test_get_config_section_not_found(self, mcp_facade):
+        """Test get_config with a section that does not exist."""
+        request = GetConfigRequest(tool_name="get_config", section="nonexistent")
+        response = await mcp_facade.get_config(request)
+        assert response.success is False
+        assert "Section 'nonexistent' not found." in response.warnings[0]
+
+    async def test_get_config_sensitive_data_masked(self, mcp_facade):
+        """Test that sensitive data is masked in get_config response."""
+        request = GetConfigRequest(tool_name="get_config")
+        response = await mcp_facade.get_config(request)
+        assert response.success is True
+        assert "llm" in response.config_data
+        if "llm_api_key" in response.config_data["llm"]:
+            assert response.config_data["llm"]["llm_api_key"]["value"] == "***"
+
+    async def test_update_config_section_not_found(self, mcp_facade):
+        """Test update_config with a section that does not exist."""
+        request = UpdateConfigRequest(
+            tool_name="update_config",
+            section="nonexistent",
+            config_updates={"test_key": "test_value"},
+        )
+        response = await mcp_facade.update_config(request)
+        assert response.success is False
+        assert "Section 'nonexistent' not found" in response.validation_errors[0]
+
+    async def test_update_config_validation_error(self, mcp_facade):
+        """Test update_config with invalid config updates."""
+        request = UpdateConfigRequest(
+            tool_name="update_config", config_updates={"pytest_timeout": "invalid"}
+        )
+        response = await mcp_facade.update_config(request)
+        assert response.success is False
+        assert len(response.validation_errors) > 0
+
+    async def test_update_config_success_validate_only(self, mcp_facade):
+        """Test successful config update with validate_only=True."""
+        request = UpdateConfigRequest(
+            tool_name="update_config",
+            config_updates={
+                "pytest_timeout": 250
+            },  # Use unique value to ensure change detection
+            validate_only=True,
+        )
+        response = await mcp_facade.update_config(request)
+        assert response.success is True
+        assert response.updated_fields == ["pytest_timeout"]
+        assert response.applied_changes == {"pytest_timeout": 250}
+
+    async def test_update_config_success_with_section(self, mcp_facade):
+        """Test successful config update with a specific section."""
+        request = UpdateConfigRequest(
+            tool_name="update_config",
+            section="llm",
+            config_updates={
+                "llm_timeout": 600
+            },  # Use unique value to ensure change detection
+        )
+        response = await mcp_facade.update_config(request)
+        assert response.success is True
+        assert "llm_timeout" in response.updated_fields
+        assert response.applied_changes == {"llm_timeout": 600}
+
     @pytest.mark.parametrize(
-        "method_name,request_class",
+        "method_name,request_class,expected_exception",
         [
-            ("analyze_pytest_output", AnalyzePytestOutputRequest),
-            ("run_and_analyze", RunAndAnalyzeRequest),
-            ("suggest_fixes", SuggestFixesRequest),
-            ("apply_suggestion", ApplySuggestionRequest),
+            ("analyze_pytest_output", AnalyzePytestOutputRequest, AnalysisError),
+            ("run_and_analyze", RunAndAnalyzeRequest, AnalysisError),
+            ("suggest_fixes", SuggestFixesRequest, LLMServiceError),
+            ("apply_suggestion", ApplySuggestionRequest, ExtractionError),
         ],
     )
     async def test_error_handling_analyzer_methods(
-        self, mcp_facade, method_name, request_class, caplog, tmp_path
+        self,
+        mcp_facade,
+        method_name,
+        request_class,
+        expected_exception,
+        caplog,
+        tmp_path,
     ):
         """Test error handling for methods that call the underlying analyzer."""
         # Setup
         caplog.set_level(logging.ERROR)
         mock_method = getattr(mcp_facade.analyzer, method_name)
-        mock_method.side_effect = BaseError("Test error")
+        mock_method.side_effect = expected_exception("Test error")
 
         # Create minimal valid request based on class requirements
         if request_class == ApplySuggestionRequest:
@@ -253,7 +329,12 @@ class TestMCPAnalyzerFacade:
             assert isinstance(response, ApplySuggestionResponse)
             assert response.success is False
         else:
-            assert isinstance(response, MCPError)
+            # MCP facade should catch and convert to MCPError, not re-raise
+            from pytest_analyzer.mcp.schemas import MCPError as MCPErrorType
+
+            assert isinstance(response, MCPErrorType)
+            assert response.code.endswith("_FAILED")
+            assert "Test error" in response.message
 
     @pytest.mark.parametrize(
         "method_name,request_class",
@@ -281,7 +362,8 @@ class TestMCPAnalyzerFacade:
             )
         elif request_class == UpdateConfigRequest:
             request = request_class(
-                tool_name=method_name, config_updates={"pytest_timeout": 120}
+                tool_name=method_name,
+                config_updates={"pytest_timeout": 150},  # Use unique value
             )
         else:
             request = request_class(tool_name=method_name)
@@ -297,10 +379,10 @@ class TestMCPAnalyzerFacade:
         """Test transformation of domain suggestion to MCP format."""
         mcp_suggestion = mcp_facade._transform_suggestion_to_mcp(sample_suggestion)
 
-        # Handle legacy model attributes (test fixtures use legacy FixSuggestion)
-        expected_id = str(getattr(sample_suggestion, "id", "unknown"))
-        expected_text = getattr(sample_suggestion, "suggestion", "")
-        expected_confidence = float(getattr(sample_suggestion, "confidence", 0.0))
+        # Use the domain entity attributes
+        expected_id = str(sample_suggestion.id)
+        expected_text = sample_suggestion.suggestion_text
+        expected_confidence = sample_suggestion.confidence_score
 
         assert mcp_suggestion.id == expected_id
         assert mcp_suggestion.suggestion_text == expected_text
@@ -366,7 +448,8 @@ class TestMCPAnalyzerFacade:
             request = request_class(tool_name=method_name, test_pattern="test_*.py")
         elif method_name == "update_config":
             request = request_class(
-                tool_name=method_name, config_updates={"key": "value"}
+                tool_name=method_name,
+                config_updates={"test_key": "test_value"},  # Use unique key-value
             )
         else:
             # For methods that only need tool_name

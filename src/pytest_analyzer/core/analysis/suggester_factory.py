@@ -8,6 +8,8 @@ implementations (rule-based, LLM-based, composite, etc.) based on configuration.
 import logging
 from typing import Any, Dict, Optional
 
+from pytest_analyzer.core.errors import ConfigurationError
+
 from ..llm.llm_service_protocol import LLMServiceProtocol
 from ..prompts.prompt_builder import PromptBuilder
 from ..protocols import Suggester
@@ -35,7 +37,7 @@ def create_suggester(
         A suggester implementation
 
     Raises:
-        ValueError: If an invalid suggester type is specified
+        ConfigurationError: If an invalid suggester type is specified
     """
     suggester_type = config.get("type", "rule-based").lower()
 
@@ -46,7 +48,14 @@ def create_suggester(
     elif suggester_type == "composite":
         return create_composite_suggester(config, llm_service, prompt_builder)
     else:
-        raise ValueError(f"Invalid suggester type: {suggester_type}")
+        logger.error(
+            f"Invalid suggester type: {suggester_type}",
+            extra={"extra_data": {"config": config}},
+        )
+        raise ConfigurationError(
+            message=f"Invalid suggester type: {suggester_type}",
+            context={"suggester_type": suggester_type, "config": config},
+        )
 
 
 def create_rule_based_suggester(config: Dict[str, Any]) -> FixSuggester:
@@ -94,7 +103,10 @@ def create_llm_based_suggester(
     llm_service_instance = llm_service or config.get("llm_service")
 
     if not llm_service_instance:
-        raise ValueError("LLM service is required for LLM-based suggester")
+        raise ConfigurationError(
+            message="LLM service is required for LLM-based suggester",
+            context={"config": config},
+        )
 
     # Use provided prompt builder or create a new one
     prompt_builder_instance = prompt_builder

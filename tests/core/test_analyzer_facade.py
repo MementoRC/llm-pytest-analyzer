@@ -90,12 +90,14 @@ class TestAnalyzerFacade:
 
         # Verify state machine was called correctly
         mock_state_machine_class.assert_called_once()
-        mock_state_machine.run.assert_called_once_with(
+        # Verify setup was called with the test parameters
+        mock_state_machine.setup.assert_called_once_with(
             test_path="test_path",
             pytest_args=["--verbose"],
             quiet=True,
-            extract_only=True,
         )
+        # Verify run was called without parameters
+        mock_state_machine.run.assert_called_once_with()
 
     @patch("pytest_analyzer.core.analyzer_state_machine.AnalyzerStateMachine")
     def test_run_and_analyze(self, mock_state_machine_class):
@@ -120,12 +122,14 @@ class TestAnalyzerFacade:
 
         # Verify state machine was called correctly
         mock_state_machine_class.assert_called_once()
-        mock_state_machine.run.assert_called_once_with(
+        # Verify setup was called with the test parameters
+        mock_state_machine.setup.assert_called_once_with(
             test_path="test_path",
             pytest_args=["--verbose"],
             quiet=True,
-            apply_fixes=False,
         )
+        # Verify run was called with apply_fixes=False
+        mock_state_machine.run.assert_called_once_with(apply_fixes=False)
 
     def test_apply_suggestion(self):
         """Test the apply_suggestion method."""

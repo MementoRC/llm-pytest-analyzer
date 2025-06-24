@@ -1,9 +1,17 @@
 site_name: llm-pytest-analyzer
-repo_url: https://github.com/MementoRC/llm-pytest-analyzer  # Add this line
+repo_url: https://github.com/MementoRC/llm-pytest-analyzer
 edit_uri: edit/main/docs
-docs_dir: docs  # Change from . to docs
-site_dir: site  # Explicitly set site output directory
+docs_dir: docs
+site_dir: site
 theme:
   name: readthedocs
 nav:
   - Home: index.md
+  - Architecture: architecture.md
+  - API User Guide: api-user-guide.md
+  - Security Practices: security-practices.md
+  - Operations & Maintenance: operations-guide.md
+  - Disaster Recovery: disaster-recovery.md
+  - Project Retrospective: project-retrospective.md
+  - Environment Managers: environment-managers.md
+  - Dependency Injection: DEPENDENCY_INJECTION.md

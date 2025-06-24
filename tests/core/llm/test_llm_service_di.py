@@ -9,10 +9,8 @@ import os
 from unittest.mock import MagicMock, patch
 
 from pytest_analyzer.core.di import Container, initialize_container
-from pytest_analyzer.core.di.service_collection import (
-    ServiceCollection,
-    _create_llm_service,
-)
+from pytest_analyzer.core.di.service_collection import ServiceCollection
+from pytest_analyzer.core.factories.analyzer_factory import create_llm_service
 from pytest_analyzer.core.llm.llm_service_factory import LLMProvider
 from pytest_analyzer.core.llm.llm_service_protocol import LLMServiceProtocol
 from pytest_analyzer.utils.settings import Settings
@@ -21,15 +19,26 @@ from pytest_analyzer.utils.settings import Settings
 class TestLLMServiceDI:
     """Test suite for LLM service integration with the DI container."""
 
+    @patch(
+        "pytest_analyzer.core.feature_flags.feature_flag_service.FlagsmithFeatureFlagService.get_feature_value"
+    )
+    @patch(
+        "pytest_analyzer.core.feature_flags.feature_flag_service.FlagsmithFeatureFlagService.is_feature_enabled"
+    )
     @patch("pytest_analyzer.core.llm.llm_service_factory.detect_llm_client")
-    def test_service_collection_llm_services(self, mock_detect_client):
+    def test_service_collection_llm_services(
+        self, mock_detect_client, mock_is_feature_enabled, mock_get_feature_value
+    ):
         """Test that ServiceCollection configures LLM services correctly."""
         # Set up mocks
+        mock_is_feature_enabled.return_value = True
+        mock_get_feature_value.return_value = None
         mock_client = MagicMock()
         mock_detect_client.return_value = (mock_client, LLMProvider.ANTHROPIC)
 
         # Test with explicit client
         service_collection = ServiceCollection()
+        service_collection.configure_core_services()
         explicit_client = MagicMock()
         service_collection.configure_llm_services(llm_client=explicit_client)
 
@@ -39,20 +48,33 @@ class TestLLMServiceDI:
         # Create a new collection and test without explicit client
         service_collection = ServiceCollection()
         service_collection.configure_core_services().configure_llm_services()
+        service_collection.build_container().resolve(LLMServiceProtocol)
 
         # Verify client detection was called
         mock_detect_client.assert_called_once()
 
+    @patch(
+        "pytest_analyzer.core.feature_flags.feature_flag_service.FlagsmithFeatureFlagService.get_feature_value"
+    )
+    @patch(
+        "pytest_analyzer.core.feature_flags.feature_flag_service.FlagsmithFeatureFlagService.is_feature_enabled"
+    )
     @patch("pytest_analyzer.core.llm.llm_service_factory.detect_llm_client")
-    def test_custom_provider_override(self, mock_detect_client):
+    def test_custom_provider_override(
+        self, mock_detect_client, mock_is_feature_enabled, mock_get_feature_value
+    ):
         """Test ServiceCollection with provider override."""
         # Set up mocks
+        mock_is_feature_enabled.return_value = True
+        mock_get_feature_value.return_value = None
         mock_client = MagicMock()
         mock_detect_client.return_value = (mock_client, LLMProvider.OPENAI)
 
         # Create service collection with provider override
         service_collection = ServiceCollection()
+        service_collection.configure_core_services()
         service_collection.configure_llm_services(override_provider="openai")
+        service_collection.build_container().resolve(LLMServiceProtocol)
 
         # Verify client detection was called with the right provider
         mock_detect_client.assert_called_once()
@@ -69,7 +91,9 @@ class TestLLMServiceDI:
 
         service_collection = ServiceCollection()
         service_collection.container = container
+        service_collection.configure_core_services()
         service_collection.configure_llm_services()
+        service_collection.build_container().resolve(LLMServiceProtocol)
 
         # Verify client detection respects settings preference
         assert mock_detect_client.call_args[1]["preferred_provider"] == "anthropic"
@@ -80,15 +104,27 @@ class TestLLMServiceDI:
         # Test override takes precedence over settings
         service_collection = ServiceCollection()
         service_collection.container = container
+        service_collection.configure_core_services()
         service_collection.configure_llm_services(override_provider="azure")
+        service_collection.build_container().resolve(LLMServiceProtocol)
 
         # Verify override trumps settings
         assert mock_detect_client.call_args[1]["preferred_provider"] == "azure"
 
+    @patch(
+        "pytest_analyzer.core.feature_flags.feature_flag_service.FlagsmithFeatureFlagService.get_feature_value"
+    )
+    @patch(
+        "pytest_analyzer.core.feature_flags.feature_flag_service.FlagsmithFeatureFlagService.is_feature_enabled"
+    )
     @patch("pytest_analyzer.core.llm.llm_service_factory.detect_llm_client")
-    def test_fallback_settings_respected(self, mock_detect_client):
+    def test_fallback_settings_respected(
+        self, mock_detect_client, mock_is_feature_enabled, mock_get_feature_value
+    ):
         """Test that fallback settings are respected."""
         # Set up mocks
+        mock_is_feature_enabled.return_value = True
+        mock_get_feature_value.return_value = None
         mock_detect_client.return_value = (MagicMock(), LLMProvider.OPENAI)
 
         # Test with fallback enabled in settings
@@ -99,7 +135,9 @@ class TestLLMServiceDI:
 
         service_collection = ServiceCollection()
         service_collection.container = container
+        service_collection.configure_core_services()
         service_collection.configure_llm_services()
+        service_collection.build_container().resolve(LLMServiceProtocol)
 
         # Verify fallback was enabled
         assert mock_detect_client.call_args[1]["fallback"] is True
@@ -115,7 +153,9 @@ class TestLLMServiceDI:
 
         service_collection = ServiceCollection()
         service_collection.container = container
+        service_collection.configure_core_services()
         service_collection.configure_llm_services()
+        service_collection.build_container().resolve(LLMServiceProtocol)
 
         # Verify fallback was disabled
         assert mock_detect_client.call_args[1]["fallback"] is False
@@ -131,13 +171,15 @@ class TestLLMServiceDI:
 
         service_collection = ServiceCollection()
         service_collection.container = container
+        service_collection.configure_core_services()
         service_collection.configure_llm_services(override_provider="azure")
+        service_collection.build_container().resolve(LLMServiceProtocol)
 
         # Verify fallback is False when using override
         assert mock_detect_client.call_args[1]["fallback"] is False
 
     def test_llm_service_factory_function_success(self):
-        """Test the _create_llm_service factory function with successful client detection."""
+        """Test the create_llm_service factory function with successful client detection."""
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "env-test-key"}):
             with patch(
                 "pytest_analyzer.core.llm.llm_service_factory.detect_llm_client"
@@ -155,7 +197,7 @@ class TestLLMServiceDI:
                 container.register_instance(Settings, settings)
 
                 # Call the factory function
-                llm_service = _create_llm_service(container)
+                llm_service = create_llm_service(container)
 
                 # Verify detect_llm_client was called
                 mock_detect_client.assert_called_once()
@@ -164,7 +206,7 @@ class TestLLMServiceDI:
                 assert llm_service.timeout_seconds == 120
 
     def test_llm_service_factory_function_import_error(self):
-        """Test the _create_llm_service factory function with import error handling."""
+        """Test the create_llm_service factory function with import error handling."""
         with patch(
             "pytest_analyzer.core.llm.llm_service_factory.detect_llm_client",
             side_effect=ImportError("Module not found"),
@@ -178,12 +220,12 @@ class TestLLMServiceDI:
 
             # Mock the LLMService import to avoid the actual error import path
             with patch(
-                "pytest_analyzer.core.di.service_collection.LLMService"
+                "pytest_analyzer.core.factories.analyzer_factory.LLMService"
             ) as mock_service:
                 mock_service.return_value = MagicMock()
 
                 # Call the function but don't need to store it as we're just testing the calls
-                _create_llm_service(container)
+                create_llm_service(container)
 
                 # Verify LLMService was called - specific client None check moved to mock
                 assert mock_service.call_count == 1
@@ -192,7 +234,7 @@ class TestLLMServiceDI:
                 mock_detect_client.assert_called_once()
 
     def test_llm_service_factory_function_general_error(self):
-        """Test the _create_llm_service factory function with general error handling."""
+        """Test the create_llm_service factory function with general error handling."""
         with patch(
             "pytest_analyzer.core.llm.llm_service_factory.detect_llm_client",
             side_effect=Exception("General error"),
@@ -204,12 +246,12 @@ class TestLLMServiceDI:
 
             # Mock the LLMService import to isolate testing
             with patch(
-                "pytest_analyzer.core.di.service_collection.LLMService"
+                "pytest_analyzer.core.factories.analyzer_factory.LLMService"
             ) as mock_service:
                 mock_service.return_value = MagicMock()
 
                 # Call the function but don't need to store it, testing the error handling
-                _create_llm_service(container)
+                create_llm_service(container)
 
                 # Verify LLMService was called as a fallback
                 assert mock_service.call_count == 1
@@ -217,10 +259,20 @@ class TestLLMServiceDI:
                 # Verify attempt was made to handle the error
                 mock_detect_client.assert_called_once()
 
+    @patch(
+        "pytest_analyzer.core.feature_flags.feature_flag_service.FlagsmithFeatureFlagService.get_feature_value"
+    )
+    @patch(
+        "pytest_analyzer.core.feature_flags.feature_flag_service.FlagsmithFeatureFlagService.is_feature_enabled"
+    )
     @patch("pytest_analyzer.core.llm.llm_service_factory.detect_llm_client")
-    def test_container_initialization_with_llm(self, mock_detect_client):
+    def test_container_initialization_with_llm(
+        self, mock_detect_client, mock_is_feature_enabled, mock_get_feature_value
+    ):
         """Test initialization of the container with LLM services."""
         # Set up mocks
+        mock_is_feature_enabled.return_value = True
+        mock_get_feature_value.return_value = None
         mock_client = MagicMock()
         mock_client.__class__.__module__ = "anthropic.client"
         mock_detect_client.return_value = (mock_client, LLMProvider.ANTHROPIC)

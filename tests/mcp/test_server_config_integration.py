@@ -1,5 +1,6 @@
 """Tests for MCP server configuration integration."""
 
+import logging
 import re
 
 from pytest_analyzer.mcp.server import MCPServerFactory, PytestAnalyzerMCPServer
@@ -90,6 +91,9 @@ class TestMCPServerConfigIntegration:
         )
         settings = Settings(mcp=custom_mcp)
 
+        # Ensure logger is set to NOTSET so caplog can capture all levels
+        caplog.set_level(logging.NOTSET, logger="PytestAnalyzerMCPServer")
+
         PytestAnalyzerMCPServer(settings=settings)
 
         # Check that initialization log includes config info
@@ -102,7 +106,14 @@ class TestMCPServerConfigIntegration:
         assert len(log_records) > 0
 
         # Should mention transport type, host, and port
-        init_message = log_records[0].message
-        assert "http transport" in init_message
-        assert re.search(r"\btest\.example\.com\b", init_message)
-        assert "8888" in init_message
+        found = False
+        for record in log_records:
+            init_message = record.message
+            if (
+                "http transport" in init_message
+                and re.search(r"\btest\.example\.com\b", init_message)
+                and "8888" in init_message
+            ):
+                found = True
+                break
+        assert found, "Expected config info not found in any log record"

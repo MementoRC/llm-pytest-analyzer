@@ -10,10 +10,10 @@ import asyncio
 import logging
 from typing import Any, Dict, Optional, Union
 
-from ..utils.errors import FrameworkError, TaskNotFoundError
-from .models.config import TaskConfig
-from .protocols import TaskExecutor, TaskInput, TaskResult
-from .registry import TaskRegistry
+from llm_task_framework.core.models.config import TaskConfig
+from llm_task_framework.core.registry import TaskRegistry
+from llm_task_framework.protocols import TaskExecutor, TaskInput, TaskResult
+from llm_task_framework.utils.errors import FrameworkError, TaskNotFoundError
 
 logger = logging.getLogger("llm_task_framework.core.facade")
 

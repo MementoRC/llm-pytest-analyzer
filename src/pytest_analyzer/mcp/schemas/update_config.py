@@ -58,9 +58,7 @@ class UpdateConfigRequest:
         if self.section is not None:
             valid_sections = {"llm", "mcp", "analysis", "extraction", "logging", "git"}
             if self.section not in valid_sections:
-                errors.append(
-                    f"Invalid section '{self.section}'. Must be one of: {valid_sections}"
-                )
+                errors.append(f"Section '{self.section}' not found")
 
         # Validate merge_strategy
         valid_strategies = {"merge", "replace", "append"}

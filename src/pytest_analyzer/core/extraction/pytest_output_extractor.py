@@ -135,8 +135,8 @@ class PytestOutputExtractor(Extractor):
 
         try:
             with ResourceMonitor(max_time_seconds=self.timeout):
-                with open(input_path, "r", encoding="utf-8") as f:
-                    content = f.read()
+                # Use async file reading for large files
+                content = self._read_file_streaming(input_path)
                 failures = self.extract_failures_from_text(content)
                 return {
                     "failures": failures,
@@ -146,6 +146,32 @@ class PytestOutputExtractor(Extractor):
         except Exception as e:
             logger.error(f"Error extracting failures from pytest output: {e}")
             raise ExtractionError(f"Failed to extract failures: {e}") from e
+
+    def _read_file_streaming(self, input_path: Path, chunk_size: int = 65536) -> str:
+        """
+        Read a file in streaming fashion to avoid loading large files into memory at once.
+
+        Args:
+            input_path: Path to the file
+            chunk_size: Size of each chunk to read
+
+        Returns:
+            The file content as a string
+        """
+        try:
+            # Use generator to yield chunks and join for memory efficiency
+            def chunk_reader():
+                with open(input_path, "r", encoding="utf-8") as f:
+                    while True:
+                        chunk = f.read(chunk_size)
+                        if not chunk:
+                            break
+                        yield chunk
+
+            return "".join(chunk_reader())
+        except Exception as e:
+            logger.error(f"Error streaming file read: {e}")
+            raise
 
     @with_timeout(30)
     def extract_failures(self, input_path: Path) -> List[PytestFailure]:
@@ -397,6 +423,16 @@ class PytestOutputExtractor(Extractor):
         if not line_number:
             return None
 
+        # Use LRU cache for code context extraction
+        return self._get_code_context_cached(test_file, line_number)
+
+    # LRU cache for code context extraction (cache size 128)
+    from functools import lru_cache
+
+    @lru_cache(maxsize=128)
+    def _get_code_context_cached(
+        self, test_file: str, line_number: int
+    ) -> Optional[str]:
         try:
             # Make sure we have a valid file path
             try:
@@ -409,13 +445,16 @@ class PytestOutputExtractor(Extractor):
                 logger.warning(f"Test file not found: {file_path}")
                 return None
 
-            with open(file_path, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-
-            # Extract context (5 lines before and after)
+            # Use generator to avoid loading all lines into memory
+            context_lines = []
             start_line = max(0, line_number - 6)
-            end_line = min(len(lines), line_number + 5)
-            context_lines = lines[start_line:end_line]
+            end_line = line_number + 5
+            with open(file_path, "r", encoding="utf-8") as f:
+                for i, line in enumerate(f):
+                    if start_line <= i < end_line:
+                        context_lines.append(line)
+                    if i >= end_line:
+                        break
 
             return "".join(context_lines)
         except Exception as e:

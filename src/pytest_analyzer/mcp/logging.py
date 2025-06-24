@@ -13,7 +13,12 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Callable, Dict, Optional, TypeVar
 
-from ..utils.logging_config import configure_logging
+from ..utils.logging_config import (
+    configure_logging,
+    log_performance,
+    mask_sensitive_data,
+    set_logging_context,
+)
 
 # Type variable for decorator
 F = TypeVar("F", bound=Callable[..., Any])
@@ -49,25 +54,10 @@ class MCPLogger:
             configure_logging(settings)
 
     def sanitize_message(self, message: Any) -> str:
-        """Sanitize sensitive information from messages."""
-        sensitive_fields = ["password", "token", "secret", "key", "auth"]
-
-        def _sanitize_recursive(data: Any) -> Any:
-            if isinstance(data, dict):
-                sanitized_data = {}
-                for k, v in data.items():
-                    if k in sensitive_fields:
-                        sanitized_data[k] = "***"
-                    else:
-                        sanitized_data[k] = _sanitize_recursive(v)
-                return sanitized_data
-            elif isinstance(data, list):
-                return [_sanitize_recursive(item) for item in data]
-            else:
-                return data
-
-        sanitized_message_obj = _sanitize_recursive(message)
-        return json.dumps(sanitized_message_obj)
+        """Sanitize sensitive information from messages using enhanced masking."""
+        # Use the enhanced mask_sensitive_data function
+        sanitized_message_obj = mask_sensitive_data(message)
+        return json.dumps(sanitized_message_obj, default=str)
 
     def log_protocol_message(
         self, direction: str, message: Any, level: int = logging.DEBUG
@@ -113,18 +103,19 @@ class MCPLogger:
     def log_security_event(
         self, event_type: str, details: Dict[str, Any], level: int = logging.INFO
     ) -> None:
-        """Log security-related events."""
-        sanitized_details = {
-            k: "***" if k in ["token", "password"] else v for k, v in details.items()
-        }
+        """Log security-related events with enhanced sanitization."""
+        # Use enhanced masking for all security event details
+        sanitized_details = mask_sensitive_data(details)
 
         self.logger.log(
             level,
             f"Security event: {event_type}",
             extra={
-                "security_event": event_type,
-                "details": sanitized_details,
-                "timestamp": datetime.utcnow().isoformat(),
+                "extra_data": {
+                    "security_event": event_type,
+                    "event_details": sanitized_details,
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
             },
         )
 
@@ -132,19 +123,75 @@ class MCPLogger:
         """Get collected metrics."""
         return self.metrics.copy()
 
+    def set_mcp_context(
+        self,
+        correlation_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        operation: Optional[str] = None,
+    ) -> None:
+        """Set MCP-specific logging context."""
+        set_logging_context(
+            correlation_id=correlation_id,
+            user_id=user_id,
+            operation=operation,
+        )
+
+        self.logger.debug(
+            "MCP context set",
+            extra={
+                "extra_data": {
+                    "correlation_id": correlation_id,
+                    "user_id": user_id,
+                    "operation": operation,
+                }
+            },
+        )
+
+    def log_request_response(
+        self,
+        request_data: Any,
+        response_data: Any,
+        duration_ms: Optional[float] = None,
+        level: int = logging.DEBUG,
+    ) -> None:
+        """Log MCP request/response pairs with sanitization."""
+        sanitized_request = mask_sensitive_data(request_data)
+        sanitized_response = mask_sensitive_data(response_data)
+
+        log_data = {
+            "request": sanitized_request,
+            "response": sanitized_response,
+        }
+
+        if duration_ms is not None:
+            log_data["duration_ms"] = round(duration_ms, 2)
+
+        self.logger.log(
+            level,
+            "MCP request/response",
+            extra={"extra_data": log_data},
+        )
+
 
 def log_tool_execution(logger: Optional[MCPLogger] = None) -> Callable[[F], F]:
-    """Decorator to log tool execution with metrics."""
+    """Decorator to log tool execution with enhanced metrics and performance tracking."""
 
     def decorator(func: F) -> F:
+        # Apply the enhanced performance logging decorator
+        perf_decorated = log_performance(
+            operation_name=f"mcp_tool_{func.__name__}",
+            log_args=False,  # Don't log args for MCP tools (may contain sensitive data)
+            min_duration_ms=1.0,  # Log operations taking more than 1ms
+        )(func)
+
         @functools.wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
             start_time = time.time()
             error = None
             success = False
 
             try:
-                result = await func(*args, **kwargs)
+                result = await perf_decorated(*args, **kwargs)
                 success = True
                 return result
             except Exception as e:
@@ -160,7 +207,34 @@ def log_tool_execution(logger: Optional[MCPLogger] = None) -> Callable[[F], F]:
                         error=error,
                     )
 
-        return wrapper  # type: ignore
+        @functools.wraps(func)
+        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+            start_time = time.time()
+            error = None
+            success = False
+
+            try:
+                result = perf_decorated(*args, **kwargs)
+                success = True
+                return result
+            except Exception as e:
+                error = str(e)
+                raise
+            finally:
+                if logger:
+                    duration_ms = (time.time() - start_time) * 1000
+                    logger.log_tool_execution(
+                        tool_name=func.__name__,
+                        duration_ms=duration_ms,
+                        success=success,
+                        error=error,
+                    )
+
+        # Return appropriate wrapper based on function type
+        if hasattr(func, "__code__") and func.__code__.co_flags & 0x80:  # CO_COROUTINE
+            return async_wrapper  # type: ignore
+        else:
+            return sync_wrapper  # type: ignore
 
     return decorator
 

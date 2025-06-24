@@ -297,7 +297,9 @@ class CompositeSuggester(Suggester):
         fingerprint = ":".join(parts)
         import hashlib
 
-        return hashlib.md5(fingerprint.encode("utf-8")).hexdigest()
+        return hashlib.md5(
+            fingerprint.encode("utf-8"), usedforsecurity=False
+        ).hexdigest()
 
     def _generate_dict_fingerprint(self, suggestion: Dict[str, Any]) -> str:
         """
@@ -326,4 +328,6 @@ class CompositeSuggester(Suggester):
         fingerprint = ":".join(parts)
         import hashlib
 
-        return hashlib.md5(fingerprint.encode("utf-8")).hexdigest()
+        return hashlib.md5(
+            fingerprint.encode("utf-8"), usedforsecurity=False
+        ).hexdigest()

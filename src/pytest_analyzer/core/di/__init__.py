@@ -49,6 +49,31 @@ def set_container(container: Optional[Container]) -> None:
     _global_container = container
 
 
+# Enhanced DI functionality
+_ENHANCED_DI_AVAILABLE = False
+
+try:
+    import importlib.util
+
+    if importlib.util.find_spec("injector") is not None:
+        from .enhanced_service_collection import (
+            configure_enhanced_services,
+            get_enhanced_container,
+        )
+
+        _ENHANCED_DI_AVAILABLE = True
+        # Add to globals for dynamic exports
+        globals()["configure_enhanced_services"] = configure_enhanced_services
+        globals()["get_enhanced_container"] = get_enhanced_container
+except ImportError:
+    pass
+
+
+def is_enhanced_di_available() -> bool:
+    """Check if enhanced DI with injector library is available."""
+    return _ENHANCED_DI_AVAILABLE
+
+
 __all__ = [
     "Container",
     "RegistrationMode",
@@ -64,4 +89,15 @@ __all__ = [
     "configure_services",
     "get_service",
     "initialize_container",
+    # Enhanced DI (if available)
+    "is_enhanced_di_available",
 ]
+
+# Add enhanced DI to exports if available
+if _ENHANCED_DI_AVAILABLE:
+    __all__.extend(
+        [
+            "configure_enhanced_services",
+            "get_enhanced_container",
+        ]
+    )

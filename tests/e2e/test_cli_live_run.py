@@ -129,7 +129,7 @@ def test_cli_with_report_file(sample_json_report):
     # Verify header, test details, and suggestion are present
     assert "Analyzing output file:" in output
     assert (
-        "test_assertion.py::test_assertion_error" in output
+        "test_assertion_fail.py::test_simple_fail" in output
         or "AssertionError" in output
     )
     assert "Suggested fix" in output

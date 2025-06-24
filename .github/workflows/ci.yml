@@ -9,7 +9,6 @@ on:
 jobs:
   lint_and_types:
     runs-on: ubuntu-latest
-    # name: lint_and_type (${{ github.event_name }})
 
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +21,7 @@ jobs:
           manifest-path: pyproject.toml
 
       - name: Install dependencies with Pixi
-        run: pixi install -e dev -v
+        run: pixi install -e dev -v || (echo "::error::Failed to install dev dependencies with Pixi." && exit 1)
 
       - name: Install pre-commit hooks
         run: pixi run -e dev setup-pre-commit
@@ -36,17 +35,13 @@ jobs:
             exit 1
           fi
 
-  test:
+  static_analysis:
+    runs-on: ubuntu-latest
     needs: lint_and_types
-    runs-on: ${{ matrix.os }}
-    # name: test-${{ matrix.python-version }} (${{ github.event_name }})
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        python-version: ["3.10", "3.11", "3.12"]
-
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: prefix-dev/setup-pixi@v0.8.8
         with:
@@ -54,12 +49,147 @@ jobs:
           manifest-path: pyproject.toml
 
       - name: Install dependencies with Pixi
-        run: pixi install -e dev -v
+        run: pixi install -e dev -v || (echo "::error::Failed to install dev dependencies with Pixi." && exit 1)
+
+      - name: Run Pylint
+        run: pixi run -e dev pylint-check-console || (echo "::error::Pylint check failed." && exit 1)
+
+      - name: Run Bandit (security static analysis)
+        run: pixi run -e dev security-scan-console || (echo "::error::Bandit scan failed." && exit 1)
+
+      - name: Run Radon (complexity check)
+        run: pixi run -e dev complexity-check || (echo "::error::Radon complexity check failed." && exit 1)
+
+      - name: Run Vulture (dead code check)
+        run: pixi run -e dev dead-code-check || (echo "::error::Vulture dead code check failed." && exit 1)
+
+  dependency_vulnerabilities:
+    runs-on: ubuntu-latest
+    needs: lint_and_types
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: prefix-dev/setup-pixi@v0.8.8
+        with:
+          pixi-version: latest
+          manifest-path: pyproject.toml
+
+      - name: Install dependencies with Pixi
+        run: pixi install -e dev -v || (echo "::error::Failed to install dev dependencies with Pixi." && exit 1)
+
+      - name: Run Safety (dependency vulnerability check)
+        run: pixi run -e dev safety-check-console
+
+  security_scan:
+    runs-on: ubuntu-latest
+    needs: lint_and_types
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up OWASP ZAP
+        uses: zaproxy/action-full-scan@v0.10.0
+        with:
+          target: 'http://localhost:8000'
+        continue-on-error: true
+      # Note: You may need to ensure your app is running for ZAP to scan it.
+      # This is a placeholder for ZAP integration.
+
+  performance_test:
+    runs-on: ubuntu-latest
+    needs: lint_and_types
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: prefix-dev/setup-pixi@v0.8.8
+        with:
+          pixi-version: latest
+          manifest-path: pyproject.toml
+
+      - name: Install dependencies with Pixi
+        run: pixi install -e dev -v || (echo "::error::Failed to install dev dependencies with Pixi." && exit 1)
+
+      - name: Run performance regression tests
+        run: |
+          echo "TODO: Add performance regression test commands here"
+          # Example: pixi run -e dev performance-test
+
+  test:
+    needs: [lint_and_types, static_analysis, dependency_vulnerabilities, security_scan, performance_test]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: "src"
+      CI: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - uses: prefix-dev/setup-pixi@v0.8.8
+        with:
+          pixi-version: latest
+          manifest-path: pyproject.toml
+
+      - name: Install test dependencies with Pixi
+        run: |
+          echo "::group::Installing test dependencies with Pixi"
+          pixi install -e test -v || (echo "::error::Failed to install test dependencies with Pixi. This could be a network issue or a problem with dependency resolution." && exit 1)
+          echo "::endgroup::"
+
+      - name: Pre-test validation and environment logging
+        run: |
+          echo "::group::Environment Details"
+          echo "Runner OS: ${{ runner.os }}"
+          echo "Python version: $(python --version)"
+          echo "Python path: $(which python)"
+          echo "Pip version: $(pip --version)"
+          echo "Pip path: $(which pip)"
+          echo "PYTHONPATH: $PYTHONPATH"
+          echo "CI: $CI"
+          echo "Project root contents:"
+          ls -la
+          echo "::endgroup::"
+          echo "::group::Pixi Environment Info"
+          pixi --version
+          pixi info
+          echo "::endgroup::"
+
+      - name: Verify Dependencies
+        run: |
+          echo "::group::Listing installed packages"
+          pixi run -e test pip list
+          echo "::endgroup::"
+          echo "::group::Checking for dependency conflicts"
+          pixi run -e test pip check || (echo "::error::'pip check' found dependency conflicts." && exit 1)
+          echo "::endgroup::"
 
       - name: Run tests with coverage
-        run: pixi run -e dev test
+        run: |
+          echo "Running tests with coverage using the 'test-cov' pixi task..."
+          echo "PYTHONPATH in CI: $PYTHONPATH"
+          echo "Current directory: $(pwd)"
+          echo "Python path resolution:"
+          pixi run -e test python -c 'import sys; print("Python paths:"); [print("  " + p) for p in sys.path]'
+          pixi run -e test test-cov
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
