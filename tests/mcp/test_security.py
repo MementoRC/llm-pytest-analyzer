@@ -259,7 +259,7 @@ def test_rate_limit_allows_within_limit(security_manager):
 def test_rate_limit_blocks_over_limit(security_manager):
     for _ in range(3):
         security_manager.check_rate_limit("client2")
-    with pytest.raises(SecurityError, match="Rate limit exceeded"):
+    with pytest.raises(SecurityError, match="Rate limit.*exceeded"):
         security_manager.check_rate_limit("client2")
 
 

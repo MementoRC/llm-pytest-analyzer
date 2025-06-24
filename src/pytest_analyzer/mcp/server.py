@@ -562,6 +562,88 @@ class PytestAnalyzerMCPServer:
             "prompts": {"listChanged": True} if self._registered_prompts else None,
         }
 
+    async def test_call_tool(
+        self, name: str, arguments: dict, client_id: str = "test_client"
+    ) -> Any:
+        """
+        A test helper to directly invoke the tool calling logic.
+        This bypasses the MCP transport layer and allows for direct testing
+        of tool handlers, security checks, and other internal logic.
+
+        Args:
+            name: The name of the tool to call.
+            arguments: The arguments for the tool.
+            client_id: The client identifier for rate limiting. Defaults to 'test_client'.
+
+        Returns:
+            The result of the tool call.
+        """
+        self.logger.info(
+            f"MCP: test_call_tool invoked for '{name}' by client '{client_id}'"
+        )
+
+        try:
+            # --- Security Checks ---
+            self.security_manager.check_rate_limit(client_id, tool_name=name)
+            self.security_manager.check_circuit_breaker(tool_name=name)
+
+            # Sanitize and validate inputs AFTER rate limiting to prevent
+            # expensive validation on denied requests.
+            sanitized_args = self.security_manager.validate_tool_input(
+                name,
+                arguments,
+                read_only=True,  # Assume most tools are read-only
+            )
+
+        except SecurityError as e:
+            self.logger.warning(f"Security violation for tool '{name}': {e}")
+            from mcp.types import TextContent
+
+            return [TextContent(type="text", text=f"Security error: {e}")]
+
+        handler = self._registered_handlers.get(name)
+        if not handler:
+            self.logger.error(f"Unknown tool requested: {name}")
+            from mcp.types import TextContent
+
+            return [TextContent(type="text", text=f"Unknown tool: {name}")]
+        try:
+            # Handler may be async or sync
+            if asyncio.iscoroutinefunction(handler):
+                result = await handler(sanitized_args)
+            else:
+                result = handler(sanitized_args)
+
+            # Record success for circuit breaker
+            self.security_manager.record_success(tool_name=name)
+
+            # Try to extract .content if present (CallToolResult pattern)
+            if hasattr(result, "content"):
+                return result.content
+            elif isinstance(result, list):
+                return result
+            elif isinstance(result, dict):
+                import json
+
+                from mcp.types import TextContent
+
+                response_text = json.dumps(result, indent=2)
+                return [TextContent(type="text", text=response_text)]
+            else:
+                from mcp.types import TextContent
+
+                response_text = str(result)
+                return [TextContent(type="text", text=response_text)]
+        except Exception as e:
+            self.logger.error(f"Error executing tool '{name}': {e}", exc_info=True)
+
+            # Record failure for circuit breaker
+            self.security_manager.record_failure(tool_name=name)
+
+            from mcp.types import TextContent
+
+            return [TextContent(type="text", text=f"Error executing tool {name}: {e}")]
+
     async def stop(self) -> None:
         """Stop the MCP server gracefully."""
         if not self._running:

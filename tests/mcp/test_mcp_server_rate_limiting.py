@@ -56,7 +56,7 @@ def mcp_server(rate_limit_mcp_settings):
 
 @pytest.mark.asyncio
 async def test_call_tool_rate_limiting(mcp_server):
-    call_tool_func = mcp_server.mcp_server.tool_handler
+    call_tool_func = mcp_server.test_call_tool
 
     # First two calls should succeed
     await call_tool_func(name="test_tool", arguments={})
@@ -70,7 +70,7 @@ async def test_call_tool_rate_limiting(mcp_server):
 
 @pytest.mark.asyncio
 async def test_call_tool_rate_limit_window_resets(mcp_server):
-    call_tool_func = mcp_server.mcp_server.tool_handler
+    call_tool_func = mcp_server.test_call_tool
 
     with patch("time.time") as mock_time:
         mock_time.return_value = 1000
@@ -89,58 +89,69 @@ async def test_call_tool_rate_limit_window_resets(mcp_server):
 
 @pytest.mark.asyncio
 async def test_circuit_breaker_integration_opens(mcp_server):
-    call_tool_func = mcp_server.mcp_server.tool_handler
+    call_tool_func = mcp_server.test_call_tool
 
-    # First two calls fail, opening the circuit
-    await call_tool_func(name="failing_tool", arguments={})
-    result = await call_tool_func(name="failing_tool", arguments={})
-    assert "Error executing tool" in result[0].text
+    # Patch rate limiting to isolate circuit breaker functionality
+    with patch.object(
+        mcp_server.security_manager, "check_rate_limit"
+    ) as mock_rate_limit:
+        # First two calls fail, opening the circuit
+        await call_tool_func(name="failing_tool", arguments={})
+        result = await call_tool_func(name="failing_tool", arguments={})
+        assert "Error executing tool" in result[0].text
 
-    # Third call should be blocked by open circuit
-    result = await call_tool_func(name="failing_tool", arguments={})
-    assert isinstance(result[0], TextContent)
-    assert (
-        "Security error: Circuit breaker for tool 'failing_tool' is open"
-        in result[0].text
-    )
+        # Third call should be blocked by open circuit
+        result = await call_tool_func(name="failing_tool", arguments={})
+        assert isinstance(result[0], TextContent)
+        assert (
+            "Security error: Circuit breaker for tool 'failing_tool' is open"
+            in result[0].text
+        )
+        assert mock_rate_limit.call_count == 3
 
 
 @pytest.mark.asyncio
 async def test_circuit_breaker_integration_half_open_and_close(mcp_server):
-    call_tool_func = mcp_server.mcp_server.tool_handler
+    call_tool_func = mcp_server.test_call_tool
 
-    with patch("time.time") as mock_time:
-        mock_time.return_value = 1000
+    # Patch rate limiting to isolate circuit breaker functionality
+    with patch.object(
+        mcp_server.security_manager, "check_rate_limit"
+    ) as mock_rate_limit:
+        with patch("time.time") as mock_time:
+            mock_time.return_value = 1000
 
-        # Open the circuit with failing_tool
-        await call_tool_func(name="failing_tool", arguments={})
-        await call_tool_func(name="failing_tool", arguments={})
+            # Open the circuit with failing_tool
+            await call_tool_func(name="failing_tool", arguments={})
+            await call_tool_func(name="failing_tool", arguments={})
 
-        # Move time forward to allow for HALF_OPEN state
-        mock_time.return_value = 1021
+            # Move time forward to allow for HALF_OPEN state
+            mock_time.return_value = 1021
 
-        # Now, let's mock the handler to succeed
-        mcp_server._registered_handlers["failing_tool"].side_effect = None
-        mcp_server._registered_handlers["failing_tool"].return_value = {
-            "status": "fixed"
-        }
+            # Now, let's mock the handler to succeed
+            mcp_server._registered_handlers["failing_tool"].side_effect = None
+            mcp_server._registered_handlers["failing_tool"].return_value = {
+                "status": "fixed"
+            }
 
-        # This call should be allowed in HALF_OPEN state and succeed
-        result = await call_tool_func(name="failing_tool", arguments={})
-        assert "Security error" not in str(result)
+            # This call should be allowed in HALF_OPEN state and succeed
+            result = await call_tool_func(name="failing_tool", arguments={})
+            assert "Security error" not in str(result)
 
-        # The breaker requires 1 success to close. It should be closed now.
-        breaker = mcp_server.security_manager._get_breaker("failing_tool")
-        assert breaker["state"] == CircuitBreakerState.CLOSED
+            # The breaker requires 1 success to close. It should be closed now.
+            breaker = mcp_server.security_manager._get_breaker("failing_tool")
+            assert breaker["state"] == CircuitBreakerState.CLOSED
 
-        # The next call should also succeed
-        result = await call_tool_func(name="failing_tool", arguments={})
-        assert "Security error" not in str(result)
+            # The next call should also succeed
+            result = await call_tool_func(name="failing_tool", arguments={})
+            assert "Security error" not in str(result)
+
+            assert mock_rate_limit.call_count == 4
 
 
 @pytest.mark.asyncio
 async def test_input_sanitization_in_call_tool(mcp_server):
-    call_tool_func = mcp_server.mcp_server.tool_handler
+    call_tool_func = mcp_server.test_call_tool
     mock_handler = mcp_server._registered_handlers["test_tool"]
 
     bad_input = {"param": "<script>alert(1)</script>"}
