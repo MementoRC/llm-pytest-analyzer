@@ -6,6 +6,7 @@ detecting failure patterns, ranking failures, identifying bulk fixes,
 and generating structured summaries optimized for LLM token usage.
 """
 
+import logging  # Added import for logging
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -19,6 +20,8 @@ from pytest_analyzer.analysis.pattern_database import (
 
 # Import new components
 from pytest_analyzer.analysis.pattern_detector import AhoCorasickPatternDetector
+
+logger = logging.getLogger(__name__)  # Initialize logger
 
 
 @dataclass
@@ -66,10 +69,14 @@ class AnalysisResult:
 class TokenEfficientAnalyzer:
     def __init__(self, fuzzy_match_threshold: float = 0.8):
         self.pattern_db = FailurePatternDatabase()
-        self.aho_corasick_detector = AhoCorasickPatternDetector()
         self.fuzzy_matcher = FuzzyMatcher(threshold=fuzzy_match_threshold)
 
-        # Populate Aho-Corasick detector with known patterns
+        self.aho_corasick_detector: Optional[AhoCorasickPatternDetector] = None
+        self._is_aho_corasick_available = (
+            False  # Flag to track if Aho-Corasick is successfully initialized
+        )
+
+        # Initial attempt to build the automaton
         self._build_aho_corasick_automaton()
 
         # Regex for parsing individual failure lines (still useful for initial extraction)
@@ -79,13 +86,33 @@ class TokenEfficientAnalyzer:
         )
 
     def _build_aho_corasick_automaton(self):
-        """Helper to build/rebuild the Aho-Corasick automaton."""
-        self.aho_corasick_detector = (
-            AhoCorasickPatternDetector()
-        )  # Re-initialize to clear previous patterns
-        for pattern in self.pattern_db.get_all_patterns():
-            self.aho_corasick_detector.add_pattern(pattern.id, pattern.pattern_string)
-        self.aho_corasick_detector.build()
+        """Helper to build/rebuild the Aho-Corasick automaton.
+        Handles graceful degradation if pyahocorasick is not available.
+        """
+        try:
+            # Always attempt to re-initialize to clear previous patterns and add new ones
+            temp_detector = AhoCorasickPatternDetector()
+            for pattern in self.pattern_db.get_all_patterns():
+                temp_detector.add_pattern(pattern.id, pattern.pattern_string)
+            temp_detector.build()
+            self.aho_corasick_detector = temp_detector
+            self._is_aho_corasick_available = True
+        except RuntimeError as e:
+            if (
+                self._is_aho_corasick_available
+            ):  # Log if it was previously available and now failed
+                logger.warning(
+                    f"Failed to rebuild AhoCorasickPatternDetector: {e}. "
+                    "Aho-Corasick functionality will be disabled."
+                )
+            else:  # Log only once on initial failure
+                logger.warning(
+                    f"AhoCorasickPatternDetector could not be initialized: {e}. "
+                    "Falling back to fuzzy matching for pattern detection. "
+                    "Install 'pyahocorasick' for optimal performance."
+                )
+            self.aho_corasick_detector = None
+            self._is_aho_corasick_available = False
 
     def update_pattern_database(self, new_patterns: List[KnownPattern]):
         """
@@ -115,27 +142,31 @@ class TokenEfficientAnalyzer:
             # 1. Try Aho-Corasick for exact known pattern matching on the full message
             matched_known_pattern: Optional[KnownPattern] = None
 
-            # Aho-Corasick search on the full failure line (type: message)
-            # We search for "failure_type: message_start"
-            search_string = f"{failure_type}: {message}"
+            # Only attempt Aho-Corasick search if the detector is available
+            if self.aho_corasick_detector and self._is_aho_corasick_available:
+                # Aho-Corasick search on the full failure line (type: message)
+                # We search for "failure_type: message_start"
+                search_string = f"{failure_type}: {message}"
 
-            ac_matches = self.aho_corasick_detector.search(search_string)
+                ac_matches = self.aho_corasick_detector.search(search_string)
 
-            best_ac_match_id = None
-            longest_match_len = 0
+                best_ac_match_id = None
+                longest_match_len = 0
 
-            for _, (pattern_id, pattern_string) in ac_matches:
-                # Ensure the matched pattern string is actually a prefix or contained in the relevant part
-                # and that it's the longest match found so far.
-                if (
-                    pattern_string in search_string
-                    and len(pattern_string) > longest_match_len
-                ):
-                    best_ac_match_id = pattern_id
-                    longest_match_len = len(pattern_string)
+                for _, (pattern_id, pattern_string) in ac_matches:
+                    # Ensure the matched pattern string is actually a prefix or contained in the relevant part
+                    # and that it's the longest match found so far.
+                    if (
+                        pattern_string in search_string
+                        and len(pattern_string) > longest_match_len
+                    ):
+                        best_ac_match_id = pattern_id
+                        longest_match_len = len(pattern_string)
 
-            if best_ac_match_id:
-                matched_known_pattern = self.pattern_db.get_pattern(best_ac_match_id)
+                if best_ac_match_id:
+                    matched_known_pattern = self.pattern_db.get_pattern(
+                        best_ac_match_id
+                    )
 
             if matched_known_pattern:
                 # Found an exact or near-exact match via Aho-Corasick
@@ -154,7 +185,7 @@ class TokenEfficientAnalyzer:
                     )
                 )
             else:
-                # 2. If no exact Aho-Corasick match, try fuzzy matching against known patterns' base messages
+                # 2. If no exact Aho-Corasick match (or Aho-Corasick not available), try fuzzy matching against known patterns' base messages
                 best_fuzzy_pattern: Optional[KnownPattern] = None
                 best_fuzzy_score = 0.0
 
