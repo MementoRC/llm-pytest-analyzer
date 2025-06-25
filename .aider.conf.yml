@@ -1,6 +1,0 @@
-github_repo: MementoRC/llm-pytest-analyzer
-env:
-  manager: pixi
-  use: true
-  # Optionally, specify the environment name if not "default"
-  # name: default
