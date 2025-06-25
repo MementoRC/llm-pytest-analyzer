@@ -91,6 +91,26 @@ class PytestFailure:
         return self.location.file_path
 
     @property
+    def error_type(self) -> str:
+        """Get the error type as a string for backward compatibility."""
+        return self.failure_type.value
+
+    @property
+    def error_message(self) -> str:
+        """Get the error message for backward compatibility."""
+        return self.failure_message
+
+    @property
+    def relevant_code(self) -> Optional[str]:
+        """Get the relevant code for backward compatibility."""
+        return self.source_code
+
+    @property
+    def traceback_str(self) -> str:
+        """Get the traceback as a joined string for backward compatibility."""
+        return "\n".join(self.traceback) if self.traceback else ""
+
+    @property
     def short_error_message(self) -> str:
         """Get a shortened version of the error message."""
         lines = self.failure_message.split("\n")

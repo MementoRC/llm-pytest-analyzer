@@ -8,6 +8,7 @@ establishing contracts that implementations must follow.
 from enum import Enum, auto
 from typing import (
     Dict,
+    Optional,
     Protocol,
     TypeVar,
     runtime_checkable,
@@ -15,8 +16,8 @@ from typing import (
 
 # Type variables for generic types
 TState = TypeVar("TState", bound="State")
-TContext = TypeVar("TContext")
-TEvent = TypeVar("TEvent")
+TContext = TypeVar("TContext", contravariant=True)
+TEvent = TypeVar("TEvent", contravariant=True)
 TStateMachine = TypeVar("TStateMachine", bound="StateMachine")
 
 
@@ -153,7 +154,9 @@ class StateMachine(Protocol[TContext, TEvent]):
         """
         ...
 
-    def trigger(self, trigger_name: str, event: TEvent = None) -> TransitionResult:
+    def trigger(
+        self, trigger_name: str, event: Optional[TEvent] = None
+    ) -> TransitionResult:
         """
         Trigger a transition by name.
 

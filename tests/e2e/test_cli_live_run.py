@@ -16,6 +16,7 @@ from pytest_analyzer.cli.analyzer_cli import main as cli_main
 
 
 @pytest.mark.e2e
+@pytest.mark.timeout(60)
 def test_cli_direct_execution_help():
     """Test direct execution of the CLI with help option."""
     # Temporarily replace sys.argv
@@ -42,9 +43,9 @@ def test_cli_direct_execution_help():
 
     # Check output
     assert "Python Test Failure Analyzer" in output
-    assert "test_path" in output
-    assert "--json" in output
-    assert "--use-llm" in output
+    assert "analyze" in output  # Should show the analyze subcommand
+    assert "mcp" in output  # Should show the mcp subcommand
+    assert "Available commands" in output  # Should show subcommand help
 
 
 @pytest.mark.e2e
@@ -68,7 +69,12 @@ def test_cli_with_assertion_file(
         with patch("builtins.open", mock_open(read_data=json_content)):
             # Run the CLI
             original_argv = sys.argv.copy()
-            sys.argv = ["pytest-analyzer", str(sample_assertion_file), "--json"]
+            sys.argv = [
+                "pytest-analyzer",
+                "analyze",
+                str(sample_assertion_file),
+                "--json",
+            ]
 
             # Capture output
             import io
@@ -96,6 +102,7 @@ def test_cli_with_assertion_file(
 
 
 @pytest.mark.e2e
+@pytest.mark.timeout(60)
 def test_cli_with_report_file(sample_json_report):
     """Test the CLI with an existing report file via subprocess."""
     # Execute the CLI as a module in a subprocess, ensuring src/ is on PYTHONPATH
@@ -107,6 +114,7 @@ def test_cli_with_report_file(sample_json_report):
             sys.executable,
             "-m",
             "pytest_analyzer.cli.analyzer_cli",
+            "analyze",
             "--output-file",
             str(sample_json_report),
         ],
@@ -114,19 +122,21 @@ def test_cli_with_report_file(sample_json_report):
         stderr=subprocess.STDOUT,
         text=True,
         env=env,
+        timeout=30,
     )
     output = result.stdout
 
     # Verify header, test details, and suggestion are present
     assert "Analyzing output file:" in output
     assert (
-        "test_assertion.py::test_assertion_error" in output
+        "test_assertion_fail.py::test_simple_fail" in output
         or "AssertionError" in output
     )
     assert "Suggested fix" in output
 
 
 @pytest.mark.e2e
+@pytest.mark.timeout(60)
 @pytest.mark.xfail(
     reason="Known failure in LLM integration test - complex to mock all interactions"
 )
@@ -171,6 +181,7 @@ def test_cli_with_llm_integration(sample_json_report):
             original_argv = sys.argv.copy()
             sys.argv = [
                 "pytest-analyzer",
+                "analyze",
                 tmp_test_path,
                 "--output-file",
                 str(sample_json_report),
@@ -218,11 +229,12 @@ def test_cli_with_llm_integration(sample_json_report):
 
 
 @pytest.mark.e2e
+@pytest.mark.timeout(60)
 def test_cli_with_different_formats(sample_assertion_file, patch_subprocess):
     """Test the CLI with different output formats."""
     # Test JSON format
     original_argv = sys.argv.copy()
-    sys.argv = ["pytest-analyzer", str(sample_assertion_file), "--json"]
+    sys.argv = ["pytest-analyzer", "analyze", str(sample_assertion_file), "--json"]
 
     # Capture output
     import io
@@ -242,7 +254,7 @@ def test_cli_with_different_formats(sample_assertion_file, patch_subprocess):
     assert "json-report" in " ".join(patch_subprocess.last_command)
 
     # Test XML format
-    sys.argv = ["pytest-analyzer", str(sample_assertion_file), "--xml"]
+    sys.argv = ["pytest-analyzer", "analyze", str(sample_assertion_file), "--xml"]
 
     xml_out = io.StringIO()
     with redirect_stdout(xml_out):

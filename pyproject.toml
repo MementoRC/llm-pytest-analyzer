@@ -7,7 +7,7 @@ name = "pytest-analyzer"
 dynamic = ["version"]
 description = "Analyzes pytest test results to identify patterns and suggest fixes."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
     { name = "Memento", email = "claude.rc@gmail.com" },
@@ -20,7 +20,6 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -31,29 +30,61 @@ classifiers = [
 
 dependencies = [
     "anthropic",
+    "flagsmith==3.1.0",
+    "hvac>=1.1.0",
+    "injector==0.20.1",
+    "mcp>=1.9.2",
     "openai",
+    "pydantic>=2.0.0",
     "pyyaml",
     "python-dotenv",
     "rich>=12.0.0",
+    "structlog>=24.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
+    "bandit[toml]>=1.7.5",
     "clang-format",
     "isort",
-    "mkdocs",
     "mypy",
     "pre-commit",
     "pre-commit-hooks",
+    "pylint>=2.17.4",
     "pytest>=7.0.0",
     "pytest-asyncio",
     "pytest-cov",
     "pytest-json-report>=1.5.0",
+    "radon>=5.1.0",
     "ruff",
+    "safety>=3.2.0,<3.3.0",
+    "marshmallow==3.26.1",
     "types-pyyaml",
+    "vulture>=2.7",
+    "sphinx>=7.0.0",
+    "sphinx_rtd_theme",
 ]
 
 test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio",
+    "pytest-cov",
+    "pytest-json-report>=1.5.0",
+    "prometheus-client>=0.16.0",
+    "setuptools>=65.0.0",
+    "wheel>=0.37.0",
+    "build>=0.8.0",
+    "marshmallow==3.26.1",
+    "injector==0.20.1",
+]
+
+mcp = [
+    "httpx>=0.24.0",
+    "starlette>=0.27.0",
+    "uvicorn>=0.22.0",
+    "httpx-sse>=0.3.0",
+    "sse-starlette>=1.6.0",
+    "typer>=0.9.0",
     "pytest>=7.0.0",
     "pytest-asyncio",
     "pytest-cov",
@@ -64,15 +95,16 @@ test = [
 pytest-analyzer = "pytest_analyzer.cli.analyzer_cli:main"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/pytest_analyzer"
-Repository = "https://github.com/yourusername/pytest_analyzer"
-Issues = "https://github.com/yourusername/pytest_analyzer/issues"
+Homepage = "https://github.com/MementoRC/llm-pytest-analyzer"
+Repository = "https://github.com/MementoRC/llm-pytest-analyzer"
+Issues = "https://github.com/MementoRC/llm-pytest-analyzer/issues"
 
 [tool.hatch.version]
 path = "src/pytest_analyzer/__version__.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 python_files = "test_*.py"
 python_classes = "Test*"
@@ -81,20 +113,21 @@ pythonpath = ["src"]
 log_cli = true
 log_cli_level = "INFO"
 filterwarnings = ["ignore::DeprecationWarning", "ignore::pytest.PytestDeprecationWarning"]
-addopts = "--quiet --cov=src/pytest_analyzer --cov-report=term-missing"
 markers = [
     "e2e: mark test as an end-to-end test",
+    "ci_timeout: mark test as potentially timing out in CI",
 ]
+
 
 [tool.mypy]
 mypy_path = ["src"]
 explicit_package_bases = true
 exclude = ["examples/*", "demo_script.py", "src/pytest_analyzer/core/di/*"]
-python_version = "3.9"
+python_version = "3.10"
 ignore_errors = false
 
 [[tool.mypy.overrides]]
-module = ["anthropic.*", "openai.*"]
+module = ["anthropic.*", "openai.*", "mcp.*", "httpx.*", "starlette.*", "uvicorn.*"]
 ignore_missing_imports = true
 
 [tool.pixi.project]
@@ -105,25 +138,43 @@ platforms = ["linux-64"]
 "pyyaml" = "*"
 "rich" = ">=12.0.0"
 python-dotenv = ">=1.1.0,<2"
+psutil = ">=5.9.0"
 
 [tool.pixi.pypi-dependencies]
-# pytest-analyzer = { path = ".", editable = true }
+pytest-analyzer = { path = ".", editable = true }
+prometheus-client = ">=0.16.0"
+pytest = ">=7.0.0"
+pytest-asyncio = "*"
+pytest-cov = "*"
+pytest-json-report = ">=1.5.0"
 
 [tool.pixi.environments]
 default = { solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
 test = { features = ["test"], solve-group = "default" }
+mcp = { features = ["mcp"], solve-group = "default" }
 
 [tool.pixi.tasks]
 dev = "pip install -e ."
-install-editable = "pip install -e ."
+install-editable = "pip install -e . || (echo '::error::Editable installation failed' && exit 1)"
 lint = "ruff check src tests"
 lint-fix = "ruff check --fix src tests"
 format = "ruff format src tests"
 typecheck = "mypy src"
-test = "pytest tests"
-test-cov = { cmd = "pytest --cov=src/pytest_analyzer --cov-report=term-missing --cov-report=xml tests", depends-on = ["install-editable"] }
+test = { cmd = "python -m pytest tests || (echo '::error::Pytest failed, check dependencies and import paths' && exit 1)", depends-on = ["install-editable"] }
+test-cov = { cmd = "python -m pytest --cov=src/pytest_analyzer --cov-report=term-missing --cov-report=xml tests || (echo '::error::Pytest with coverage failed' && exit 1)", depends-on = ["install-editable"] }
 build = { cmd = "hatch build", depends-on = ["install-editable"] }
 clean = "rm -rf dist build .ruff_cache .mypy_cache .pytest_cache *.egg-info src/pytest_analyzer.egg-info"
-check-all = { depends-on = ["lint", "typecheck", "test"] }
+security-scan = { cmd = "bandit -r src/ -f json -o security-report.json", depends-on = ["install-editable"] }
+security-scan-console = { cmd = "bandit -r src/ --severity-level high", depends-on = ["install-editable"] }
+complexity-check = { cmd = "radon cc src/ --min B", depends-on = ["install-editable"] }
+dead-code-check = { cmd = "vulture src/ --min-confidence 80", depends-on = ["install-editable"] }
+safety-check = { cmd = "safety check --json --output safety-report.json", depends-on = ["install-editable"] }
+safety-check-console = { cmd = "echo 'Running safety check with debug output...' && pip list | head -n 10 && (safety check || (echo '::warning::Safety check failed - this may be due to network connectivity' && exit 0))", depends-on = ["install-editable"] }
+pylint-check = { cmd = "pylint src/pytest_analyzer --output-format=json --output=pylint-report.json", depends-on = ["install-editable"] }
+pylint-check-console = { cmd = "pylint src/pytest_analyzer --errors-only", depends-on = ["install-editable"] }
+static-analysis = { depends-on = ["security-scan-console", "complexity-check", "dead-code-check", "safety-check-console", "pylint-check-console"] }
+check-all = { depends-on = ["lint", "typecheck", "test", "static-analysis"] }
 setup-pre-commit = "pre-commit install --install-hooks"
+docs = "sphinx-build -b html docs docs/_build/html"
+mcp-server = { cmd = "python -m pytest_analyzer.cli.mcp_cli mcp start --stdio --project-root .", env = { PYTHONPATH = "src" } }

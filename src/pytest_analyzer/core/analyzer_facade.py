@@ -234,12 +234,13 @@ class PytestAnalyzerFacade:
             state_machine = analyzer_state_machine.AnalyzerStateMachine(
                 analyzer_context
             )
-            result = state_machine.run(
+            # Set up the state machine with the test parameters
+            state_machine.setup(
                 test_path=test_path,
                 pytest_args=pytest_args or [],
                 quiet=quiet,
-                extract_only=True,
             )
+            result = state_machine.run()
 
             if isinstance(result, dict) and "error" in result:
                 logger.error(f"Error running tests: {result['error']}")
@@ -276,12 +277,13 @@ class PytestAnalyzerFacade:
             state_machine = analyzer_state_machine.AnalyzerStateMachine(
                 analyzer_context
             )
-            result = state_machine.run(
+            # Set up the state machine with the test parameters
+            state_machine.setup(
                 test_path=test_path,
                 pytest_args=pytest_args or [],
                 quiet=quiet,
-                apply_fixes=False,
             )
+            result = state_machine.run(apply_fixes=False)
 
             if isinstance(result, dict) and "error" in result:
                 logger.error(f"Error analyzing tests: {result['error']}")

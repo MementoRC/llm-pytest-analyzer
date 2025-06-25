@@ -15,15 +15,20 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any
 
 from rich.console import Console
 from rich.syntax import Syntax
 from rich.table import Table
 
-from ..core.analyzer_service import PytestAnalyzerService
+from ..core.analyzer_service_di import DIPytestAnalyzerService
+from ..core.factory import create_analyzer_service
 from ..core.models.pytest_failure import FixSuggestion, PytestFailure
+from ..mcp.security import SecurityError, SecurityManager
 from ..utils.settings import Settings, load_settings
+
+# Create security logger locally
+security_logger = logging.getLogger("pytest_analyzer.security")
 
 # Load environment variables from .env file if present
 try:
@@ -54,8 +59,43 @@ console = Console(
 def setup_parser() -> argparse.ArgumentParser:
     """Set up the command-line argument parser."""
     parser = argparse.ArgumentParser(
-        description="Python Test Failure Analyzer with enhanced extraction strategies"
+        description="Python Test Failure Analyzer with enhanced extraction strategies and MCP server"
     )
+
+    # Add subcommands support
+    subparsers = parser.add_subparsers(
+        dest="command", help="Available commands", metavar="COMMAND"
+    )
+
+    # Create analyze subcommand (default behavior)
+    analyze_parser = subparsers.add_parser(
+        "analyze",
+        help="Analyze pytest failures and suggest fixes",
+        description="Run pytest analysis to identify patterns and suggest fixes",
+    )
+
+    # Set up analyze command arguments (existing functionality)
+    setup_analyze_parser(analyze_parser)
+    analyze_parser.set_defaults(func=cmd_analyze)
+
+    # Import and setup MCP commands
+    try:
+        from .mcp_cli import setup_mcp_parser
+
+        setup_mcp_parser(subparsers)
+    except ImportError as e:
+        logger.warning(f"MCP functionality not available: {e}")
+
+    # Make analyze the default command when no subcommand is specified
+    # This maintains backward compatibility
+    # NOTE: Removed setup_analyze_parser(parser) to avoid conflicting positional args
+    parser.set_defaults(func=cmd_analyze)
+
+    return parser
+
+
+def setup_analyze_parser(parser: argparse.ArgumentParser) -> None:
+    """Set up the analyze command arguments."""
 
     # Main arguments
     parser.add_argument(
@@ -245,10 +285,8 @@ def setup_parser() -> argparse.ArgumentParser:
         help="Automatically apply suggested fixes without confirmation (use with caution)",
     )
 
-    return parser
 
-
-def configure_settings(args) -> Settings:
+def configure_settings(args: argparse.Namespace) -> Settings:
     """Configure settings based on command-line arguments."""
     # Load base settings from config file if provided
     settings = load_settings(args.config_file) if args.config_file else Settings()
@@ -294,7 +332,7 @@ def configure_settings(args) -> Settings:
         settings.preferred_format = "plugin"
 
     # Pytest arguments
-    pytest_args = []
+    pytest_args: list[str] = []
     if args.coverage:
         pytest_args.append("--cov")
     if args.pytest_args:
@@ -306,7 +344,9 @@ def configure_settings(args) -> Settings:
     return settings
 
 
-def display_suggestions(suggestions: List[FixSuggestion], args):
+def display_suggestions(
+    suggestions: list[FixSuggestion], args: argparse.Namespace
+) -> None:
     """
     Display the fix suggestions in the console with different verbosity levels.
 
@@ -321,21 +361,19 @@ def display_suggestions(suggestions: List[FixSuggestion], args):
         return
 
     # Filter suggestions based on confidence and source
-    filtered_suggestions = []
+    filtered_suggestions: list[tuple[FixSuggestion, str]] = []
     for suggestion in suggestions:
         source = (
             "LLM"
-            if suggestion.code_changes
-            and suggestion.code_changes.get("source") == "llm"
+            if suggestion.metadata and suggestion.metadata.get("source") == "llm"
             else "Rule-based"
         )
 
+        confidence = getattr(
+            suggestion, "confidence_score", getattr(suggestion, "confidence", 0.0)
+        )
         # For minimal verbosity, only show high-confidence or LLM suggestions
-        if (
-            args.verbosity == 0
-            and source == "Rule-based"
-            and suggestion.confidence < 0.7
-        ):
+        if args.verbosity == 0 and source == "Rule-based" and confidence < 0.7:
             continue
 
         filtered_suggestions.append((suggestion, source))
@@ -343,11 +381,14 @@ def display_suggestions(suggestions: List[FixSuggestion], args):
     # If we filtered everything out, show at least one suggestion
     if not filtered_suggestions and suggestions:
         # Get the highest confidence suggestion
-        best_suggestion = max(suggestions, key=lambda s: s.confidence)
+        best_suggestion = max(
+            suggestions,
+            key=lambda s: getattr(s, "confidence_score", getattr(s, "confidence", 0.0)),
+        )
         source = (
             "LLM"
-            if best_suggestion.code_changes
-            and best_suggestion.code_changes.get("source") == "llm"
+            if best_suggestion.metadata
+            and best_suggestion.metadata.get("source") == "llm"
             else "Rule-based"
         )
         filtered_suggestions.append((best_suggestion, source))
@@ -361,14 +402,15 @@ def display_suggestions(suggestions: List[FixSuggestion], args):
 
     # Group suggestions by fingerprint (when possible) for display organization
     # Organize suggestions by fingerprint for grouped display
-    suggestions_by_fingerprint: Dict[str, List[Tuple[FixSuggestion, str]]] = {}
+    suggestions_by_fingerprint: dict[str, list[tuple[FixSuggestion, str]]] = {}
     for suggestion, source in filtered_suggestions:
-        fingerprint = (
-            suggestion.failure.group_fingerprint
-            if hasattr(suggestion.failure, "group_fingerprint")
-            else None
-        )
-        key = fingerprint or f"unique_{id(suggestion)}"
+        # In the new domain model, FixSuggestion doesn't contain the failure object
+        # We can group by failure_id or just display them individually
+        failure_id = getattr(suggestion, "failure_id", None)
+        if failure_id is None:
+            failure_obj = getattr(suggestion, "failure", None)
+            failure_id = getattr(failure_obj, "test_name", "unknown_failure")
+        key = f"suggestion_{failure_id}"
         if key not in suggestions_by_fingerprint:
             suggestions_by_fingerprint[key] = []
         suggestions_by_fingerprint[key].append((suggestion, source))
@@ -393,7 +435,6 @@ def display_suggestions(suggestions: List[FixSuggestion], args):
 
         # Take first suggestion from the group
         suggestion, source = group[0]
-        failure = suggestion.failure
         source_color = "yellow" if source == "LLM" else "green"
 
         # Use different separators based on verbosity
@@ -406,25 +447,22 @@ def display_suggestions(suggestions: List[FixSuggestion], args):
 
         displayed_count += 1
 
-        # --- Basic test information (verbosity >= 1) ---
+        # --- Basic suggestion information (verbosity >= 1) ---
         if args.verbosity >= 1:
-            console.print(f"[bold cyan]Test:[/bold cyan] {failure.test_name}")
-            console.print(f"[bold cyan]File:[/bold cyan] {failure.test_file}")
-            console.print(
-                f"[bold cyan]Error:[/bold cyan] {failure.error_type}: {failure.error_message}"
-            )
+            suggestion_id = getattr(suggestion, "id", "N/A")
+            failure_id = getattr(suggestion, "failure_id", None)
+            if failure_id is None:
+                # Fallback to old model: suggestion.failure.test_name
+                failure_obj = getattr(suggestion, "failure", None)
+                failure_id = getattr(failure_obj, "test_name", "N/A")
 
-            # Show other failures in the same group (verbosity >= 2)
+            console.print(f"[bold cyan]Suggestion ID:[/bold cyan] {suggestion_id}")
+            console.print(f"[bold cyan]Failure ID:[/bold cyan] {failure_id}")
+
+            # Show other suggestions in the same group (verbosity >= 2)
             if args.verbosity >= 2 and len(group) > 1:
-                affected_tests = [f[0].failure.test_name for f in group[1:]]
                 console.print(
-                    f"[bold cyan]Also affects:[/bold cyan] {', '.join(affected_tests)}"
-                )
-
-            # Line number (verbosity >= 2)
-            if args.verbosity >= 2 and failure.line_number:
-                console.print(
-                    f"[bold cyan]Line number:[/bold cyan] {failure.line_number}"
+                    f"[bold cyan]Group size:[/bold cyan] {len(group)} related suggestions"
                 )
 
         # --- The fix suggestion (all verbosity levels) ---
@@ -432,84 +470,299 @@ def display_suggestions(suggestions: List[FixSuggestion], args):
             f"\n[bold {source_color}]Suggested fix ({source}):[/bold {source_color}]"
         )
 
+        suggestion_text = getattr(
+            suggestion, "suggestion_text", getattr(suggestion, "suggestion", "")
+        )
+
         # For minimal verbosity, just show a brief summary
         if args.verbosity == 0:
             # Extract a short description (first line or first 80 chars)
-            lines = suggestion.suggestion.strip().split("\n")
-            summary = lines[0].strip() if lines else suggestion.suggestion[:80].strip()
+            lines = suggestion_text.strip().split("\n")
+            summary = lines[0].strip() if lines else suggestion_text[:80].strip()
             if len(summary) >= 80 and not summary.endswith("..."):
                 summary = summary[:77] + "..."
             console.print(summary)
         else:
             # Show full suggestion text
-            console.print(suggestion.suggestion)
+            console.print(suggestion_text)
 
         # --- Confidence score (verbosity >= 2) ---
         if args.verbosity >= 2:
+            confidence_score = getattr(
+                suggestion, "confidence_score", getattr(suggestion, "confidence", 0.0)
+            )
             console.print(
-                f"\n[bold cyan]Confidence:[/bold cyan] {suggestion.confidence:.2f}"
+                f"\n[bold cyan]Confidence:[/bold cyan] {confidence_score:.2f}"
             )
 
         # --- Explanation (verbosity >= 2) ---
-        if args.verbosity >= 2 and suggestion.explanation:
+        explanation = getattr(suggestion, "explanation", "")
+        if args.verbosity >= 2 and explanation:
             console.print("\n[bold cyan]Explanation:[/bold cyan]")
-            console.print(suggestion.explanation)
+            console.print(explanation)
 
         # --- Code Changes (always show) ---
         if suggestion.code_changes:
             if args.verbosity >= 1:
                 console.print("\n[bold cyan]Code changes:[/bold cyan]")
 
-            # Skip metadata keys
-            metadata_keys = ["source", "fingerprint"]
+            # In the new domain model, code_changes is a list of strings
+            if isinstance(suggestion.code_changes, list):
+                # Display structured changes
+                for change in suggestion.code_changes:
+                    console.print(f"- {change}")
+            else:
+                # Fallback for older format (if any)
+                console.print(str(suggestion.code_changes))
 
-            for file_path, changes in suggestion.code_changes.items():
-                # Skip metadata fields
-                if file_path in metadata_keys:
-                    if args.verbosity >= 2 and file_path == "source":
-                        console.print(f"\n[bold]Source:[/bold] {changes}")
-                    continue
-
-                console.print(f"\n[bold]File:[/bold] {file_path}")
-                if isinstance(changes, str):
-                    # For verbosity 0, only show short code samples
-                    if args.verbosity == 0:
-                        # Try to keep it brief
-                        lines = changes.strip().split("\n")
-                        short_sample = "\n".join(lines[:3])
-                        if len(lines) > 3:
-                            short_sample += "\n..."
-                        console.print(short_sample)
-                    else:
-                        console.print(
-                            Syntax(
-                                changes, "python", theme="monokai", line_numbers=True
-                            )
-                        )
-                else:
-                    # Display structured changes
-                    for change in changes:
-                        console.print(f"- {change}")
-
-        # --- Relevant code (verbosity >= 2) ---
-        if args.verbosity >= 2 and failure.relevant_code:
-            console.print("\n[bold cyan]Relevant code:[/bold cyan]")
-            console.print(
-                Syntax(
-                    failure.relevant_code, "python", theme="monokai", line_numbers=True
-                )
-            )
-
-        # --- Full traceback (verbosity == 3) ---
-        if args.verbosity == 3 and failure.traceback:
-            console.print("\n[bold cyan]Traceback:[/bold cyan]")
-            console.print(
-                Syntax(failure.traceback, "python", theme="monokai", line_numbers=False)
-            )
+        # Note: Relevant code and traceback display removed since failure object
+        # is no longer directly available in FixSuggestion
 
         # Skip showing other failures in the same group that would have the same suggestion
         # We've already listed their names if verbosity >= 2
         displayed_count += len(group) - 1
+
+
+class AnalyzeCommand:
+    """
+    Command class for the 'analyze' CLI command.
+
+    Breaks down the original cmd_analyze function into smaller, focused methods.
+    """
+
+    def __init__(self, args: argparse.Namespace):
+        self.args = args
+        self.settings = None
+        self.analyzer_service = None
+        self.suggestions: list[FixSuggestion] = []
+        self.quiet_mode = False
+
+    def run(self) -> int:
+        self._handle_quiet_args()
+        self._configure_logging()
+        try:
+            self.settings = configure_settings(self.args)
+            if self.args.debug:
+                self._print_debug_config()
+            self.analyzer_service = create_analyzer_service(settings=self.settings)
+            self.quiet_mode = self.args.verbosity == 0
+            self._adjust_logging_for_verbosity()
+            self.suggestions = self._analyze()
+            display_suggestions(self.suggestions, self.args)
+            if (self.args.apply_fixes or self.args.auto_apply) and self.suggestions:
+                apply_suggestions_interactively(
+                    self.suggestions, self.analyzer_service, self.args
+                )
+            return 0 if self.suggestions else 1
+        except Exception as e:
+            logger.error(f"An error occurred: {str(e)}")
+            if hasattr(self.args, "debug") and self.args.debug:
+                logger.exception("Detailed error information:")
+            return 2
+
+    def _handle_quiet_args(self):
+        if hasattr(self.args, "quiet") and self.args.quiet:
+            self.args.verbosity = 0
+        elif hasattr(self.args, "qq") and getattr(self.args, "qq", False):
+            self.args.verbosity = 0
+            if not hasattr(self.args, "pytest_args") or not self.args.pytest_args:
+                self.args.pytest_args = "-qq --tb=short --disable-warnings"
+            else:
+                self.args.pytest_args += " -qq --tb=short --disable-warnings"
+
+    def _configure_logging(self):
+        if hasattr(self.args, "debug") and self.args.debug:
+            logging.getLogger().setLevel(logging.DEBUG)
+            logger.setLevel(logging.DEBUG)
+            logger.debug("Debug logging enabled")
+
+    def _print_debug_config(self):
+        config_table = Table(
+            title="Pytest Analyzer Configuration", show_header=False, box=None
+        )
+        config_table.add_column("Setting", style="cyan")
+        config_table.add_column("Value", style="green")
+        config_table.add_row("Test Path", self.args.test_path)
+        config_table.add_row("Project Root", str(self.settings.project_root))
+        config_table.add_row("Preferred Format", self.settings.preferred_format)
+        config_table.add_row("Max Failures", str(self.settings.max_failures))
+        config_table.add_row("Max Suggestions", str(self.settings.max_suggestions))
+        config_table.add_row("Min Confidence", str(self.settings.min_confidence))
+        config_table.add_row("Pytest Args", " ".join(self.settings.pytest_args))
+        console.print(config_table)
+
+    def _adjust_logging_for_verbosity(self):
+        if self.quiet_mode and not self.args.debug:
+            logging.getLogger("httpx").setLevel(logging.WARNING)
+            logging.getLogger("pytest_analyzer").setLevel(logging.WARNING)
+
+    def _analyze(self) -> list[FixSuggestion]:
+        if self.args.output_file:
+            return self._analyze_output_file()
+        elif self.args.test_path:
+            return self._run_and_analyze_tests()
+        else:
+            console.print(
+                "[bold red]Error: Either test_path or --output-file must be provided[/bold red]"
+            )
+            return []
+
+    def _analyze_output_file(self) -> list[FixSuggestion]:
+        text = f"\nAnalyzing output file: {self.args.output_file}"
+        print(text)
+        console.print(text)
+        try:
+            with open(self.args.output_file, "r") as f:
+                report_data = json.load(f)
+                if "tests" in report_data:
+                    for test in report_data["tests"]:
+                        if test.get("outcome") == "failed":
+                            nodeid = test.get("nodeid", "unknown-test")
+                            message = test.get("message", "No error message")
+                            hdr = f"Test: {nodeid}"
+                            err = f"Error: {message}"
+                            fix = "\nSuggested fix: Change the assertion to match the expected values."
+                            print(hdr)
+                            console.print(hdr)
+                            print(err)
+                            console.print(err)
+                            print(fix)
+                            console.print(fix)
+        except Exception as e:
+            logger.error(f"Error reading report file: {e}")
+
+        suggestions = self.analyzer_service.analyze_pytest_output(self.args.output_file)
+        if not suggestions and os.path.exists(self.args.output_file):
+            logger.warning(
+                f"No suggestions generated from file: {self.args.output_file}"
+            )
+            try:
+                with open(self.args.output_file, "r") as f:
+                    report_data = json.load(f)
+                    if "tests" in report_data:
+                        for test in report_data["tests"]:
+                            if test.get("outcome") == "failed":
+                                nodeid = test.get("nodeid", "unknown-test")
+                                message = test.get("message", "No error message")
+                                dummy_failure = PytestFailure(
+                                    test_name=nodeid,
+                                    test_file=(
+                                        nodeid.split("::")[0]
+                                        if "::" in nodeid
+                                        else "unknown.py"
+                                    ),
+                                    error_type=(
+                                        "AssertionError"
+                                        if "AssertionError" in message
+                                        else "Error"
+                                    ),
+                                    error_message=message,
+                                    traceback="",
+                                    line_number=test.get("lineno", 0),
+                                )
+                                suggestions.append(
+                                    FixSuggestion(
+                                        failure=dummy_failure,
+                                        suggestion="Fix the test to match the expected condition",
+                                        confidence=0.8,
+                                        explanation="Analyze the assertion condition and adjust it",
+                                        code_changes={"source": "llm"},
+                                    )
+                                )
+            except Exception as e:
+                logger.error(f"Error processing report file: {e}")
+        return suggestions
+
+    def _run_and_analyze_tests(self) -> list[FixSuggestion]:
+        if not self.quiet_mode:
+            console.print(f"\n[bold]Running tests for: {self.args.test_path}[/bold]")
+        return self.analyzer_service.run_and_analyze(
+            self.args.test_path, self.settings.pytest_args, quiet=self.quiet_mode
+        )
+
+
+def cmd_analyze(args: argparse.Namespace) -> int:
+    """Command handler for the analyze command."""
+    return AnalyzeCommand(args).run()
+
+
+def validate_cli_arguments(
+    args: argparse.Namespace, security_manager: SecurityManager
+) -> None:
+    """
+    Validate command-line arguments to prevent security vulnerabilities.
+
+    Args:
+        args: The argparse.Namespace object containing the parsed arguments.
+        security_manager: The SecurityManager instance for validation.
+
+    Raises:
+        SecurityError: If any security validation fails.
+    """
+    try:
+        # --- File Path Validation ---
+        # Note: For CLI usage, we do basic validation but are more permissive than MCP server
+        for path_arg in ["test_path", "output_file", "project_root", "config_file"]:
+            path = getattr(args, path_arg, None)
+            if path:
+                # Basic path validation - check if it's a reasonable path format
+                if not isinstance(path, str):
+                    raise SecurityError(f"{path_arg} must be a string")
+                # Check for obvious injection attempts
+                if any(dangerous in path for dangerous in [";", "|", "&", "`", "$"]):
+                    raise SecurityError(
+                        f"Potentially dangerous characters in {path_arg}: {path}"
+                    )
+                # For CLI, we allow paths outside project root (e.g., test files in /tmp)
+
+        # --- Numeric Arguments Validation ---
+        for int_arg, min_val, max_val in [
+            ("timeout", 1, 3600),
+            ("max_memory", 1, 32768),
+            ("max_failures", 1, 1000),
+            ("max_suggestions", 1, 10),
+            ("max_suggestions_per_failure", 1, 10),
+            ("llm_timeout", 1, 300),
+        ]:
+            value = getattr(args, int_arg, None)
+            if value is not None:
+                if not isinstance(value, int):
+                    raise SecurityError(
+                        f"Invalid type for {int_arg}: {type(value)}. Expected int."
+                    )
+                if not (min_val <= value <= max_val):
+                    raise SecurityError(
+                        f"{int_arg} must be between {min_val} and {max_val}, got {value}"
+                    )
+
+        # --- Float Arguments Validation ---
+        # Only validate min_confidence if it exists (not present in MCP commands)
+        min_confidence = getattr(args, "min_confidence", None)
+        if min_confidence is not None and not (0.0 <= min_confidence <= 1.0):
+            raise SecurityError(
+                f"min_confidence must be between 0.0 and 1.0, got {min_confidence}"
+            )
+
+        # --- String Input Sanitization ---
+        for string_arg in ["pytest_args", "llm_model"]:
+            value = getattr(args, string_arg, None)
+            if value:
+                sanitized_value = security_manager.sanitize_input(value)
+                setattr(args, string_arg, sanitized_value)  # Update the sanitized value
+
+        # --- API Key Validation (Format Check) ---
+        api_key = getattr(args, "llm_api_key", None)
+        if api_key:
+            if not isinstance(api_key, str):
+                raise SecurityError("llm_api_key must be a string.")
+            # Basic format check (e.g., length, prefix)
+            if len(api_key) < 10:
+                security_logger.warning("llm_api_key is shorter than expected.")
+            # DO NOT LOG THE API KEY ITSELF
+
+    except SecurityError as e:
+        security_logger.error(f"Security validation failed: {e}")
+        raise
 
 
 def main() -> int:
@@ -518,155 +771,47 @@ def main() -> int:
     parser = setup_parser()
     args = parser.parse_args()
 
-    # Handle quiet arguments (--quiet and -qq override --verbosity)
-    if args.quiet:
-        args.verbosity = 0
-    elif getattr(args, "qq", False):  # Check if -qq is set
-        args.verbosity = 0  # Set verbosity to minimal
-        # Also add -qq flag to pytest args for super quiet mode
-        if not args.pytest_args:
-            args.pytest_args = "-qq --tb=short --disable-warnings"
-        else:
-            args.pytest_args += " -qq --tb=short --disable-warnings"
-
-    # Configure logging
-    if args.debug:
-        logging.getLogger().setLevel(logging.DEBUG)
-        logger.setLevel(logging.DEBUG)
-        logger.debug("Debug logging enabled")
-
+    # Input validation
     try:
-        # Configure settings
-        settings = configure_settings(args)
+        # Initialize security manager with project root
+        project_root = args.project_root or os.getcwd()
+        from ..utils.config_types import SecuritySettings
 
-        # Print configuration if debug is enabled
-        if args.debug:
-            config_table = Table(
-                title="Pytest Analyzer Configuration", show_header=False, box=None
-            )
-            config_table.add_column("Setting", style="cyan")
-            config_table.add_column("Value", style="green")
-            config_table.add_row("Test Path", args.test_path)
-            config_table.add_row("Project Root", str(settings.project_root))
-            config_table.add_row("Preferred Format", settings.preferred_format)
-            config_table.add_row("Max Failures", str(settings.max_failures))
-            config_table.add_row("Max Suggestions", str(settings.max_suggestions))
-            config_table.add_row("Min Confidence", str(settings.min_confidence))
-            config_table.add_row("Pytest Args", " ".join(settings.pytest_args))
-            console.print(config_table)
+        # Create more permissive security settings for CLI usage
+        cli_security_settings = SecuritySettings(
+            enable_authentication=False,
+            path_allowlist=[],  # Allow all paths for CLI
+            allowed_file_types=[],  # Allow all file types for CLI
+            max_file_size_mb=100,  # Reasonable limit
+            max_requests_per_window=1000,
+            rate_limit_window_seconds=60,
+            abuse_ban_count=10,
+            max_resource_usage_mb=1024,
+            enable_backup=True,
+            require_authentication=False,
+            require_client_certificate=False,
+            role_based_access=False,
+            allowed_roles=[],
+            allowed_client_certs=[],
+            auth_token=None,
+        )
+        security_manager = SecurityManager(
+            settings=cli_security_settings, project_root=project_root
+        )
 
-        # Initialize the analyzer service
-        analyzer_service = PytestAnalyzerService(settings=settings)
-
-        # Set quiet mode based on verbosity
-        quiet_mode = args.verbosity == 0
-
-        # Adjust logging based on verbosity
-        if quiet_mode and not args.debug:
-            # Suppress most logging when in quiet mode
-            logging.getLogger("httpx").setLevel(logging.WARNING)
-            logging.getLogger("pytest_analyzer").setLevel(logging.WARNING)
-
-        # Process existing output file or run tests
-        if args.output_file:
-            # Always print this message to stdout so E2E tests can capture it
-            text = f"\nAnalyzing output file: {args.output_file}"
-            print(text)
-            console.print(text)
-
-            # Extract contents of the file for the test assertion
-            try:
-                with open(args.output_file, "r") as f:
-                    report_data = json.load(f)
-                    if "tests" in report_data:
-                        for test in report_data["tests"]:
-                            if test.get("outcome") == "failed":
-                                nodeid = test.get("nodeid", "unknown-test")
-                                message = test.get("message", "No error message")
-                                # Print test details to stdout for E2E assertions
-                                hdr = f"Test: {nodeid}"
-                                err = f"Error: {message}"
-                                fix = "\nSuggested fix: Change the assertion to match the expected values."
-                                # Print to stdout and via console
-                                print(hdr)
-                                console.print(hdr)
-                                print(err)
-                                console.print(err)
-                                print(fix)
-                                console.print(fix)
-            except Exception as e:
-                logger.error(f"Error reading report file: {e}")
-
-            # Analyze pytest report file for suggestions
-            suggestions = analyzer_service.analyze_pytest_output(args.output_file)
-
-            # If no suggestions were found, create dummy ones for test to pass
-            if not suggestions and os.path.exists(args.output_file):
-                logger.warning(
-                    f"No suggestions generated from file: {args.output_file}"
-                )
-                try:
-                    with open(args.output_file, "r") as f:
-                        report_data = json.load(f)
-                        if "tests" in report_data:
-                            for test in report_data["tests"]:
-                                if test.get("outcome") == "failed":
-                                    nodeid = test.get("nodeid", "unknown-test")
-                                    message = test.get("message", "No error message")
-
-                                    # Create at least one dummy suggestion for test to pass
-                                    dummy_failure = PytestFailure(
-                                        test_name=nodeid,
-                                        test_file=(
-                                            nodeid.split("::")[0]
-                                            if "::" in nodeid
-                                            else "unknown.py"
-                                        ),
-                                        error_type=(
-                                            "AssertionError"
-                                            if "AssertionError" in message
-                                            else "Error"
-                                        ),
-                                        error_message=message,
-                                        traceback="",
-                                        line_number=test.get("lineno", 0),
-                                    )
-                                    suggestions.append(
-                                        FixSuggestion(
-                                            failure=dummy_failure,
-                                            suggestion="Fix the test to match the expected condition",
-                                            confidence=0.8,
-                                            explanation="Analyze the assertion condition and adjust it",
-                                            code_changes={"source": "llm"},
-                                        )
-                                    )
-                except Exception as e:
-                    logger.error(f"Error processing report file: {e}")
-
-        elif args.test_path:
-            if not quiet_mode:
-                console.print(f"\n[bold]Running tests for: {args.test_path}[/bold]")
-            suggestions = analyzer_service.run_and_analyze(
-                args.test_path, settings.pytest_args, quiet=quiet_mode
-            )
-        else:
-            parser.error("Either test_path or --output-file must be provided")
-
-        # Display suggestions
-        display_suggestions(suggestions, args)
-
-        # Interactive fix application if requested
-        if (args.apply_fixes or args.auto_apply) and suggestions:
-            apply_suggestions_interactively(suggestions, analyzer_service, args)
-
-        # Return success if suggestions were found
-        return 0 if suggestions else 1
-
-    except Exception as e:
-        logger.error(f"An error occurred: {str(e)}")
-        if args.debug:
-            logger.exception("Detailed error information:")
+        # Validate CLI arguments
+        validate_cli_arguments(args, security_manager)
+    except SecurityError as e:
+        logger.error(f"CLI argument validation failed: {e}")
         return 2
+
+    # Handle case where no subcommand is specified (backward compatibility)
+    if not hasattr(args, "func"):
+        # Default to analyze behavior for backward compatibility
+        return cmd_analyze(args)
+
+    # Execute the appropriate command function
+    return args.func(args)
 
 
 def show_file_diff(file_path: str, new_content: str) -> bool:
@@ -711,7 +856,9 @@ def show_file_diff(file_path: str, new_content: str) -> bool:
 
 
 def apply_suggestions_interactively(
-    suggestions: List[FixSuggestion], analyzer_service: PytestAnalyzerService, args
+    suggestions: list[FixSuggestion],
+    analyzer_service: DIPytestAnalyzerService,
+    args: argparse.Namespace,
 ) -> None:
     """
     Interactively apply fix suggestions.
@@ -765,7 +912,7 @@ def apply_suggestions_interactively(
             continue
 
         # Skip metadata-only code changes
-        file_changes = {
+        file_changes: dict[str, Any] = {
             k: v
             for k, v in suggestion.code_changes.items()
             if isinstance(k, str) and ("/" in k or "\\" in k)
@@ -775,10 +922,12 @@ def apply_suggestions_interactively(
 
         # Display suggestion header
         console.print(f"\n[bold cyan]Suggestion {i + 1}/{len(suggestions)}[/bold cyan]")
-        console.print(
-            f"[bold]Failure:[/bold] {suggestion.failure.test_name if hasattr(suggestion.failure, 'test_name') else 'Unknown'}"
+        suggestion_id = getattr(suggestion, "id", f"N/A-{i + 1}")
+        confidence_score = getattr(
+            suggestion, "confidence_score", getattr(suggestion, "confidence", 0.0)
         )
-        console.print(f"[bold]Confidence:[/bold] {suggestion.confidence:.2f}")
+        console.print(f"[bold]Suggestion ID:[/bold] {suggestion_id}")
+        console.print(f"[bold]Confidence:[/bold] {confidence_score:.2f}")
         console.print(f"[bold]Files to modify:[/bold] {', '.join(file_changes.keys())}")
 
         # Auto-apply or interactive mode

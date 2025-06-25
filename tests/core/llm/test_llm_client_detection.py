@@ -290,8 +290,14 @@ class TestLLMClientDetection:
             client = _try_initialize_client(LLMProvider.ANTHROPIC, settings)
             assert client is None
 
+    @patch(
+        "pytest_analyzer.core.feature_flags.feature_flag_service.FlagsmithFeatureFlagService.is_feature_enabled",
+        return_value=True,
+    )
     @patch("pytest_analyzer.core.llm.llm_service_factory.detect_llm_client")
-    def test_integration_with_service_collection(self, mock_detect_client):
+    def test_integration_with_service_collection(
+        self, mock_detect_client, mock_is_feature_enabled
+    ):
         """Test integration of client detection with the ServiceCollection."""
         # Setup mocks
         mock_client = MagicMock()
@@ -308,7 +314,10 @@ class TestLLMClientDetection:
         # Test the service collection configuring LLM services
         service_collection = ServiceCollection()
         service_collection.container = container
-        service_collection.configure_llm_services()
+        service_collection.configure_core_services()
+
+        # Resolve the LLM service to trigger the factory function
+        service_collection.build_container().resolve(LLMServiceProtocol)
 
         # Verify the client detection was called
         mock_detect_client.assert_called_once()

@@ -13,7 +13,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pytest_analyzer.cli.analyzer_cli import apply_suggestions_interactively, main
+from pytest_analyzer.cli.analyzer_cli import (
+    apply_suggestions_interactively,
+    cmd_analyze,
+)
 from pytest_analyzer.core.analysis.fix_applier import FixApplicationResult
 from pytest_analyzer.core.models.pytest_failure import FixSuggestion, PytestFailure
 
@@ -48,185 +51,202 @@ class TestCLIFixIntegration:
             )
         ]
 
+    def _get_default_mock_args(self):
+        """Helper to create a mock args object with all necessary attributes."""
+        mock_args = MagicMock()
+        mock_args.apply_fixes = False
+        mock_args.auto_apply = False
+        mock_args.test_path = "dummy_test.py"
+        mock_args.output_file = None
+        mock_args.verbosity = 1
+        mock_args.quiet = False
+        mock_args.debug = False
+        mock_args.config_file = None
+        mock_args.project_root = None
+        mock_args.timeout = 300
+        mock_args.max_memory = 1024
+        mock_args.check_git = True
+        mock_args.auto_init_git = False
+        mock_args.use_git_branches = True
+        mock_args.max_failures = 100
+        mock_args.max_suggestions = 3
+        mock_args.max_suggestions_per_failure = 3
+        mock_args.min_confidence = 0.5
+        mock_args.use_llm = True
+        mock_args.llm_timeout = 60
+        mock_args.llm_api_key = None
+        mock_args.llm_model = "auto"
+        mock_args.env_manager = "auto"
+        mock_args.json = False
+        mock_args.xml = False
+        mock_args.plugin = False
+        mock_args.coverage = False
+        mock_args.pytest_args = None
+        mock_args.test_functions = None
+        mock_args.qq = False
+        mock_args.raw_output = False
+        return mock_args
+
     def test_apply_fixes_flag(self):
         """Test that --apply-fixes flag enables interactive fix application."""
-        # Mock argparse.ArgumentParser.parse_args to include --apply-fixes
-        with patch("argparse.ArgumentParser.parse_args") as mock_parse_args:
-            mock_args = MagicMock()
-            mock_args.apply_fixes = True
-            mock_args.auto_apply = False
-            mock_args.test_path = "dummy_test.py"
-            mock_args.output_file = None
-            mock_args.verbosity = 1
-            mock_args.quiet = False
-            mock_args.debug = False
-            mock_parse_args.return_value = mock_args
+        # Create mock args directly for cmd_analyze
+        mock_args = self._get_default_mock_args()
+        mock_args.apply_fixes = True
 
-            # Mock analyzer service and apply_suggestions_interactively
-            with (
-                patch(
-                    "pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService"
-                ) as mock_service_class,
-                patch(
-                    "pytest_analyzer.cli.analyzer_cli.apply_suggestions_interactively"
-                ) as mock_apply,
-            ):
-                # Mock service to return suggestions
-                mock_service = mock_service_class.return_value
-                # Create proper FixSuggestion objects to return
-                failure = PytestFailure(
-                    test_name="test_module::test_function",
-                    test_file="/path/to/test_file.py",
-                    error_type="AssertionError",
-                    error_message="assert 1 == 2",
-                    traceback="...",
-                    line_number=10,
-                    relevant_code="assert value == expected",
+        # Mock analyzer service and apply_suggestions_interactively
+        with (
+            patch(
+                "pytest_analyzer.cli.analyzer_cli.create_analyzer_service"
+            ) as mock_create_service,
+            patch(
+                "pytest_analyzer.cli.analyzer_cli.apply_suggestions_interactively"
+            ) as mock_apply,
+        ):
+            # Mock service to return suggestions
+            mock_service = MagicMock()
+            mock_create_service.return_value = mock_service
+
+            # Create proper FixSuggestion objects to return
+            failure = PytestFailure(
+                test_name="test_module::test_function",
+                test_file="/path/to/test_file.py",
+                error_type="AssertionError",
+                error_message="assert 1 == 2",
+                traceback="...",
+                line_number=10,
+                relevant_code="assert value == expected",
+            )
+            suggestions = [
+                FixSuggestion(
+                    failure=failure,
+                    suggestion="Fix the assertion",
+                    confidence=0.9,
+                    code_changes={
+                        "/path/to/source_file.py": "corrected code content",
+                        "fingerprint": "abcdef123456",
+                        "source": "llm",
+                    },
+                    explanation="Fix explanation",
                 )
-                suggestions = [
-                    FixSuggestion(
-                        failure=failure,
-                        suggestion="Fix the assertion",
-                        confidence=0.9,
-                        code_changes={
-                            "/path/to/source_file.py": "corrected code content",
-                            "fingerprint": "abcdef123456",
-                            "source": "llm",
-                        },
-                        explanation="Fix explanation",
-                    )
-                ]
-                mock_service.run_and_analyze.return_value = suggestions
+            ]
+            mock_service.run_and_analyze.return_value = suggestions
 
-                # Run CLI main
-                main()
+            # Call cmd_analyze directly with mock args
+            cmd_analyze(mock_args)
 
-                # Check that apply_suggestions_interactively was called
-                mock_apply.assert_called_once()
-                # Verify that the first argument is our suggestions list
-                assert mock_apply.call_args[0][0] == suggestions, (
-                    "Should pass suggestions to apply_suggestions_interactively"
-                )
+            # Check that apply_suggestions_interactively was called
+            mock_apply.assert_called_once()
+            # Verify that the first argument is our suggestions list
+            assert mock_apply.call_args[0][0] == suggestions, (
+                "Should pass suggestions to apply_suggestions_interactively"
+            )
 
     def test_auto_apply_flag(self):
         """Test that --auto-apply flag enables automatic fix application."""
-        # Mock argparse.ArgumentParser.parse_args to include --auto-apply
-        with patch("argparse.ArgumentParser.parse_args") as mock_parse_args:
-            mock_args = MagicMock()
-            mock_args.apply_fixes = False
-            mock_args.auto_apply = True
-            mock_args.test_path = "dummy_test.py"
-            mock_args.output_file = None
-            mock_args.verbosity = 1
-            mock_args.quiet = False
-            mock_args.debug = False
-            mock_parse_args.return_value = mock_args
+        # Create mock args directly for cmd_analyze
+        mock_args = self._get_default_mock_args()
+        mock_args.auto_apply = True
 
-            # Mock analyzer service and apply_suggestions_interactively
-            with (
-                patch(
-                    "pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService"
-                ) as mock_service_class,
-                patch(
-                    "pytest_analyzer.cli.analyzer_cli.apply_suggestions_interactively"
-                ) as mock_apply,
-            ):
-                # Mock service to return suggestions
-                mock_service = mock_service_class.return_value
-                # Create proper FixSuggestion objects to return
-                failure = PytestFailure(
-                    test_name="test_module::test_function",
-                    test_file="/path/to/test_file.py",
-                    error_type="AssertionError",
-                    error_message="assert 1 == 2",
-                    traceback="...",
-                    line_number=10,
-                    relevant_code="assert value == expected",
-                )
-                suggestions = [
-                    FixSuggestion(
-                        failure=failure,
-                        suggestion="Fix the assertion",
-                        confidence=0.9,
-                        code_changes={
-                            "/path/to/source_file.py": "corrected code content",
-                            "fingerprint": "abcdef123456",
-                            "source": "llm",
-                        },
-                        explanation="Fix explanation",
-                    )
-                ]
-                mock_service.run_and_analyze.return_value = suggestions
+        # Mock analyzer service and apply_suggestions_interactively
+        with (
+            patch(
+                "pytest_analyzer.cli.analyzer_cli.create_analyzer_service"
+            ) as mock_create_service,
+            patch(
+                "pytest_analyzer.cli.analyzer_cli.apply_suggestions_interactively"
+            ) as mock_apply,
+        ):
+            # Mock service to return suggestions
+            mock_service = MagicMock()
+            mock_create_service.return_value = mock_service
 
-                # Run CLI main
-                main()
+            # Create proper FixSuggestion objects to return
+            failure = PytestFailure(
+                test_name="test_module::test_function",
+                test_file="/path/to/test_file.py",
+                error_type="AssertionError",
+                error_message="assert 1 == 2",
+                traceback="...",
+                line_number=10,
+                relevant_code="assert value == expected",
+            )
+            suggestions = [
+                FixSuggestion(
+                    failure=failure,
+                    suggestion="Fix the assertion",
+                    confidence=0.9,
+                    code_changes={
+                        "/path/to/source_file.py": "corrected code content",
+                        "fingerprint": "abcdef123456",
+                        "source": "llm",
+                    },
+                    explanation="Fix explanation",
+                )
+            ]
+            mock_service.run_and_analyze.return_value = suggestions
 
-                # Check that apply_suggestions_interactively was called
-                mock_apply.assert_called_once()
-                # Verify that the first argument is our suggestions list
-                assert mock_apply.call_args[0][0] == suggestions, (
-                    "Should pass suggestions to apply_suggestions_interactively"
-                )
-                # Verify that the args parameter has auto_apply=True
-                assert mock_apply.call_args[0][2].auto_apply, (
-                    "Should pass args with auto_apply=True"
-                )
+            # Call cmd_analyze directly with mock args
+            cmd_analyze(mock_args)
+
+            # Check that apply_suggestions_interactively was called
+            mock_apply.assert_called_once()
+            # Verify that the first argument is our suggestions list
+            assert mock_apply.call_args[0][0] == suggestions, (
+                "Should pass suggestions to apply_suggestions_interactively"
+            )
+            # Verify that the args parameter has auto_apply=True
+            assert mock_apply.call_args[0][2].auto_apply, (
+                "Should pass args with auto_apply=True"
+            )
 
     def test_no_apply_flags(self):
         """Test that without --apply-fixes or --auto-apply, fixes are not applied."""
-        # Mock argparse.ArgumentParser.parse_args with no apply flags
-        with patch("argparse.ArgumentParser.parse_args") as mock_parse_args:
-            mock_args = MagicMock()
-            mock_args.apply_fixes = False
-            mock_args.auto_apply = False
-            mock_args.test_path = "dummy_test.py"
-            mock_args.output_file = None
-            mock_args.verbosity = 1
-            mock_args.quiet = False
-            mock_args.debug = False
-            mock_parse_args.return_value = mock_args
+        # Create mock args directly for cmd_analyze
+        mock_args = self._get_default_mock_args()
 
-            # Mock analyzer service and apply_suggestions_interactively
-            with (
-                patch(
-                    "pytest_analyzer.cli.analyzer_cli.PytestAnalyzerService"
-                ) as mock_service_class,
-                patch(
-                    "pytest_analyzer.cli.analyzer_cli.apply_suggestions_interactively"
-                ) as mock_apply,
-            ):
-                # Mock service to return suggestions
-                mock_service = mock_service_class.return_value
-                # Create proper FixSuggestion objects to return
-                failure = PytestFailure(
-                    test_name="test_module::test_function",
-                    test_file="/path/to/test_file.py",
-                    error_type="AssertionError",
-                    error_message="assert 1 == 2",
-                    traceback="...",
-                    line_number=10,
-                    relevant_code="assert value == expected",
+        # Mock analyzer service and apply_suggestions_interactively
+        with (
+            patch(
+                "pytest_analyzer.cli.analyzer_cli.create_analyzer_service"
+            ) as mock_create_service,
+            patch(
+                "pytest_analyzer.cli.analyzer_cli.apply_suggestions_interactively"
+            ) as mock_apply,
+        ):
+            # Mock service to return suggestions
+            mock_service = MagicMock()
+            mock_create_service.return_value = mock_service
+
+            # Create proper FixSuggestion objects to return
+            failure = PytestFailure(
+                test_name="test_module::test_function",
+                test_file="/path/to/test_file.py",
+                error_type="AssertionError",
+                error_message="assert 1 == 2",
+                traceback="...",
+                line_number=10,
+                relevant_code="assert value == expected",
+            )
+            suggestions = [
+                FixSuggestion(
+                    failure=failure,
+                    suggestion="Fix the assertion",
+                    confidence=0.9,
+                    code_changes={
+                        "/path/to/source_file.py": "corrected code content",
+                        "fingerprint": "abcdef123456",
+                        "source": "llm",
+                    },
+                    explanation="Fix explanation",
                 )
-                suggestions = [
-                    FixSuggestion(
-                        failure=failure,
-                        suggestion="Fix the assertion",
-                        confidence=0.9,
-                        code_changes={
-                            "/path/to/source_file.py": "corrected code content",
-                            "fingerprint": "abcdef123456",
-                            "source": "llm",
-                        },
-                        explanation="Fix explanation",
-                    )
-                ]
-                mock_service.run_and_analyze.return_value = suggestions
+            ]
+            mock_service.run_and_analyze.return_value = suggestions
 
-                # Run CLI main
-                main()
+            # Call cmd_analyze directly with mock args
+            cmd_analyze(mock_args)
 
-                # Check that apply_suggestions_interactively was NOT called
-                mock_apply.assert_not_called()
+            # Check that apply_suggestions_interactively was NOT called
+            mock_apply.assert_not_called()
 
     def test_interactive_apply_yes(self, mock_suggestions, capsys):
         """Test interactive application with 'y' input."""
