@@ -264,8 +264,11 @@ class CIEnvironmentDetector:
     def _get_install_commands(self, ci_provider: str) -> Dict[str, str]:
         """Legacy: Get install commands for provider (from str)"""
         platform = CIPlatform(name=ci_provider, detected=(ci_provider != "local"))
-        missing_tools = self._identify_missing_tools(self._scan_available_tools())
-        return self.generate_install_commands(platform, missing_tools)
+        # For legacy compatibility, assume all standard required tools are missing
+        # to ensure comprehensive install commands are returned for the platform.
+        # This bypasses the actual scan for the purpose of generating commands.
+        required_tools_for_commands = ["bandit", "safety", "mypy", "ruff"]
+        return self.generate_install_commands(platform, required_tools_for_commands)
 
     def _check_pixi_tool(self, tool: str) -> bool:
         """Legacy: Check if tool is available in pixi environment"""

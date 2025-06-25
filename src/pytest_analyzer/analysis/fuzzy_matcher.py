@@ -1,6 +1,29 @@
+import difflib
+import logging
 from typing import List, Optional, Tuple
 
-import Levenshtein
+logger = logging.getLogger(__name__)
+
+_LEVENSHTEIN_AVAILABLE = False
+try:
+    import Levenshtein
+
+    _LEVENSHTEIN_AVAILABLE = True
+    _jaro_winkler_func = Levenshtein.jaro_winkler
+except ImportError:
+    logger.warning(
+        "Levenshtein module not found. Falling back to difflib.SequenceMatcher for fuzzy matching. "
+        "Install 'python-Levenshtein' for better performance and accuracy."
+    )
+
+    def _fallback_jaro_winkler(s1: str, s2: str) -> float:
+        """
+        A simple fallback similarity calculation using difflib.SequenceMatcher.
+        Note: This is NOT Jaro-Winkler and may yield different results.
+        """
+        return difflib.SequenceMatcher(None, s1.lower(), s2.lower()).ratio()
+
+    _jaro_winkler_func = _fallback_jaro_winkler
 
 
 class FuzzyMatcher:
@@ -17,10 +40,10 @@ class FuzzyMatcher:
 
     def calculate_similarity(self, s1: str, s2: str) -> float:
         """
-        Calculates the Jaro-Winkler similarity between two strings.
-        Jaro-Winkler is generally good for short strings like error messages.
+        Calculates the Jaro-Winkler similarity between two strings if Levenshtein is available,
+        otherwise uses a fallback (difflib.SequenceMatcher ratio).
         """
-        return Levenshtein.jaro_winkler(s1.lower(), s2.lower())
+        return _jaro_winkler_func(s1, s2)
 
     def find_best_match(
         self, target_string: str, candidates: List[str]

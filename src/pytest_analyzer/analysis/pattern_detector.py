@@ -1,6 +1,11 @@
 from typing import List, Tuple
 
-import ahocorasick
+try:
+    import ahocorasick
+
+    AHOCORASICK_AVAILABLE = True
+except ImportError:
+    AHOCORASICK_AVAILABLE = False
 
 
 class AhoCorasickPatternDetector:
@@ -9,6 +14,11 @@ class AhoCorasickPatternDetector:
     """
 
     def __init__(self):
+        if not AHOCORASICK_AVAILABLE:
+            raise RuntimeError(
+                "The 'pyahocorasick' library is required for pattern detection "
+                "but is not installed. Please install it with 'pip install pyahocorasick'."
+            )
         self._automaton = ahocorasick.Automaton()
         self._patterns_added = False
 
