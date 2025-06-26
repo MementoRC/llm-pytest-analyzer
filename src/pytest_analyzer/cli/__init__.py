@@ -5,5 +5,7 @@ This package provides the CLI components for interacting with the pytest_analyze
 """
 
 from .analyzer_cli import main
+from .check_env import CheckEnvironmentCommand
+from .check_env import main as check_env_main
 
-__all__ = ["main"]
+__all__ = ["main", "CheckEnvironmentCommand", "check_env_main"]
