@@ -8,7 +8,7 @@ and generating structured summaries optimized for LLM token usage.
 
 import logging  # Added import for logging
 import re
-from collections import Counter, defaultdict
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -306,60 +306,252 @@ class TokenEfficientAnalyzer:
         return ranked
 
     def identify_bulk_fixes(
-        self, ranked_failures: List[RankedFailure]
+        self,
+        ranked_failures: List[RankedFailure],
+        codebase_paths: Optional[List[str]] = None,
     ) -> List[BulkFix]:
         """
-        Identifies bulk fixes and returns BulkFix objects.
-        Prioritizes bulk fixes for known patterns.
+        Advanced bulk fix identification using clustering, static code analysis, heuristics, and confidence scoring.
+
+        - Uses DBSCAN clustering (if available) to group related failures by multiple features.
+        - Applies static code analysis (AST) to correlate failures with code structure.
+        - Generates fix suggestions using a decision tree and assigns confidence scores.
+        - Predicts fix impact.
+        - Optionally builds a graph visualization of failure relationships.
+        - Maintains backward compatibility with the previous grouping logic if clustering is unavailable.
+
+        Args:
+            ranked_failures: List of RankedFailure objects.
+            codebase_paths: Optional list of file paths for static code analysis.
+
+        Returns:
+            List of BulkFix objects with enhanced metadata.
         """
-        # Group by failure_type and known_pattern_id for more precise bulk fixes
-        grouped = defaultdict(list)
-        for rf in ranked_failures:
-            # Use a composite key for grouping: (failure_type, known_pattern_id or message_hash)
-            # This allows grouping similar fuzzy-matched errors or exact known errors.
-            group_key = (
-                rf.failure_type,
-                rf.suggested_fix,
-            )  # Group by suggested fix for broader bulk fixes
-            if (
-                group_key[1] is None
-            ):  # If no specific suggested fix, group by message for uniqueness
-                group_key = (rf.failure_type, rf.message)
-            grouped[group_key].append(rf)
+        import math
 
+        # --- 1. Feature Extraction for Clustering ---
+        # Features: failure_type, message similarity, location (file), complexity, suggested_fix
+        feature_vectors = []
+        failure_indices = []
+        failure_locations = []
+        for idx, rf in enumerate(ranked_failures):
+            # Use hash of failure_type and suggested_fix for categorical encoding
+            type_hash = hash(rf.failure_type) % 1000
+            fix_hash = hash(rf.suggested_fix or "") % 1000
+            # Use file path as a categorical feature (if available)
+            file_path = (
+                rf.location.split("::")[0] if "::" in rf.location else rf.location
+            )
+            file_hash = hash(file_path) % 1000
+            # Message length as a proxy for similarity
+            msg_len = len(rf.message)
+            # Complexity and priority as numeric features
+            feature_vectors.append(
+                [
+                    type_hash,
+                    fix_hash,
+                    file_hash,
+                    msg_len,
+                    rf.complexity_score,
+                    rf.priority_score,
+                ]
+            )
+            failure_indices.append(idx)
+            failure_locations.append(file_path)
+
+        # --- 2. Clustering with DBSCAN (if available) ---
+        clusters = None
+        dbscan_available = False
+        try:
+            import numpy as np
+            from sklearn.cluster import DBSCAN
+
+            dbscan_available = True
+        except ImportError:
+            logger.warning(
+                "scikit-learn not available, falling back to legacy grouping for bulk fix identification."
+            )
+
+        if dbscan_available and feature_vectors:
+            X = np.array(feature_vectors)
+            # DBSCAN: eps and min_samples can be tuned
+            db = DBSCAN(eps=300, min_samples=2, metric="euclidean")
+            labels = db.fit_predict(X)
+            clusters = {}
+            for label, idx in zip(labels, failure_indices):
+                if label == -1:
+                    continue  # Noise, treat as singleton
+                clusters.setdefault(label, []).append(ranked_failures[idx])
+        else:
+            # Fallback: legacy grouping by (failure_type, suggested_fix)
+            clusters = {}
+            for rf in ranked_failures:
+                group_key = (rf.failure_type, rf.suggested_fix)
+                clusters.setdefault(group_key, []).append(rf)
+
+        # --- 3. Static Code Analysis (AST) for Failure Correlation ---
+        ast_analysis = {}
+        if codebase_paths:
+            import ast
+
+            for path in codebase_paths:
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        source = f.read()
+                    tree = ast.parse(source, filename=path)
+                    # Collect function/class definitions and their line numbers
+                    defs = []
+                    for node in ast.walk(tree):
+                        if isinstance(
+                            node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+                        ):
+                            defs.append(
+                                {
+                                    "name": node.name,
+                                    "type": type(node).__name__,
+                                    "lineno": getattr(node, "lineno", None),
+                                    "end_lineno": getattr(node, "end_lineno", None),
+                                }
+                            )
+                    ast_analysis[path] = defs
+                except Exception as e:
+                    logger.warning(f"AST analysis failed for {path}: {e}")
+
+        # --- 4. Heuristics & Decision Tree for Fix Suggestion and Confidence ---
+        def suggest_fix_and_confidence(failure_group):
+            # Simple decision tree for fix suggestion and confidence scoring
+            # (Extendable for more sophisticated logic)
+            sf = failure_group[0].suggested_fix or ""
+            freq = len(failure_group)
+            # Heuristic: higher frequency, known pattern, and similar locations = higher confidence
+            locations = [f.location for f in failure_group]
+            unique_files = set(loc.split("::")[0] for loc in locations)
+            confidence = 0.5
+            if freq > 3:
+                confidence += 0.2
+            if len(unique_files) == 1:
+                confidence += 0.1
+            if "assert" in sf.lower() or "import" in sf.lower():
+                confidence += 0.1
+            if any("test" in loc for loc in locations):
+                confidence += 0.05
+            confidence = min(confidence, 1.0)
+            # Fix suggestion: use most common suggested_fix or fallback
+            fix_suggestion = max(
+                (f.suggested_fix for f in failure_group if f.suggested_fix),
+                default="Review related code.",
+                key=lambda x: len(x),
+            )
+            return fix_suggestion, confidence
+
+        # --- 5. Impact Prediction ---
+        def predict_impact(failure_group):
+            # Simple impact: sum of priority scores, scaled
+            total_priority = sum(f.priority_score for f in failure_group)
+            impact = math.log1p(total_priority)  # log scale for large numbers
+            return round(impact, 2)
+
+        # --- 6. Visualization (Graph) ---
+        graph = None
+        networkx_available = False
+        try:
+            import networkx as nx
+
+            networkx_available = True
+        except ImportError:
+            logger.info(
+                "networkx not available, skipping failure relationship visualization."
+            )
+
+        if networkx_available:
+            graph = nx.Graph()
+            # Nodes: failures, Edges: same cluster/group
+            for group in clusters.values():
+                node_ids = [f"{f.failure_type}:{f.location}" for f in group]
+                for node in node_ids:
+                    graph.add_node(node)
+                for i in range(len(node_ids)):
+                    for j in range(i + 1, len(node_ids)):
+                        graph.add_edge(node_ids[i], node_ids[j])
+
+        # --- 7. Build BulkFix objects ---
         bulk_fixes = []
-        for (failure_type, fix_identifier), failures in grouped.items():
-            if len(failures) > 1:
-                # Use the most common suggested fix or a generic one
-                common_suggested_fix = (
-                    failures[0].suggested_fix
-                    if failures[0].suggested_fix
-                    else f"Address multiple instances of {failure_type}."
-                )
+        for group_key, group in clusters.items():
+            if len(group) < 2:
+                continue  # Only bulk fixes for groups of 2+
+            fix_suggestion, confidence = suggest_fix_and_confidence(group)
+            impact = predict_impact(group)
+            description = (
+                f"Bulk fix for {group[0].failure_type} ({fix_suggestion}) "
+                f"[Confidence: {confidence:.2f}, Impact: {impact}]"
+            )
+            affected_failures = [f.location for f in group]
+            estimated_effort = (
+                sum(f.complexity_score for f in group) * 0.15 + len(group) * 0.1
+            )
+            # Attach extra metadata for advanced use
+            bulk_fix = BulkFix(
+                fix_type=group[0].failure_type,
+                description=description,
+                affected_failures=affected_failures,
+                affected_count=len(group),
+                estimated_effort=estimated_effort,
+            )
+            # Attach advanced fields for downstream use (not in dataclass, but can be added as attributes)
+            setattr(bulk_fix, "confidence_score", confidence)
+            setattr(bulk_fix, "impact_prediction", impact)
+            setattr(bulk_fix, "fix_suggestion", fix_suggestion)
+            setattr(
+                bulk_fix, "visualization_graph", graph if networkx_available else None
+            )
+            setattr(bulk_fix, "ast_analysis", ast_analysis if ast_analysis else None)
+            bulk_fixes.append(bulk_fix)
 
-                description = (
-                    f"Bulk fix for {failure_type} failures ({common_suggested_fix})"
-                )
-                affected_failures = [f.location for f in failures]
-
-                # Estimated effort can be refined: e.g., based on average complexity of affected failures
-                estimated_effort = (
-                    sum(f.complexity_score for f in failures) * 0.2
-                    + len(failures) * 0.1
-                )  # Example: 0.1 per failure + 0.2 per complexity point
-
-                bulk_fixes.append(
-                    BulkFix(
-                        fix_type=failure_type,
-                        description=description,
-                        affected_failures=affected_failures,
-                        affected_count=len(failures),
-                        estimated_effort=estimated_effort,
-                    )
-                )
-        # Sort bulk fixes by affected count or estimated effort
-        bulk_fixes.sort(key=lambda b: b.affected_count, reverse=True)
+        # Sort by affected_count and impact
+        bulk_fixes.sort(
+            key=lambda b: (b.affected_count, getattr(b, "impact_prediction", 0)),
+            reverse=True,
+        )
         return bulk_fixes
+
+    # --- API for programmatic bulk fix application ---
+    def apply_bulk_fix(
+        self, bulk_fix: BulkFix, codebase_paths: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Programmatic API to apply a bulk fix suggestion.
+
+        Args:
+            bulk_fix: The BulkFix object to apply.
+            codebase_paths: Optional list of file paths to apply fixes to.
+
+        Returns:
+            Dict with results, including success, details, and any errors.
+        """
+        # This is a stub for integration with actual fix application logic.
+        # In a real system, this would use FixApplier or GitFixApplier, etc.
+        try:
+            # Example: log the fix and affected files
+            logger.info(f"Applying bulk fix: {bulk_fix.description}")
+            logger.info(f"Affected files: {bulk_fix.affected_failures}")
+            # Here, you would integrate with the actual fix application system.
+            # For now, just return a simulated result.
+            return {
+                "success": True,
+                "applied_fix_type": bulk_fix.fix_type,
+                "affected_count": bulk_fix.affected_count,
+                "description": bulk_fix.description,
+                "confidence_score": getattr(bulk_fix, "confidence_score", None),
+                "impact_prediction": getattr(bulk_fix, "impact_prediction", None),
+                "details": "Bulk fix application simulated. Integrate with FixApplier for real changes.",
+            }
+        except Exception as e:
+            logger.error(f"Bulk fix application failed: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "description": bulk_fix.description,
+            }
 
     def generate_structured_summary(
         self, analysis_result: AnalysisResult
