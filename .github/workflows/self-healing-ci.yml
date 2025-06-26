@@ -262,7 +262,7 @@ jobs:
                   COMMENT_BODY+="**Rerun Tests:** ✅ All tests passed after applying fix.\n"
                 else
                   COMMENT_BODY+="**Rerun Tests:** ❌ Tests still failing after applying fix (Exit Code: $RERUN_EXIT_CODE).\n"
-                F
+                fi
                 COMMENT_BODY+="See [rerun pytest report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run.id }}/artifacts/pytest-report-after-fix) for details.\n"
               else
                 COMMENT_BODY+="**Fix Application:** ⚠️ Automated fix was not applied.\n"
