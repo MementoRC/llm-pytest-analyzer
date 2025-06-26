@@ -135,7 +135,7 @@ class TestAnalyzerServiceDI:
             applied_files=["/path/to/source_file.py"],
             rolled_back_files=[],
         )
-        analyzer_service.context.fix_applier.apply_fix_suggestion.return_value = (
+        analyzer_service.context.fix_applier.apply_suggestion.return_value = (
             expected_result
         )
 
@@ -143,7 +143,7 @@ class TestAnalyzerServiceDI:
         result = analyzer_service.apply_suggestion(fix_suggestion)
 
         # Check that fix applier was called
-        analyzer_service.context.fix_applier.apply_fix_suggestion.assert_called_once_with(
+        analyzer_service.context.fix_applier.apply_suggestion.assert_called_once_with(
             fix_suggestion
         )
         assert result is expected_result
@@ -159,7 +159,8 @@ class TestAnalyzerServiceDI:
         result = analyzer_service.apply_suggestion(fix_suggestion)
 
         # Check result
-        assert result is None
+        assert result.success is False
+        assert "Fix applier not available" in result.message
 
     def test_service_from_container(self, settings):
         """Test that the service can be retrieved from the container."""
