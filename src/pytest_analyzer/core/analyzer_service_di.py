@@ -7,10 +7,11 @@ the DIPytestAnalyzerService class. It delegates to the refactored PytestAnalyzer
 
 import logging
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 from ..utils.path_resolver import PathResolver
 from ..utils.settings import Settings
+from .analysis.fix_applier import FixApplicationResult
 from .analyzer_service import PytestAnalyzerService
 from .analyzer_state_machine import AnalyzerStateMachine
 from .environment.protocol import EnvironmentManager
@@ -85,11 +86,26 @@ class DIPytestAnalyzerService:
                 },
             )()
 
+        # Internal cache for suggestions to support get_suggestion_by_id
+        self._suggestions_cache: Dict[str, FixSuggestion] = {}
+
     def analyze_pytest_output(
         self, output_path: Union[str, Path]
     ) -> List[FixSuggestion]:
-        """Analyze pytest output from a file and generate fix suggestions."""
-        return self._service.analyze_pytest_output(output_path)
+        """
+        Analyze pytest output from a file and generate fix suggestions.
+        Caches suggestions internally for retrieval by ID.
+        """
+        suggestions = self._service.analyze_pytest_output(output_path)
+        for suggestion in suggestions:
+            self._suggestions_cache[str(suggestion.id)] = suggestion
+        return suggestions
+
+    def get_suggestion_by_id(self, suggestion_id: str) -> Optional[FixSuggestion]:
+        """
+        Retrieves a FixSuggestion by its ID from the internal cache.
+        """
+        return self._suggestions_cache.get(suggestion_id)
 
     def run_pytest_only(
         self,
@@ -114,20 +130,25 @@ class DIPytestAnalyzerService:
         """Run pytest on the given path and analyze the output."""
         return self._service.run_and_analyze(test_path, pytest_args, quiet, use_async)
 
-    def apply_suggestion(self, suggestion: FixSuggestion):
+    def apply_suggestion(self, suggestion: FixSuggestion) -> FixApplicationResult:
         """Apply a fix suggestion."""
         # Try to use context.fix_applier for backward compatibility
         if hasattr(self.context, "fix_applier"):
             if self.context.fix_applier is not None:
-                return self.context.fix_applier.apply_fix_suggestion(suggestion)
+                return self.context.fix_applier.apply_suggestion(suggestion)
             else:
-                # If fix_applier is explicitly set to None, return None for backward compatibility
-                return None
+                # If fix_applier is explicitly set to None, return a failed result
+                logger.error("Cannot apply fix: Fix applier is None in context.")
+                return FixApplicationResult(
+                    success=False, message="Fix applier not available."
+                )
         elif hasattr(self._service, "apply_suggestion"):
             return self._service.apply_suggestion(suggestion)
         else:
-            logger.error("Cannot apply fix: Fix applier not initialized")
-            return None
+            logger.error("Cannot apply fix: Fix applier not initialized or available.")
+            return FixApplicationResult(
+                success=False, message="Fix applier not available."
+            )
 
     def get_performance_metrics(self):
         """Get performance metrics."""

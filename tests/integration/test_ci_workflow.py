@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Dict, List, Optional  # Added for type hinting
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,6 +14,11 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
+# New import for FixApplicationResult
+from pytest_analyzer.core.analysis.fix_applier import FixApplicationResult
+from pytest_analyzer.core.models.pytest_failure import (
+    FixSuggestion,  # Moved this import to top-level
+)
 
 # --- Fixtures for Mocking ---
 
@@ -85,22 +91,53 @@ def mock_analyzer_service_methods(monkeypatch):
     # Import necessary classes from the dummy project setup
     from pytest_analyzer.core.analyzer_service_di import DIPytestAnalyzerService
 
+    # Removed: from pytest_analyzer.core.models.pytest_failure import FixSuggestion # Moved this import to top-level
+
     mock_service = MagicMock(spec=DIPytestAnalyzerService)
     monkeypatch.setattr(
         "pytest_analyzer.core.factory.create_analyzer_service",
         lambda settings: mock_service,
     )
 
-    # Default mock for analyze_pytest_output (no suggestions)
+    # Internal cache for mock suggestions
+    mock_suggestions_cache: Dict[str, FixSuggestion] = {}
+
+    # Mock for analyze_pytest_output
+    def mock_analyze_pytest_output_side_effect(
+        report_file_path: str,
+    ) -> List[FixSuggestion]:
+        # Clear cache and populate with new suggestions based on the return_value
+        mock_suggestions_cache.clear()
+        suggestions = (
+            mock_service.analyze_pytest_output.return_value
+        )  # Get the value set by the test
+        for suggestion in suggestions:
+            mock_suggestions_cache[str(suggestion.id)] = suggestion
+        return suggestions
+
+    mock_service.analyze_pytest_output.side_effect = (
+        mock_analyze_pytest_output_side_effect
+    )
+    # Default return value for analyze_pytest_output (will be overridden by tests)
     mock_service.analyze_pytest_output.return_value = []
 
-    # Default mock for apply_suggestion_by_id (success, no diff)
-    mock_service.apply_suggestion_by_id.return_value = {
-        "success": True,
-        "message": "Fix applied successfully.",
-        "diff_preview": "--- a/file.py\n+++ b/file.py\n- old\n+ new",
-        "applied_files": ["file.py"],
-    }
+    # Mock for get_suggestion_by_id
+    def mock_get_suggestion_by_id_side_effect(
+        suggestion_id: str,
+    ) -> Optional[FixSuggestion]:
+        return mock_suggestions_cache.get(suggestion_id)
+
+    mock_service.get_suggestion_by_id.side_effect = (
+        mock_get_suggestion_by_id_side_effect
+    )
+
+    # Default mock for apply_suggestion (success, no diff)
+    mock_service.apply_suggestion.return_value = FixApplicationResult(
+        success=True,
+        message="Fix applied successfully.",
+        applied_files=[Path("file.py")],
+        rolled_back_files=[],
+    )
     yield mock_service
 
 
@@ -155,28 +192,35 @@ def create_analyzer_service(settings: Settings) -> DIPytestAnalyzerService:
     return DIPytestAnalyzerService(settings=settings)
 """
     )
+    # Updated dummy DIPytestAnalyzerService to match the real one's new methods
     (src_dir / "pytest_analyzer" / "core" / "analyzer_service_di.py").write_text(
         """
 from pytest_analyzer.utils.settings import Settings
 from pytest_analyzer.core.models.pytest_failure import FixSuggestion
-from pytest_analyzer.core.domain.value_objects.suggestion_confidence import SuggestionConfidence
+from pytest_analyzer.core.analysis.fix_applier import FixApplicationResult
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+# Removed uuid4 import as it's not needed in the dummy DIPytestAnalyzerService anymore
+# The real DIPytestAnalyzerService has it, but the dummy one in test_ci_workflow.py doesn't need it.
 
 class DIPytestAnalyzerService:
     def __init__(self, settings: Settings):
         self.settings = settings
-        # In a real scenario, this would be populated by analysis results
-        self._suggestions_cache: Dict[str, FixSuggestion] = {}
+        self._suggestions_cache: Dict[str, FixSuggestion] = {} # Added internal cache
 
     def analyze_pytest_output(self, report_file_path: str) -> List[FixSuggestion]:
         # This method is mocked by the test fixture `mock_analyzer_service_methods`
-        # It should return a list of FixSuggestion objects
+        # It should return a list of FixSuggestion objects and populate _suggestions_cache
         raise NotImplementedError("This method should be mocked in tests.")
 
-    def apply_suggestion_by_id(self, suggestion_id: str, target_file: str) -> Dict[str, Any]:
+    def get_suggestion_by_id(self, suggestion_id: str) -> Optional[FixSuggestion]:
         # This method is mocked by the test fixture `mock_analyzer_service_methods`
-        # It should return a dict matching the expected output of scripts/run_analyzer.py apply
+        # It should return a FixSuggestion object from _suggestions_cache
+        raise NotImplementedError("This method should be mocked in tests.")
+
+    def apply_suggestion(self, suggestion: FixSuggestion) -> FixApplicationResult:
+        # This method is mocked by the test fixture `mock_analyzer_service_methods`
+        # It should return a FixApplicationResult
         raise NotImplementedError("This method should be mocked in tests.")
 """
     )
@@ -296,7 +340,7 @@ def load_settings(config_file: Optional[str] = None) -> Settings:
     scripts_dir.mkdir()
     # The content of run_analyzer.py is the one defined in the solution
     (scripts_dir / "run_analyzer.py").write_text(
-        """
+        '''
 import argparse
 import json
 import logging
@@ -305,13 +349,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # Add src to PYTHONPATH to allow imports from pytest_analyzer
+# This is crucial for the script to find the core modules when run from the project root
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from pytest_analyzer.core.analyzer_service_di import DIPytestAnalyzerService
 from pytest_analyzer.core.factory import create_analyzer_service
 from pytest_analyzer.core.models.pytest_failure import FixSuggestion
 from pytest_analyzer.utils.settings import Settings, load_settings
-from pytest_analyzer.core.domain.value_objects.suggestion_confidence import SuggestionConfidence
+from pytest_analyzer.core.analysis.fix_applier import FixApplicationResult, FixApplier # New imports
 
 # Configure logging for the script
 logging.basicConfig(
@@ -323,6 +368,7 @@ logger = logging.getLogger("run_analyzer_script")
 
 
 def setup_parser() -> argparse.ArgumentParser:
+    """Set up the command-line argument parser for the helper script."""
     parser = argparse.ArgumentParser(
         description="Helper script for pytest-analyzer in CI workflows."
     )
@@ -357,28 +403,35 @@ def setup_parser() -> argparse.ArgumentParser:
         required=True,
         help="ID of the fix suggestion to apply.",
     )
-    apply_parser.add_argument(
-        "--target-file",
-        type=str,
-        required=True,
-        help="Path to the file where the fix should be applied.",
-    )
+    # Removed --target-file as it's now derived from the FixSuggestion's code_changes
     apply_parser.set_defaults(func=cmd_apply)
 
     return parser
 
 
-def get_analyzer_service(settings: Optional[Settings] = None) -> DIPytestAnalyzerService:
+def get_analyzer_service(
+    settings: Optional[Settings] = None,
+) -> DIPytestAnalyzerService:
+    """
+    Initializes and returns the PytestAnalyzerService.
+    Sets up default settings suitable for CI environment.
+    """
     if settings is None:
         settings = load_settings()
+    # Force LLM usage and set a reasonable timeout for CI
     settings.use_llm = True
     settings.llm_timeout = 120
+    # Ensure project_root is set, defaulting to current working directory
     if not settings.project_root:
         settings.project_root = Path.cwd()
     return create_analyzer_service(settings=settings)
 
 
 def cmd_analyze(args: argparse.Namespace) -> None:
+    """
+    Command handler for 'analyze'.
+    Analyzes a pytest JSON report and outputs the best suggestion as JSON.
+    """
     report_file_path = Path(args.report_file)
     if not report_file_path.exists():
         logger.error(f"Report file not found: {report_file_path}")
@@ -395,22 +448,27 @@ def cmd_analyze(args: argparse.Namespace) -> None:
 
     try:
         analyzer_service = get_analyzer_service()
+        # The analyze_pytest_output method is expected to return a list of FixSuggestion objects
         suggestions: List[FixSuggestion] = analyzer_service.analyze_pytest_output(
             str(report_file_path)
         )
 
         best_suggestion: Optional[FixSuggestion] = None
         if suggestions:
+            # Filter for suggestions meeting the minimum confidence threshold
             filtered_suggestions = [
                 s
                 for s in suggestions
                 if s.confidence.numeric_value >= args.min_confidence
             ]
             if filtered_suggestions:
+                # If multiple high-confidence suggestions, pick the highest
                 best_suggestion = max(
                     filtered_suggestions, key=lambda s: s.confidence.numeric_value
                 )
-            else:
+            elif suggestions:
+                # If no high-confidence suggestions, still report the highest confidence one found
+                # but mark it as not high-confidence.
                 best_suggestion = max(
                     suggestions, key=lambda s: s.confidence.numeric_value
                 )
@@ -431,10 +489,12 @@ def cmd_analyze(args: argparse.Namespace) -> None:
 
         if best_suggestion:
             output_data["suggestion_id"] = str(best_suggestion.id)
+            # The target_file should ideally come from the suggestion's metadata or a dedicated field
+            # For now, we assume it's in metadata or fallback to the first file in code_changes.
             output_data["target_file"] = str(
                 best_suggestion.metadata.get("target_file", "")
                 or (
-                    best_suggestion.code_changes.keys().__iter__().__next__()
+                    next(iter(best_suggestion.code_changes.keys()), "")
                     if best_suggestion.code_changes
                     else ""
                 )
@@ -465,34 +525,65 @@ def cmd_analyze(args: argparse.Namespace) -> None:
 
 
 def cmd_apply(args: argparse.Namespace) -> None:
+    """
+    Command handler for 'apply'.
+    Applies a specific fix suggestion by ID and outputs the result as JSON.
+    """
     suggestion_id = args.suggestion_id
-    target_file = Path(args.target_file)
-
-    if not target_file.exists():
-        logger.error(f"Target file not found for applying fix: {target_file}")
-        json.dump(
-            {
-                "success": False,
-                "message": f"Target file not found: {target_file}",
-                "diff_preview": "",
-            },
-            sys.stdout,
-            indent=2,
-        )
-        sys.exit(1)
 
     try:
         analyzer_service = get_analyzer_service()
-        # This method is mocked in tests.
-        # In a real scenario, DIPytestAnalyzerService would need to implement
-        # a way to retrieve the FixSuggestion object by ID and apply it.
-        # For now, we assume it exists and returns a dict.
-        result = analyzer_service.apply_suggestion_by_id(
-            suggestion_id=suggestion_id, target_file=str(target_file)
-        )
 
-        json.dump(result, sys.stdout, indent=2)
-        sys.exit(0 if result.get("success", False) else 1)
+        # Retrieve the full FixSuggestion object using its ID
+        suggestion: Optional[FixSuggestion] = analyzer_service.get_suggestion_by_id(suggestion_id)
+        if not suggestion:
+            logger.error(f"Fix suggestion with ID '{suggestion_id}' not found in cache.")
+            json.dump(
+                {
+                    "success": False,
+                    "message": f"Fix suggestion with ID '{suggestion_id}' not found.",
+                    "diff_preview": "",
+                },
+                sys.stdout,
+                indent=2,
+            )
+            sys.exit(1)
+
+        # Apply the fix using the FixSuggestion object
+        result: FixApplicationResult = analyzer_service.apply_suggestion(suggestion)
+
+        # Generate diff preview if files were applied
+        diff_preview = ""
+        if result.success and result.applied_files:
+            # Instantiate FixApplier to generate diffs.
+            # Assuming project_root is current working directory for diff generation.
+            applier = FixApplier(project_root=Path.cwd())
+
+            # Generate diff for each applied file
+            for file_path in result.applied_files:
+                # Get the new content from the suggestion's code_changes
+                # Need to ensure the path in code_changes matches the relative path from project_root
+                relative_path_str = str(file_path.relative_to(applier.project_root))
+                new_content = suggestion.code_changes.get(relative_path_str)
+
+                if new_content is not None:
+                    diff_preview += applier.show_diff(file_path, new_content) + "\\n"
+                else:
+                    logger.warning(f"New content not found in suggestion.code_changes for diff generation of {file_path}")
+            diff_preview = diff_preview.strip() # Remove trailing newline if any
+
+
+        # Prepare output dictionary for JSON serialization
+        output_data = {
+            "success": result.success,
+            "message": result.message,
+            "applied_files": [str(p) for p in result.applied_files],
+            "rolled_back_files": [str(p) for p in result.rolled_back_files],
+            "diff_preview": diff_preview, # Include diff preview
+        }
+
+        json.dump(output_data, sys.stdout, indent=2)
+        sys.exit(0 if result.success else 1)
 
     except Exception as e:
         logger.error(f"Error during fix application: {e}", exc_info=True)
@@ -516,7 +607,7 @@ if __name__ == "__main__":
     else:
         parser.print_help()
         sys.exit(1)
-"""
+'''
     )
 
     # Create a dummy test file
@@ -555,7 +646,7 @@ async def simulate_workflow_job(
     mock_upload_artifact: MagicMock,
     initial_pytest_exit_code: int,
     analyzer_suggestion_data: dict,
-    apply_fix_result: dict,
+    apply_fix_result: dict,  # This remains a dict for input to this helper
     rerun_pytest_exit_code: int,
 ):
     """
@@ -590,8 +681,7 @@ async def simulate_workflow_job(
         analyzer_results_path = cwd / "analyzer-results.json"
 
         # Configure mock_analyzer_service_methods for the analyze command
-        from pytest_analyzer.core.models.pytest_failure import FixSuggestion
-
+        # Set the return_value for analyze_pytest_output, which will then be used by its side_effect
         mock_analyzer_service_methods.analyze_pytest_output.return_value = (
             [
                 FixSuggestion.create_from_score(
@@ -685,8 +775,17 @@ async def simulate_workflow_job(
             )
 
         # Configure mock_analyzer_service_methods for apply command
-        mock_analyzer_service_methods.apply_suggestion_by_id.return_value = (
-            apply_fix_result
+        # Convert the dictionary apply_fix_result into a FixApplicationResult object
+        mock_apply_result_obj = FixApplicationResult(
+            success=apply_fix_result.get("success", False),
+            message=apply_fix_result.get("message", ""),
+            applied_files=[Path(f) for f in apply_fix_result.get("applied_files", [])],
+            rolled_back_files=[
+                Path(f) for f in apply_fix_result.get("rolled_back_files", [])
+            ],
+        )
+        mock_analyzer_service_methods.apply_suggestion.return_value = (
+            mock_apply_result_obj
         )
 
         # Simulate the `python scripts/run_analyzer.py apply` call
@@ -699,7 +798,7 @@ async def simulate_workflow_job(
                     argparse.Namespace(
                         command="apply",
                         suggestion_id=step_outputs["analyze_failures"]["SUGGESTION_ID"],
-                        target_file=step_outputs["analyze_failures"]["TARGET_FILE"],
+                        # target_file is no longer passed directly to cmd_apply
                     )
                 )
             except SystemExit as e:
@@ -859,8 +958,7 @@ async def simulate_workflow_job(
                 "apply",
                 "--suggestion-id",
                 step_outputs["analyze_failures"]["SUGGESTION_ID"],
-                "--target-file",
-                step_outputs["analyze_failures"]["TARGET_FILE"],
+                # target_file is no longer passed directly
             ],
             check=False,
         )
@@ -1046,7 +1144,8 @@ async def test_workflow_success_no_fix_needed(
     # Verify no analyzer or apply calls
     mock_run_analyzer_main.assert_not_called()
     mock_analyzer_service_methods.analyze_pytest_output.assert_not_called()
-    mock_analyzer_service_methods.apply_suggestion_by_id.assert_not_called()
+    mock_analyzer_service_methods.apply_suggestion.assert_not_called()  # Updated method name
+    mock_analyzer_service_methods.get_suggestion_by_id.assert_not_called()  # New method
 
     # Verify comment content
     comment_body = outputs["generate_comment"]["COMMENT_BODY"]
@@ -1111,7 +1210,8 @@ async def test_workflow_failure_no_suggestion(
 
     mock_run_analyzer_main.assert_called_once()  # Analyzer should be called
     mock_analyzer_service_methods.analyze_pytest_output.assert_called_once()
-    mock_analyzer_service_methods.apply_suggestion_by_id.assert_not_called()  # No fix applied
+    mock_analyzer_service_methods.apply_suggestion.assert_not_called()  # No fix applied
+    mock_analyzer_service_methods.get_suggestion_by_id.assert_called_once()  # Should be called to retrieve suggestion
 
     comment_body = outputs["generate_comment"]["COMMENT_BODY"]
     assert "❌ Tests failed (Exit Code: 1)." in comment_body
@@ -1185,8 +1285,17 @@ async def test_workflow_failure_high_confidence_fix_push_event(
     # Verify analyzer and apply calls
     assert mock_run_analyzer_main.call_count == 2  # Analyze and Apply
     mock_analyzer_service_methods.analyze_pytest_output.assert_called_once()
-    mock_analyzer_service_methods.apply_suggestion_by_id.assert_called_once_with(
-        suggestion_id="sugg-high-conf-push", target_file="my_code.py"
+    mock_analyzer_service_methods.get_suggestion_by_id.assert_called_once_with(
+        "sugg-high-conf-push"
+    )
+    # The apply_suggestion mock now receives a FixSuggestion object
+    assert mock_analyzer_service_methods.apply_suggestion.called
+    assert isinstance(
+        mock_analyzer_service_methods.apply_suggestion.call_args[0][0], FixSuggestion
+    )
+    assert (
+        mock_analyzer_service_methods.apply_suggestion.call_args[0][0].id
+        == "sugg-high-conf-push"
     )
 
     # Verify git commands for push event
@@ -1275,8 +1384,17 @@ async def test_workflow_failure_high_confidence_fix_pr_event(
     # Verify analyzer and apply calls
     assert mock_run_analyzer_main.call_count == 2  # Analyze and Apply
     mock_analyzer_service_methods.analyze_pytest_output.assert_called_once()
-    mock_analyzer_service_methods.apply_suggestion_by_id.assert_called_once_with(
-        suggestion_id="sugg-high-conf-pr", target_file="my_code.py"
+    mock_analyzer_service_methods.get_suggestion_by_id.assert_called_once_with(
+        "sugg-high-conf-pr"
+    )
+    # The apply_suggestion mock now receives a FixSuggestion object
+    assert mock_analyzer_service_methods.apply_suggestion.called
+    assert isinstance(
+        mock_analyzer_service_methods.apply_suggestion.call_args[0][0], FixSuggestion
+    )
+    assert (
+        mock_analyzer_service_methods.apply_suggestion.call_args[0][0].id
+        == "sugg-high-conf-pr"
     )
 
     # Verify git commands for PR event
@@ -1368,7 +1486,8 @@ async def test_workflow_analyzer_script_failure(
 
     mock_run_analyzer_main.assert_called_once()  # Analyzer script should be called
     mock_analyzer_service_methods.analyze_pytest_output.assert_called_once()  # The internal method should be called
-    mock_analyzer_service_methods.apply_suggestion_by_id.assert_not_called()  # No fix applied
+    mock_analyzer_service_methods.apply_suggestion.assert_not_called()  # No fix applied
+    mock_analyzer_service_methods.get_suggestion_by_id.assert_not_called()  # No suggestion to retrieve
 
     comment_body = outputs["generate_comment"]["COMMENT_BODY"]
     assert "❌ Tests failed (Exit Code: 1)." in comment_body
