@@ -13,7 +13,7 @@ import platform
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from rich.console import Console
 from rich.panel import Panel
@@ -33,10 +33,20 @@ console = Console()
 class CheckEnvironmentCommand:
     """Command to check and validate the development environment."""
 
-    def __init__(self):
+    def __init__(
+        self,
+        ci_detector: Optional[CIEnvironmentDetector] = None,
+        security_manager: Optional[SecurityManager] = None,
+        settings: Optional[Settings] = None,
+        settings_loader: Optional[Callable[[Optional[str]], Settings]] = None,
+    ):
         """Initialize the command with required components."""
-        self.security_manager = None  # Initialize later with settings
-        self.ci_detector = CIEnvironmentDetector()
+        self.ci_detector = ci_detector or CIEnvironmentDetector()
+        self.security_manager = (
+            security_manager  # Initialize later with settings if None
+        )
+        self._initial_settings = settings
+        self._settings_loader = settings_loader or load_settings
 
     def parse_arguments(self) -> argparse.Namespace:
         """Parse command line arguments for the check-env command."""
@@ -99,11 +109,11 @@ class CheckEnvironmentCommand:
             args = self.parse_arguments()
 
         try:
-            # Load settings
-            settings = self._load_settings(args.config_file)
+            # Load settings (use injected settings if available)
+            settings = self._initial_settings or self._load_settings(args.config_file)
 
-            # Initialize security manager with settings
-            if hasattr(settings, "security"):
+            # Initialize security manager with settings (if not already injected)
+            if self.security_manager is None and hasattr(settings, "security"):
                 from ..utils.config_types import SecuritySettings
 
                 security_settings = getattr(settings, "security", SecuritySettings())
@@ -192,9 +202,7 @@ class CheckEnvironmentCommand:
     def _load_settings(self, config_file: Optional[str]) -> Settings:
         """Load settings from configuration file."""
         try:
-            if config_file:
-                return load_settings(config_file)
-            return load_settings()
+            return self._settings_loader(config_file)
         except Exception as e:
             logger.warning(f"Failed to load settings: {e}")
             return Settings()
@@ -371,7 +379,8 @@ class CheckEnvironmentCommand:
     def _display_report(self, report: Dict[str, Any], json_format: bool):
         """Display report to console."""
         if json_format:
-            console.print_json(json.dumps(report, indent=2))
+            # Use standard print for JSON to ensure compatibility with test output capture
+            print(json.dumps(report, indent=2))
         else:
             self._display_human_readable_report(report)
 
