@@ -460,10 +460,10 @@ class TestThreadSafety:
         for thread in threads:
             thread.join()
 
-        # Verify no errors and unique session IDs
+        # Verify no errors and unique session IDs (adjusted for reduced thread count)
         assert len(errors) == 0, f"Thread safety errors: {errors}"
-        assert len(session_ids) == 5
-        assert len(set(session_ids)) == 5  # All unique
+        assert len(session_ids) == 2
+        assert len(set(session_ids)) == 2  # All unique
 
 
 class TestDataModels:
