@@ -495,7 +495,7 @@ def test_benchmarker_simple_benchmark(benchmarker):
     """Test running a simple benchmark with the benchmarker."""
 
     def simple_function():
-        time.sleep(0.01)  # 10ms
+        time.sleep(0.001)  # 1ms
         return "result"
 
     result = benchmarker.run_benchmark(
@@ -513,7 +513,7 @@ def test_benchmarker_simple_benchmark(benchmarker):
     # Check for execution time metrics
     exec_time_metric = result.get_metric("execution_time_mean")
     assert exec_time_metric is not None
-    assert exec_time_metric.value >= 0.01  # Should be at least 10ms
+    assert exec_time_metric.value >= 0.001  # Should be at least 1ms
 
     # Check metadata
     assert result.metadata["test_type"] == "unit"
@@ -582,7 +582,7 @@ async def test_benchmarker_async_benchmark(benchmarker):
 
     exec_time_metric = result.get_metric("execution_time_mean")
     assert exec_time_metric is not None
-    assert exec_time_metric.value >= 0.01
+    assert exec_time_metric.value >= 0.001
 
 
 def test_benchmarker_baseline_comparison(benchmarker):
@@ -590,7 +590,7 @@ def test_benchmarker_baseline_comparison(benchmarker):
 
     # Create and store a baseline
     def baseline_function():
-        time.sleep(0.01)
+        time.sleep(0.001)
 
     baseline_result = benchmarker.run_benchmark(
         test_name="test_comparison",
@@ -600,7 +600,7 @@ def test_benchmarker_baseline_comparison(benchmarker):
 
     # Create a slower version for comparison
     def slower_function():
-        time.sleep(0.02)  # 2x slower
+        time.sleep(0.002)  # 2x slower
 
     current_result = benchmarker.run_benchmark(
         test_name="test_comparison",
@@ -623,7 +623,7 @@ def test_benchmarker_active_benchmarks(benchmarker):
     import threading
 
     def long_running_function():
-        time.sleep(0.1)
+        time.sleep(0.001)
 
     # Start benchmark in background thread
     def run_benchmark():
@@ -635,7 +635,7 @@ def test_benchmarker_active_benchmarks(benchmarker):
     thread.start()
 
     # Check active benchmarks while running
-    time.sleep(0.02)  # Let benchmark start
+    time.sleep(0.001)  # Let benchmark start
     active = benchmarker.get_active_benchmarks()
 
     # Should have one active benchmark
@@ -1005,10 +1005,10 @@ def test_end_to_end_benchmarking_workflow(benchmarker):
 
     # 2. Run benchmarks
     def fast_function():
-        time.sleep(0.01)
+        time.sleep(0.001)
 
     def slow_function():
-        time.sleep(0.05)
+        time.sleep(0.002)
 
     fast_result = benchmarker.run_benchmark(
         test_name="fast_test",
