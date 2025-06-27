@@ -35,6 +35,7 @@ dependencies = [
     "injector==0.20.1",
     "mcp>=1.9.2",
     "openai",
+    "psutil>=5.8.0",
     "pydantic>=2.0.0",
     "pyyaml",
     "python-dotenv",
