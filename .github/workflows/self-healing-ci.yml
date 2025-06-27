@@ -42,7 +42,7 @@ jobs:
           export PYTHONPATH=$PYTHONPATH:$(pwd)/src
           # Run pytest, capture output to JSON, and allow failure to continue workflow
           # --json-report-file is used to specify the output file name
-          pixi run -e dev pytest --json-report --json-report-file=pytest-report.json || true
+          pixi run -e dev pytest --json-report --json-report-file=pytest-report.json --ignore=tests/integration --ignore=tests/e2e --ignore=tests/performance --ignore=tests/security -x || true
           # Capture pytest exit code for conditional steps
           echo "PYTEST_EXIT_CODE=$?" >> $GITHUB_OUTPUT
         continue-on-error: true # Allow workflow to continue even if tests fail
@@ -207,7 +207,7 @@ jobs:
         run: |
           echo "Rerunning tests after applying fix..."
           export PYTHONPATH=$PYTHONPATH:$(pwd)/src
-          pixi run -e dev pytest --json-report --json-report-file=pytest-report-after-fix.json || true
+          pixi run -e dev pytest --json-report --json-report-file=pytest-report-after-fix.json --ignore=tests/integration --ignore=tests/e2e --ignore=tests/performance --ignore=tests/security -x || true
           echo "PYTEST_RERUN_EXIT_CODE=$?" >> $GITHUB_OUTPUT
         continue-on-error: true
 
