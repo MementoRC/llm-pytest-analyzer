@@ -64,6 +64,8 @@ dev = [
     "vulture>=2.7",
     "sphinx>=7.0.0",
     "sphinx_rtd_theme",
+    "pytest-timeout", # Added for dev environment
+    "pytest-xdist",   # Added for dev environment
 ]
 
 test = [
@@ -77,6 +79,8 @@ test = [
     "build>=0.8.0",
     "marshmallow==3.26.1",
     "injector==0.20.1",
+    "pytest-timeout", # Added for test environment
+    "pytest-xdist",   # Added for test environment
 ]
 
 mcp = [
@@ -118,6 +122,7 @@ markers = [
     "e2e: mark test as an end-to-end test",
     "ci_timeout: mark test as potentially timing out in CI",
 ]
+addopts = "--timeout=120 --durations=10 -n auto"
 
 
 [tool.mypy]
@@ -148,6 +153,8 @@ pytest = ">=7.0.0"
 pytest-asyncio = "*"
 pytest-cov = "*"
 pytest-json-report = ">=1.5.0"
+pytest-timeout = "*" # Added for pixi
+pytest-xdist = "*"   # Added for pixi
 
 [tool.pixi.environments]
 default = { solve-group = "default" }
