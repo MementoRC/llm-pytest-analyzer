@@ -3,7 +3,7 @@ import os
 import sqlite3
 import tempfile
 import unittest
-from typing import List  # Added import for List
+from typing import List
 from unittest.mock import MagicMock, patch
 
 from pytest_analyzer.core.infrastructure.llm.anthropic_service import AnthropicService
@@ -11,7 +11,7 @@ from pytest_analyzer.core.infrastructure.llm.openai_service import OpenAIService
 from pytest_analyzer.core.infrastructure.llm.token_tracking_interceptor import (
     TokenTrackingInterceptor,
 )
-from pytest_analyzer.metrics.efficiency_tracker import (  # Added import for EfficiencyTracker
+from pytest_analyzer.metrics.efficiency_tracker import (
     EfficiencyTracker,
     EfficiencyTrackerError,
 )
@@ -265,7 +265,10 @@ class TestTokenTracking(unittest.TestCase):
 
         # Anthropic Claude-3-Sonnet input: 0.003/1k, output: 0.015/1k
         cost = self.token_tracker._estimate_cost(
-            2000, 1000, "anthropic", "claude-3-sonnet"
+            2000,
+            1000,
+            "anthropic",
+            "claude-3-sonnet-20240229",  # Corrected model name
         )
         self.assertAlmostEqual(
             cost, (2000 / 1000 * 0.003) + (1000 / 1000 * 0.015)
@@ -329,7 +332,8 @@ class TestTokenTracking(unittest.TestCase):
                 realtime_tokens[operation_type],
             )
 
-    def test_token_tracker_budget_management(self):
+    @patch("tiktoken.encoding_for_model")
+    def test_token_tracker_budget_management(self, mock_encoding_for_model):
         self.token_tracker.start_session()
         self.token_tracker.set_budget("analysis", 0.0001)  # Set a very low budget
 
@@ -340,33 +344,39 @@ class TestTokenTracking(unittest.TestCase):
         model = "gpt-3.5-turbo"
 
         # Mock tiktoken to ensure predictable token counts for budget test
-        with patch("tiktoken.encoding_for_model") as mock_encoding_for_model:
-            mock_encoder = MagicMock()
-            mock_encoder.encode.side_effect = [
-                [1] * 10,  # Input tokens
-                [1] * 10,  # Output tokens
-            ]
-            mock_encoding_for_model.return_value = mock_encoder
+        mock_encoder = MagicMock()
+        # Make each call cost 0.00007 USD (20 input + 20 output tokens for gpt-3.5-turbo)
+        mock_encoder.encode.side_effect = [
+            [1] * 20,  # Input tokens for first call
+            [1] * 20,  # Output tokens for first call
+            [1] * 20,  # Input tokens for second call
+            [1] * 20,  # Output tokens for second call
+        ]
+        mock_encoding_for_model.return_value = mock_encoder
 
-            # First call, should be within budget
-            self.token_tracker.track_llm_call(
-                prompt, response, operation_type, provider, model
-            )
-            self.metrics_client.increment.assert_not_called()  # No budget exceeded yet
+        # First call, should be within budget (0.00007 < 0.0001)
+        self.token_tracker.track_llm_call(
+            prompt, response, operation_type, provider, model
+        )
+        self.metrics_client.increment.assert_not_called()  # No budget exceeded yet
 
-            # Second call, should exceed budget
-            self.token_tracker.track_llm_call(
-                prompt, response, operation_type, provider, model
-            )
-            self.metrics_client.increment.assert_called_once_with(
-                f"llm_budget_exceeded_{operation_type}"
-            )
+        # Second call, should exceed budget (0.00007 + 0.00007 = 0.00014 > 0.0001)
+        self.token_tracker.track_llm_call(
+            prompt, response, operation_type, provider, model
+        )
+        self.metrics_client.increment.assert_called_once_with(
+            f"llm_budget_exceeded_{operation_type}"
+        )
 
     def test_token_tracker_get_detailed_analytics(self):
         session_id = self.token_tracker.start_session()
         self.token_tracker.track_llm_call("p1", "r1", "analysis", "openai", "gpt-4")
         self.token_tracker.track_llm_call(
-            "p2", "r2", "fix_suggestion", "anthropic", "claude-3-sonnet"
+            "p2",
+            "r2",
+            "fix_suggestion",
+            "anthropic",
+            "claude-3-sonnet-20240229",  # Corrected model name
         )
         self.token_tracker.end_session()
 
@@ -389,30 +399,40 @@ class TestTokenTracking(unittest.TestCase):
         self.assertEqual(analytics["realtime_tokens_by_operation"], {})
         self.assertEqual(analytics["realtime_cost_usd"], 0.0)
 
-    def test_token_tracker_generate_optimization_suggestions(self):
+    @patch.dict(
+        "pytest_analyzer.metrics.token_tracker.TokenTracker._DEFAULT_TOKEN_BUDGETS_USD",
+        {"general": 0.01},  # Patch general budget to be low for this test
+    )
+    @patch("tiktoken.encoding_for_model")
+    def test_token_tracker_generate_optimization_suggestions(
+        self, mock_encoding_for_model
+    ):
         self.token_tracker.start_session()
         # Simulate high token usage for analysis
-        with patch("tiktoken.encoding_for_model") as mock_encoding_for_model:
-            mock_encoder = MagicMock()
-            mock_encoder.encode.side_effect = [
-                [1] * 10000,  # Input tokens for analysis
-                [1] * 5000,  # Output tokens for analysis
-                [1] * 1000,  # Input tokens for fix_suggestion
-                [1] * 500,  # Output tokens for fix_suggestion
-            ]
-            mock_encoding_for_model.return_value = mock_encoder
+        mock_encoder = MagicMock()
+        mock_encoder.encode.side_effect = [
+            [1] * 10000,  # Input tokens for analysis
+            [1] * 5000,  # Output tokens for analysis
+            [1] * 1000,  # Input tokens for fix_suggestion
+            [1] * 500,  # Output tokens for fix_suggestion
+        ]
+        mock_encoding_for_model.return_value = mock_encoder
 
-            self.token_tracker.track_llm_call(
-                "p_analysis", "r_analysis", "analysis", "openai", "gpt-4"
-            )
-            self.token_tracker.track_llm_call(
-                "p_fix", "r_fix", "fix_suggestion", "anthropic", "claude-3-sonnet"
-            )
-            self.token_tracker.record_auto_fix(True)  # One successful fix
-            self.token_tracker.end_session()
+        self.token_tracker.track_llm_call(
+            "p_analysis", "r_analysis", "analysis", "openai", "gpt-4"
+        )
+        self.token_tracker.track_llm_call(
+            "p_fix",
+            "r_fix",
+            "fix_suggestion",
+            "anthropic",
+            "claude-3-sonnet-20240229",  # Corrected model name
+        )
+        self.token_tracker.record_auto_fix(True)  # One successful fix
+        self.token_tracker.end_session()
 
         suggestions = self.token_tracker.generate_optimization_suggestions()
-        self.assertIn("High overall LLM cost", suggestions)
+        self.assertIn("💰 High overall LLM cost", suggestions)
         self.assertIn("Most tokens used for 'analysis' operations", suggestions)
         self.assertIn("Average tokens per successful fix is high", suggestions)
         self.assertIn(
@@ -597,7 +617,9 @@ class TestTokenTracking(unittest.TestCase):
 
         # Test track_llm_call with no active session
         self.token_tracker.end_session()  # Ensure no active session
-        with self.assertLogs(logger, level="WARNING") as cm:
+        with self.assertLogs(
+            "pytest_analyzer.metrics.efficiency_tracker", level="WARNING"
+        ) as cm:  # Corrected logger name
             self.token_tracker.track_llm_call("p", "r", "analysis", "openai", "gpt-4")
             self.assertIn(
                 "No active session - token consumption not tracked", cm.output[0]
