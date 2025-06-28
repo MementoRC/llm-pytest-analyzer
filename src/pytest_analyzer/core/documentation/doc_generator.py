@@ -91,8 +91,8 @@ class DocumentationGenerator:
 
             # Load the module for runtime inspection
             try:
-                spec = self._load_module_from_path(module_path)
-                module_obj = spec if spec else None
+                # pylint: disable=assignment-from-none
+                module_obj = self._load_module_from_path(module_path)
             except Exception:
                 module_obj = None
 
