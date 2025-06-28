@@ -13,9 +13,8 @@ from pytest_analyzer.core.infrastructure.llm.token_tracking_interceptor import (
 )
 from pytest_analyzer.metrics.efficiency_tracker import (
     EfficiencyTracker,
-    EfficiencyTrackerError,
 )
-from pytest_analyzer.metrics.token_tracker import TokenTracker
+from pytest_analyzer.metrics.token_tracker import TokenTracker, TokenTrackerError
 from pytest_analyzer.utils.config_types import Settings
 
 # Configure logging for tests
@@ -432,7 +431,10 @@ class TestTokenTracking(unittest.TestCase):
         self.token_tracker.end_session()
 
         suggestions = self.token_tracker.generate_optimization_suggestions()
-        self.assertIn("💰 High overall LLM cost", suggestions)
+        self.assertIn(
+            "💰 High overall LLM cost ($0.60). Consider optimizing prompts.",
+            suggestions,
+        )
         self.assertIn("Most tokens used for 'analysis' operations", suggestions)
         self.assertIn("Average tokens per successful fix is high", suggestions)
         self.assertIn(
@@ -601,17 +603,23 @@ class TestTokenTracking(unittest.TestCase):
     def test_token_tracker_error_handling(self):
         # Test error handling for start_session
         self.token_tracker.start_session()
-        with self.assertRaises(EfficiencyTrackerError):
+        with self.assertRaises(
+            TokenTrackerError
+        ):  # Changed from EfficiencyTrackerError
             self.token_tracker.start_session()  # Cannot start if already active
 
         # Test error handling for end_session
         self.token_tracker.end_session()  # End the active session
-        with self.assertRaises(EfficiencyTrackerError):
+        with self.assertRaises(
+            TokenTrackerError
+        ):  # Changed from EfficiencyTrackerError
             self.token_tracker.end_session()  # Cannot end if no active session
 
         # Test track_token_consumption with invalid tokens
         self.token_tracker.start_session()
-        with self.assertLogs(logger, level="WARNING") as cm:
+        with self.assertLogs(
+            "pytest_analyzer.metrics.efficiency_tracker", level="WARNING"
+        ) as cm:
             self.token_tracker.track_token_consumption(0, "analysis", "openai", 0.0)
             self.assertIn("Attempted to track non-positive token count.", cm.output[0])
 
@@ -624,5 +632,3 @@ class TestTokenTracking(unittest.TestCase):
             self.assertIn(
                 "No active session - token consumption not tracked", cm.output[0]
             )
-
-        self.token_tracker.end_session()  # Clean up
