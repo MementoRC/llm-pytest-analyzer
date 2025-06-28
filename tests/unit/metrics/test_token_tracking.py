@@ -212,9 +212,13 @@ class TestTokenTracking(unittest.TestCase):
         self.efficiency_tracker.end_session()
 
         recommendations = self.efficiency_tracker.generate_recommendations()
-        self.assertIn("Significant LLM cost detected", recommendations)
-        self.assertIn("High token usage per successful fix", recommendations)
-        self.assertIn("Most tokens used for 'analysis' operations", recommendations)
+        # Convert list to string for easier substring searching
+        recommendations_text = " ".join(recommendations)
+        self.assertIn("Significant LLM cost detected", recommendations_text)
+        self.assertIn("High token usage per successful fix", recommendations_text)
+        self.assertIn(
+            "Most tokens used for 'analysis' operations", recommendations_text
+        )
 
     # --- TokenTracker Specific Tests ---
     @patch("tiktoken.encoding_for_model")
@@ -424,10 +428,21 @@ class TestTokenTracking(unittest.TestCase):
     # --- TokenTrackingInterceptor Tests ---
     def test_token_tracking_interceptor_openai_integration(self):
         mock_openai_client = MagicMock()
-        mock_openai_client.chat.completions.create.return_value = MagicMock(
+        # Create a mock structure that mimics the real OpenAI client hierarchy
+        # We use SimpleNamespace-like objects to ensure they're not callable
+        from types import SimpleNamespace
+
+        chat_obj = SimpleNamespace()
+        completions_obj = SimpleNamespace()
+        create_method = MagicMock()
+        create_method.return_value = MagicMock(
             choices=[MagicMock(message=MagicMock(content="Mocked OpenAI response"))],
             usage=MagicMock(prompt_tokens=10, completion_tokens=20, total_tokens=30),
         )
+
+        completions_obj.create = create_method
+        chat_obj.completions = completions_obj
+        mock_openai_client.chat = chat_obj
 
         interceptor = TokenTrackingInterceptor(
             wrapped_llm_client=mock_openai_client,
@@ -445,7 +460,7 @@ class TestTokenTracking(unittest.TestCase):
         )
 
         self.assertEqual(response.choices[0].message.content, "Mocked OpenAI response")
-        mock_openai_client.chat.completions.create.assert_called_once()
+        create_method.assert_called_once()
 
         # Verify token tracker was called
         realtime_tokens = self.token_tracker.get_realtime_token_usage()
@@ -457,17 +472,25 @@ class TestTokenTracking(unittest.TestCase):
 
     def test_token_tracking_interceptor_anthropic_integration(self):
         mock_anthropic_client = MagicMock()
-        mock_anthropic_client.messages.create.return_value = MagicMock(
+        # Create a mock structure that mimics the real Anthropic client hierarchy
+        from types import SimpleNamespace
+
+        messages_obj = SimpleNamespace()
+        create_method = MagicMock()
+        create_method.return_value = MagicMock(
             content=[MagicMock(text="Mocked Anthropic response")],
             usage=MagicMock(input_tokens=15, output_tokens=25),
         )
+
+        messages_obj.create = create_method
+        mock_anthropic_client.messages = messages_obj
 
         interceptor = TokenTrackingInterceptor(
             wrapped_llm_client=mock_anthropic_client,
             token_tracker=self.token_tracker,
             operation_type="fix_suggestion",
             provider_name="anthropic",
-            model_name="claude-3-sonnet",
+            model_name="claude-3-sonnet-20240229",
         )
 
         self.token_tracker.start_session()
@@ -478,7 +501,7 @@ class TestTokenTracking(unittest.TestCase):
         )
 
         self.assertEqual(response.content[0].text, "Mocked Anthropic response")
-        mock_anthropic_client.messages.create.assert_called_once()
+        create_method.assert_called_once()
 
         # Verify token tracker was called
         realtime_tokens = self.token_tracker.get_realtime_token_usage()

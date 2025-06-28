@@ -63,7 +63,6 @@ class TokenTrackingInterceptor:
         else:
             # For non-callable attributes, wrap them in a proxy that can intercept method calls
             return AttributeProxy(attr, self)
-        return attr
 
     def _wrap_method(self, method: Any, method_name: str) -> Any:
         """
