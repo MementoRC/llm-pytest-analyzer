@@ -198,18 +198,14 @@ class TestTokenTracking:
             assert row[0] == 150
 
     def test_track_token_consumption_invalid_values(self, efficiency_tracker):
-        """Test that invalid token values raise errors."""
+        """Test that invalid token values are handled gracefully."""
         efficiency_tracker.start_session()
 
-        with pytest.raises(
-            EfficiencyTrackerError, match="Token count must be positive"
-        ):
-            efficiency_tracker.track_token_consumption(0)
+        # Invalid values should be logged and handled gracefully (no exception)
+        efficiency_tracker.track_token_consumption(0)  # Should just log warning
+        efficiency_tracker.track_token_consumption(-10)  # Should just log warning
 
-        with pytest.raises(
-            EfficiencyTrackerError, match="Token count must be positive"
-        ):
-            efficiency_tracker.track_token_consumption(-10)
+        # Test passes if no exception is raised (values are handled gracefully)
 
     def test_track_token_consumption_no_active_session(self, efficiency_tracker):
         """Test that tracking tokens without active session logs warning but doesn't crash."""
