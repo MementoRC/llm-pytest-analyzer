@@ -9,6 +9,11 @@ from .base_llm_service import BaseLLMService
 class MockLLMService(BaseLLMService, LLMServiceProtocol):
     """Returns mock responses for testing."""
 
+    @property
+    def provider_name(self) -> str:
+        """Returns the name of the LLM provider (e.g., 'openai', 'anthropic')."""
+        return "mock"
+
     def _create_default_provider(self) -> Any:
         """Create the default mock provider."""
         # Mock service doesn't need a real provider

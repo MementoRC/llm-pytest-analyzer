@@ -27,6 +27,11 @@ class ConcreteTestLLMService(BaseLLMService):
         self.logger = logging.getLogger(self.__class__.__name__)
         super().__init__(provider=provider, settings=settings)
 
+    @property
+    def provider_name(self) -> str:
+        """Returns the name of the LLM provider for testing."""
+        return "test"
+
     def _create_default_provider(self) -> Any:  # Changed LLMProvider to Any
         """Override to provide a mock provider for tests if one isn't passed to __init__."""
         self.logger.info(f"{self.__class__.__name__}._create_default_provider called")
@@ -192,6 +197,10 @@ def test_subclass_without_generate_raises_type_error(mock_settings: MagicMock):
     """Tests TypeError for subclass not implementing abstract 'generate'."""
 
     class SubclassWithoutGenerate(BaseLLMService):
+        @property
+        def provider_name(self) -> str:
+            return "subclass_no_generate"
+
         def _create_default_provider(
             self,
         ) -> Any:  # Return type Any
@@ -214,6 +223,10 @@ def test_subclass_calling_base_create_default_provider_raises_not_implemented_er
     """
 
     class SubclassRelyingOnBaseCreateDefault(BaseLLMService):
+        @property
+        def provider_name(self) -> str:
+            return "subclass_relying_on_base"
+
         def generate(
             self, prompt: str, context: Optional[Dict[str, Any]] = None
         ) -> str:
