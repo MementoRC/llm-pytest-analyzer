@@ -22,7 +22,14 @@ class AttributeProxy:
         if callable(attr):
             # If the attribute is callable, wrap it with the interceptor
             return self._interceptor._wrap_method(attr, name)
-        return attr
+        else:
+            # If the attribute is not callable, but it's an object that might contain
+            # further callable methods, wrap it in another AttributeProxy.
+            # This handles nested structures like client.chat.completions.
+            # Avoid infinite recursion by checking if it's a basic type.
+            if isinstance(attr, (str, int, float, bool, type(None))):
+                return attr
+            return AttributeProxy(attr, self._interceptor)
 
 
 class TokenTrackingInterceptor:
