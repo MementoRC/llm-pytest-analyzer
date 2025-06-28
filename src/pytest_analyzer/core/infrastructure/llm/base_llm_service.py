@@ -16,13 +16,13 @@ class BaseLLMService(ABC):
     ):
         self.settings = settings or Settings()
         self.logger = logging.getLogger(self.__class__.__name__)
-        self._provider_instance = (
-            provider or self._create_default_provider()
-        )  # Store raw provider
         self.model = self.settings.llm_model  # Direct attribute access
         self.timeout = (
             self.settings.llm_timeout
         )  # Direct attribute access, was llm.timeout_seconds
+        self._provider_instance = (
+            provider or self._create_default_provider()
+        )  # Store raw provider
 
     @property
     @abstractmethod
