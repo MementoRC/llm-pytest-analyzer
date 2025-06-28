@@ -6,7 +6,6 @@ import unittest
 from typing import List  # Added import for List
 from unittest.mock import MagicMock, patch
 
-from pytest_analyzer.core.cross_cutting.monitoring.metrics import ApplicationMetrics
 from pytest_analyzer.core.infrastructure.llm.anthropic_service import AnthropicService
 from pytest_analyzer.core.infrastructure.llm.openai_service import OpenAIService
 from pytest_analyzer.core.infrastructure.llm.token_tracking_interceptor import (
@@ -31,12 +30,21 @@ class TestTokenTracking(unittest.TestCase):
         self.db_path = os.path.join(self.temp_dir.name, "efficiency_metrics.db")
 
         self.settings = Settings(project_root=self.temp_dir.name)
-        self.metrics_client = MagicMock(spec=ApplicationMetrics)
+        self.metrics_client = MagicMock()
+        # Manually add the required methods for the mock
+        self.metrics_client.gauge = MagicMock()
+        self.metrics_client.increment = MagicMock()
 
-        # Patch sqlite3.connect to use the temporary database
-        self.patcher = patch(
-            "sqlite3.connect", side_effect=lambda path: sqlite3.connect(self.db_path)
-        )
+        # Patch sqlite3.connect to use the temporary database, avoiding recursion
+        # Store the original function before patching
+        original_connect = sqlite3.connect
+
+        def mock_sqlite_connect(path):
+            # Use the original function to avoid recursion
+            real_conn = original_connect(self.db_path)
+            return real_conn
+
+        self.patcher = patch("sqlite3.connect", side_effect=mock_sqlite_connect)
         self.mock_sqlite_connect = self.patcher.start()
 
         # Initialize EfficiencyTracker (parent class) for basic tests

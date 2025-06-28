@@ -63,7 +63,7 @@ class AnthropicService(BaseLLMService, LLMServiceProtocol):
                 wrapped_llm_client=self.provider,  # This is the mock/real client from _create_default_provider
                 token_tracker=self._token_tracker,
                 operation_type=self._operation_type,
-                provider_name=self.provider_name,
+                provider_name="anthropic",
                 model_name=self.model,
             )
 
@@ -140,8 +140,8 @@ class AnthropicService(BaseLLMService, LLMServiceProtocol):
                 max_tokens=1024,  # Example parameter
             )
             return response_obj.content[0].text
-        except AttributeError:
-            # Fallback if provider doesn't have messages.create (e.g., older mock or direct string provider)
+        except (AttributeError, TypeError):
+            # Fallback if provider doesn't have messages.create or doesn't return expected structure
             if hasattr(self.provider, "send_request"):
                 return self.provider.send_request(prompt)
             return f"Anthropic response to: {prompt[:50]}..."
