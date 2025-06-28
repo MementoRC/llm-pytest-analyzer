@@ -1,12 +1,9 @@
 """
-EfficiencyTracker implementation for development efficiency monitoring.
+TokenEfficientAnalyzer for pytest-analyzer.
 
-This module provides the EfficiencyTracker class according to TaskMaster Task 6 requirements:
-- Session lifecycle management (start_session, end_session)
-- Token consumption tracking (track_token_consumption)
-- Auto-fix recording (record_auto_fix)
-- Efficiency score calculation (calculate_efficiency_score)
-- Recommendation generation (generate_recommendations)
+This module implements a token-efficient analyzer for pytest output,
+detecting failure patterns, ranking failures, identifying bulk fixes,
+and generating structured summaries optimized for LLM token usage.
 """
 
 import logging
@@ -15,14 +12,16 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pytest_analyzer.core.cross_cutting.error_handling import (
     error_handler,
 )
 from pytest_analyzer.core.cross_cutting.monitoring.metrics import ApplicationMetrics
 from pytest_analyzer.core.errors import BaseError
-from pytest_analyzer.utils.settings import Settings
+from pytest_analyzer.utils.config_types import (
+    Settings,  # Changed import to config_types
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +52,11 @@ class Session:
     total_fixes: int = 0
     successful_fixes: int = 0
     efficiency_score: Optional[float] = None
+    # New fields for detailed token tracking
+    total_analysis_tokens: int = 0
+    total_fix_suggestion_tokens: int = 0
+    total_validation_tokens: int = 0
+    total_estimated_cost_usd: float = 0.0
 
 
 @dataclass
@@ -112,16 +116,34 @@ class EfficiencyTracker:
                     total_tokens INTEGER DEFAULT 0,
                     total_fixes INTEGER DEFAULT 0,
                     successful_fixes INTEGER DEFAULT 0,
-                    efficiency_score REAL
+                    efficiency_score REAL,
+                    total_analysis_tokens INTEGER DEFAULT 0,
+                    total_fix_suggestion_tokens INTEGER DEFAULT 0,
+                    total_validation_tokens INTEGER DEFAULT 0,
+                    total_estimated_cost_usd REAL DEFAULT 0.0
                 )
             """)
 
-            # Token usage table
+            # Token usage table (legacy, kept for compatibility but new data goes to token_usage_by_type)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS token_usage (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     session_id INTEGER NOT NULL,
                     tokens INTEGER NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    FOREIGN KEY (session_id) REFERENCES sessions(id)
+                )
+            """)
+
+            # New table for detailed token usage by type
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS token_usage_by_type (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id INTEGER NOT NULL,
+                    operation_type TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    tokens INTEGER NOT NULL,
+                    estimated_cost_usd REAL NOT NULL,
                     timestamp TEXT NOT NULL,
                     FOREIGN KEY (session_id) REFERENCES sessions(id)
                 )
@@ -210,15 +232,25 @@ class EfficiencyTracker:
     @error_handler(
         "track token consumption", EfficiencyTrackerError, logger=logger, reraise=True
     )
-    def track_token_consumption(self, tokens: int) -> None:
+    def track_token_consumption(
+        self,
+        tokens: int,
+        operation_type: str = "general",
+        provider: str = "unknown",
+        estimated_cost_usd: float = 0.0,
+    ) -> None:
         """
-        Track LLM token consumption for the current session.
+        Track LLM token consumption for the current session, with operation type and provider.
 
         Args:
             tokens: Number of tokens consumed.
+            operation_type: Type of operation (e.g., "analysis", "fix_suggestion", "validation").
+            provider: LLM provider (e.g., "openai", "anthropic").
+            estimated_cost_usd: Estimated cost in USD for these tokens.
         """
         if tokens <= 0:
-            raise ValueError("Token count must be positive")
+            logger.warning("Attempted to track non-positive token count.")
+            return
 
         with self._lock:
             if self._current_session_id is None:
@@ -228,7 +260,23 @@ class EfficiencyTracker:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
 
-                # Record token usage
+                # Record detailed token usage (new table)
+                cursor.execute(
+                    """
+                    INSERT INTO token_usage_by_type (session_id, operation_type, provider, tokens, estimated_cost_usd, timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        self._current_session_id,
+                        operation_type,
+                        provider,
+                        tokens,
+                        estimated_cost_usd,
+                        datetime.now().isoformat(),
+                    ),
+                )
+
+                # Also record in legacy table for backwards compatibility
                 cursor.execute(
                     """
                     INSERT INTO token_usage (session_id, tokens, timestamp)
@@ -238,17 +286,32 @@ class EfficiencyTracker:
                 )
 
                 # Update session totals
-                cursor.execute(
-                    """
+                update_query = """
                     UPDATE sessions
-                    SET total_tokens = total_tokens + ?
-                    WHERE id = ?
-                """,
-                    (tokens, self._current_session_id),
-                )
+                    SET total_tokens = total_tokens + ?,
+                        total_estimated_cost_usd = total_estimated_cost_usd + ?
+                """
+                if operation_type == "analysis":
+                    update_query += (
+                        ", total_analysis_tokens = total_analysis_tokens + ?"
+                    )
+                elif operation_type == "fix_suggestion":
+                    update_query += ", total_fix_suggestion_tokens = total_fix_suggestion_tokens + ?"
+                elif operation_type == "validation":
+                    update_query += (
+                        ", total_validation_tokens = total_validation_tokens + ?"
+                    )
+                update_query += " WHERE id = ?"
+
+                params = [tokens, estimated_cost_usd]
+                if operation_type in ["analysis", "fix_suggestion", "validation"]:
+                    params.append(tokens)
+                params.append(self._current_session_id)
+
+                cursor.execute(update_query, tuple(params))
 
             logger.debug(
-                f"Tracked {tokens} tokens for session {self._current_session_id}"
+                f"Tracked {tokens} tokens ({operation_type}, {provider}, ${estimated_cost_usd:.4f}) for session {self._current_session_id}"
             )
 
     @error_handler(
@@ -319,7 +382,7 @@ class EfficiencyTracker:
             # Get current session data
             cursor.execute(
                 """
-                SELECT total_tokens, total_fixes, successful_fixes, start_time
+                SELECT total_tokens, total_fixes, successful_fixes, start_time, total_estimated_cost_usd
                 FROM sessions WHERE id = ?
             """,
                 (self._current_session_id,),
@@ -329,7 +392,13 @@ class EfficiencyTracker:
             if not row:
                 return 0.0
 
-            total_tokens, total_fixes, successful_fixes, start_time = row
+            (
+                total_tokens,
+                total_fixes,
+                successful_fixes,
+                start_time,
+                total_estimated_cost_usd,
+            ) = row
 
             # Calculate component scores
             token_efficiency = self._calculate_token_efficiency(
@@ -436,6 +505,79 @@ class EfficiencyTracker:
             return result[0] if result[0] else 1.0  # Default baseline
 
     @error_handler(
+        "get token usage by operation",
+        EfficiencyTrackerError,
+        logger=logger,
+        reraise=True,
+    )
+    def get_token_usage_by_operation(
+        self, session_id: Optional[int] = None
+    ) -> Dict[str, int]:
+        """
+        Retrieves total token usage grouped by operation type for a session or all sessions.
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            query = """
+                SELECT operation_type, SUM(tokens)
+                FROM token_usage_by_type
+            """
+            params = []
+            if session_id is not None:
+                query += " WHERE session_id = ?"
+                params.append(session_id)
+            query += " GROUP BY operation_type"
+            cursor.execute(query, tuple(params))
+            return {row[0]: row[1] for row in cursor.fetchall()}
+
+    @error_handler(
+        "get token usage by provider",
+        EfficiencyTrackerError,
+        logger=logger,
+        reraise=True,
+    )
+    def get_token_usage_by_provider(
+        self, session_id: Optional[int] = None
+    ) -> Dict[str, int]:
+        """
+        Retrieves total token usage grouped by LLM provider for a session or all sessions.
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            query = """
+                SELECT provider, SUM(tokens)
+                FROM token_usage_by_type
+            """
+            params = []
+            if session_id is not None:
+                query += " WHERE session_id = ?"
+                params.append(session_id)
+            query += " GROUP BY provider"
+            cursor.execute(query, tuple(params))
+            return {row[0]: row[1] for row in cursor.fetchall()}
+
+    @error_handler(
+        "get total estimated cost",
+        EfficiencyTrackerError,
+        logger=logger,
+        reraise=True,
+    )
+    def get_total_estimated_cost(self, session_id: Optional[int] = None) -> float:
+        """
+        Retrieves the total estimated cost in USD for a session or all sessions.
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            query = "SELECT SUM(total_estimated_cost_usd) FROM sessions"
+            params = []
+            if session_id is not None:
+                query += " WHERE id = ?"
+                params.append(session_id)
+            cursor.execute(query, tuple(params))
+            result = cursor.fetchone()
+            return result[0] if result[0] is not None else 0.0
+
+    @error_handler(
         "generate recommendations", EfficiencyTrackerError, logger=logger, reraise=True
     )
     def generate_recommendations(self) -> List[str]:
@@ -447,12 +589,13 @@ class EfficiencyTracker:
         """
         recommendations = []
 
-        if self._current_session_id is None:
+        current_session_id = self._current_session_id
+        if current_session_id is None:
             # Get latest completed session
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
-                    SELECT efficiency_score, total_tokens, total_fixes, successful_fixes
+                    SELECT efficiency_score, total_tokens, total_fixes, successful_fixes, total_estimated_cost_usd
                     FROM sessions
                     WHERE end_time IS NOT NULL
                     ORDER BY start_time DESC
@@ -462,7 +605,13 @@ class EfficiencyTracker:
                 if not row:
                     return ["No efficiency data available. Complete a session first."]
 
-                efficiency_score, total_tokens, total_fixes, successful_fixes = row
+                (
+                    efficiency_score,
+                    total_tokens,
+                    total_fixes,
+                    successful_fixes,
+                    total_estimated_cost_usd,
+                ) = row
         else:
             # Use current session data
             efficiency_score = self.calculate_efficiency_score()
@@ -470,36 +619,68 @@ class EfficiencyTracker:
                 cursor = conn.cursor()
                 cursor.execute(
                     """
-                    SELECT total_tokens, total_fixes, successful_fixes
+                    SELECT total_tokens, total_fixes, successful_fixes, total_estimated_cost_usd
                     FROM sessions WHERE id = ?
                 """,
-                    (self._current_session_id,),
+                    (current_session_id,),
                 )
                 row = cursor.fetchone()
-                total_tokens, total_fixes, successful_fixes = row
+                (
+                    total_tokens,
+                    total_fixes,
+                    successful_fixes,
+                    total_estimated_cost_usd,
+                ) = row
 
-        # Generate recommendations based on efficiency score and metrics
+        # General efficiency recommendations
         if efficiency_score < 0.3:
             recommendations.append(
-                "⚠️ Low efficiency detected. Consider reviewing your approach."
+                "⚠️ Low overall efficiency detected. Consider reviewing your approach."
+            )
+        elif efficiency_score >= 0.7:
+            recommendations.append(
+                "🎉 Great overall efficiency! Keep up the excellent work."
+            )
+        else:
+            recommendations.append(
+                "📊 Moderate overall efficiency. Look for opportunities to optimize."
             )
 
+        # Fix success rate recommendations
         if total_fixes > 0 and successful_fixes / total_fixes < 0.5:
             recommendations.append(
                 "🎯 Low fix success rate. Focus on improving fix quality over quantity."
             )
-
-        if successful_fixes > 0 and total_tokens / successful_fixes > 200:
+        elif total_fixes > 0 and successful_fixes / total_fixes >= 0.8:
             recommendations.append(
-                "🪙 High token usage per fix. Consider optimizing prompts and context."
+                "✅ High fix success rate. You're doing great at applying effective fixes!"
             )
 
-        if efficiency_score >= 0.7:
-            recommendations.append("🎉 Great efficiency! Keep up the excellent work.")
+        # Token usage recommendations
+        if total_estimated_cost_usd > 0.05:  # Example threshold for cost
+            recommendations.append(
+                f"💸 Significant LLM cost detected (${total_estimated_cost_usd:.2f}). Review token usage."
+            )
+            if (
+                successful_fixes > 0 and total_tokens / successful_fixes > 200
+            ):  # Example threshold for tokens per fix
+                recommendations.append(
+                    "🪙 High token usage per successful fix. Optimize prompts and context for LLM calls."
+                )
+
+            token_usage_by_op = self.get_token_usage_by_operation(current_session_id)
+            if token_usage_by_op:
+                most_expensive_op = max(token_usage_by_op, key=token_usage_by_op.get)
+                if (
+                    token_usage_by_op[most_expensive_op] > total_tokens * 0.5
+                ):  # If one operation dominates
+                    recommendations.append(
+                        f"📈 Most tokens used for '{most_expensive_op}' operations. Focus optimization efforts there."
+                    )
 
         if not recommendations:
             recommendations.append(
-                "📊 Moderate efficiency. Look for opportunities to optimize token usage and fix accuracy."
+                "No specific recommendations at this time. Continue monitoring efficiency."
             )
 
         return recommendations
