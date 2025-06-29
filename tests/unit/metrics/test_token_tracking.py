@@ -369,10 +369,17 @@ class TestTokenTracking(unittest.TestCase):
 
     def test_token_tracker_get_detailed_analytics(self):
         session_id = self.token_tracker.start_session()
-        self.token_tracker.track_llm_call("p1", "r1", "analysis", "openai", "gpt-4")
+        # Ensure prompts/responses are long enough to generate tokens
         self.token_tracker.track_llm_call(
-            "p2",
-            "r2",
+            "This is a prompt for analysis.",
+            "This is a response for analysis.",
+            "analysis",
+            "openai",
+            "gpt-4",
+        )
+        self.token_tracker.track_llm_call(
+            "This is a much longer prompt for fix suggestion to ensure tokens are tracked.",
+            "This is a much longer response for fix suggestion to ensure tokens are tracked.",
             "fix_suggestion",
             "anthropic",
             "claude-3-sonnet-20240229",  # Corrected model name
@@ -435,17 +442,26 @@ class TestTokenTracking(unittest.TestCase):
             "💰 High overall LLM cost ($0.60). Consider optimizing prompts.",
             suggestions,
         )
-        self.assertIn("Most tokens used for 'analysis' operations", suggestions)
-        self.assertIn("Average tokens per successful fix is high", suggestions)
         self.assertIn(
-            "For OpenAI models, consider using `gpt-3.5-turbo` for less complex tasks to reduce cost.",
+            "📈 Most tokens used for 'analysis' operations. Focus optimization efforts there.",
             suggestions,
         )
         self.assertIn(
-            "For Anthropic models, `claude-3-haiku` is very cost-effective for simpler tasks.",
+            "🪙 High token usage per successful fix. Optimize prompts and context for LLM calls.",
             suggestions,
         )
-        self.assertIn("Review LLM prompts for verbosity.", suggestions)
+        self.assertIn(
+            "⚡ For OpenAI models, consider using `gpt-3.5-turbo` for less complex tasks to reduce cost.",
+            suggestions,
+        )
+        self.assertIn(
+            "⚡ For Anthropic models, `claude-3-haiku` is very cost-effective for simpler tasks.",
+            suggestions,
+        )
+        self.assertIn(
+            "📝 Review LLM prompts for verbosity. Can you achieve the same result with fewer words?",
+            suggestions,
+        )
 
     # --- TokenTrackingInterceptor Tests ---
     def test_token_tracking_interceptor_openai_integration(self):
