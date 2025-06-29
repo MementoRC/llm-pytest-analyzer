@@ -22,6 +22,16 @@ from ..analysis.token_efficient_analyzer import TokenEfficientAnalyzer
 from ..core.test_categorization.categorizer import TestCategorizer
 from ..utils.settings import Settings, load_settings
 
+# Import the new optimizer
+try:
+    from ..core.test_categorization.execution_order import TestExecutionOrderOptimizer
+except ImportError:
+    TestExecutionOrderOptimizer = None
+    logger = logging.getLogger("pytest_analyzer.smart_test")
+    logger.warning(
+        "TestExecutionOrderOptimizer could not be imported. Order optimization features will be unavailable."
+    )
+
 # Create logger
 logger = logging.getLogger("pytest_analyzer.smart_test")
 
@@ -37,11 +47,15 @@ class SmartTestCommand:
         test_categorizer: Optional[TestCategorizer] = None,
         token_analyzer: Optional[TokenEfficientAnalyzer] = None,
         settings: Optional[Settings] = None,
+        optimizer: Optional[Any] = None,
     ):
         """Initialize the command with required components."""
         self.test_categorizer = test_categorizer or TestCategorizer()
         self.token_analyzer = token_analyzer or TokenEfficientAnalyzer()
         self._initial_settings = settings
+        self.optimizer = optimizer or (
+            TestExecutionOrderOptimizer() if TestExecutionOrderOptimizer else None
+        )
 
     def parse_arguments(self) -> argparse.Namespace:
         """Parse command line arguments for the smart-test command."""
@@ -96,6 +110,29 @@ class SmartTestCommand:
             "-v",
             action="store_true",
             help="Enable verbose output",
+        )
+
+        # Execution order optimization options
+        optimization_group = parser.add_argument_group("Execution Order Optimization")
+        optimization_group.add_argument(
+            "--optimize-order",
+            action="store_true",
+            help="Enable test execution order optimization",
+        )
+        optimization_group.add_argument(
+            "--parallel",
+            action="store_true",
+            help="Enable parallel execution planning",
+        )
+        optimization_group.add_argument(
+            "--fast-fail",
+            action="store_true",
+            help="Prioritize tests likely to fail (fast-fail)",
+        )
+        optimization_group.add_argument(
+            "--historical-data",
+            action="store_true",
+            help="Use historical failure data for optimization",
         )
 
         return parser.parse_args()
@@ -168,7 +205,12 @@ class SmartTestCommand:
     def run_tests(
         self, categorized_tests: Dict[str, List[str]], args: argparse.Namespace
     ) -> Dict[str, Any]:
-        """Run the selected tests using pytest."""
+        """
+        Run the selected tests using pytest, with optional execution order optimization.
+
+        If --optimize-order is enabled, uses TestExecutionOrderOptimizer to plan execution,
+        apply dependency ordering, parallelization, and fast-fail strategies.
+        """
         # Determine which tests to run
         tests_to_run = []
 
@@ -187,16 +229,136 @@ class SmartTestCommand:
             console.print("📭 No relevant tests found to run")
             return {"success": True, "tests_run": 0, "output": "No tests selected"}
 
-        # Build pytest command
-        cmd = ["python", "-m", "pytest"] + tests_to_run
+        # Execution order optimization
+        execution_plan = None
+        dependency_graph = None
+        parallel_groups = None
+        optimization_benefits = None
 
-        if args.pytest_args:
-            cmd.extend(args.pytest_args.split())
+        if args.optimize_order:
+            if not self.optimizer:
+                logger.warning(
+                    "TestExecutionOrderOptimizer is not available. Skipping optimization."
+                )
+            else:
+                try:
+                    # Prepare optimizer options
+                    optimizer_options = {
+                        "parallel": args.parallel,
+                        "fast_fail": args.fast_fail,
+                        "historical_data": args.historical_data,
+                    }
+                    # Generate execution plan
+                    execution_plan = self.optimizer.generate_execution_plan(
+                        tests_to_run,
+                        categorized_tests=categorized_tests,
+                        options=optimizer_options,
+                    )
+                    # Extract dependency graph and parallel groups if available
+                    dependency_graph = getattr(self.optimizer, "dependency_graph", None)
+                    parallel_groups = (
+                        execution_plan.get("parallel_groups")
+                        if isinstance(execution_plan, dict)
+                        else None
+                    )
+                    optimization_benefits = (
+                        execution_plan.get("optimization_benefits")
+                        if isinstance(execution_plan, dict)
+                        else None
+                    )
 
-        if args.verbose:
-            cmd.append("-v")
+                    # Use the ordered/optimized test list
+                    if (
+                        isinstance(execution_plan, dict)
+                        and "ordered_tests" in execution_plan
+                    ):
+                        tests_to_run = execution_plan["ordered_tests"]
+                    elif isinstance(execution_plan, list):
+                        tests_to_run = execution_plan
+                    else:
+                        logger.warning(
+                            "Execution plan format not recognized, running tests in default order."
+                        )
 
-        # Run tests
+                except Exception as e:
+                    logger.warning(f"Failed to optimize execution order: {e}")
+                    # Fallback to default order
+
+        # Build pytest command(s)
+        def build_pytest_cmd(test_subset):
+            cmd = ["python", "-m", "pytest"] + test_subset
+            if args.pytest_args:
+                cmd.extend(args.pytest_args.split())
+            if args.verbose:
+                cmd.append("-v")
+            return cmd
+
+        # Parallel execution
+        if args.optimize_order and args.parallel and parallel_groups:
+            # Run each group in parallel subprocesses
+            import concurrent.futures
+
+            results = []
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future_to_group = {
+                        executor.submit(
+                            subprocess.run,
+                            build_pytest_cmd(group),
+                            capture_output=True,
+                            text=True,
+                            timeout=300,
+                        ): group
+                        for group in parallel_groups
+                        if group
+                    }
+                    for future in concurrent.futures.as_completed(future_to_group):
+                        group = future_to_group[future]
+                        try:
+                            result = future.result()
+                            results.append(
+                                {
+                                    "group": group,
+                                    "returncode": result.returncode,
+                                    "stdout": result.stdout,
+                                    "stderr": result.stderr,
+                                }
+                            )
+                        except Exception as exc:
+                            results.append(
+                                {
+                                    "group": group,
+                                    "returncode": 1,
+                                    "stdout": "",
+                                    "stderr": f"Exception: {exc}",
+                                }
+                            )
+                # Aggregate results
+                overall_success = all(r["returncode"] == 0 for r in results)
+                output = "\n\n".join(r["stdout"] for r in results)
+                errors = "\n\n".join(r["stderr"] for r in results if r["stderr"])
+                return {
+                    "success": overall_success,
+                    "tests_run": sum(len(r["group"]) for r in results),
+                    "output": output,
+                    "errors": errors,
+                    "returncode": 0 if overall_success else 1,
+                    "parallel_groups": [r["group"] for r in results],
+                    "dependency_graph": dependency_graph,
+                    "execution_plan": execution_plan,
+                    "optimization_benefits": optimization_benefits,
+                }
+            except Exception as e:
+                return {
+                    "success": False,
+                    "tests_run": 0,
+                    "output": "",
+                    "errors": f"Parallel execution failed: {e}",
+                    "returncode": 1,
+                }
+
+        # Sequential execution (default or optimized order)
+        cmd = build_pytest_cmd(tests_to_run)
         try:
             result = subprocess.run(
                 cmd,
@@ -211,6 +373,10 @@ class SmartTestCommand:
                 "output": result.stdout,
                 "errors": result.stderr,
                 "returncode": result.returncode,
+                "dependency_graph": dependency_graph,
+                "execution_plan": execution_plan,
+                "parallel_groups": parallel_groups,
+                "optimization_benefits": optimization_benefits,
             }
         except subprocess.TimeoutExpired:
             return {
@@ -384,6 +550,41 @@ class SmartTestCommand:
 
         console.print(exec_table)
 
+        # Execution order optimization reporting
+        if execution.get("dependency_graph"):
+            console.print("\n[magenta]🔗 Dependency Graph:[/magenta]")
+            dep_graph = execution["dependency_graph"]
+            if isinstance(dep_graph, dict):
+                for node, deps in dep_graph.items():
+                    console.print(f"  [bold]{node}[/bold] -> {deps}")
+            else:
+                console.print(str(dep_graph))
+
+        if execution.get("execution_plan"):
+            console.print("\n[yellow]🗺️ Execution Plan:[/yellow]")
+            plan = execution["execution_plan"]
+            if isinstance(plan, dict):
+                for k, v in plan.items():
+                    if k == "ordered_tests":
+                        console.print(f"  [bold]Ordered Tests:[/bold] {v}")
+                    elif k == "parallel_groups":
+                        continue  # Shown below
+                    elif k == "optimization_benefits":
+                        continue  # Shown below
+                    else:
+                        console.print(f"  [bold]{k}:[/bold] {v}")
+            else:
+                console.print(str(plan))
+
+        if execution.get("parallel_groups"):
+            console.print("\n[cyan]⚡ Parallel Execution Groups:[/cyan]")
+            for idx, group in enumerate(execution["parallel_groups"], 1):
+                console.print(f"  Group {idx}: {group}")
+
+        if execution.get("optimization_benefits"):
+            console.print("\n[green]📈 Optimization Benefits:[/green]")
+            console.print(str(execution["optimization_benefits"]))
+
         # Analysis results
         analysis = report["analysis"]
         if "analysis" in analysis:
@@ -409,6 +610,43 @@ class SmartTestCommand:
         for category, tests in report["categorization"].items():
             lines.append(f"  {category.title()}: {len(tests)} tests")
         lines.append("")
+
+        # Execution order optimization reporting (plain text)
+        execution = report.get("execution", {})
+        if execution.get("dependency_graph"):
+            lines.append("Dependency Graph:")
+            dep_graph = execution["dependency_graph"]
+            if isinstance(dep_graph, dict):
+                for node, deps in dep_graph.items():
+                    lines.append(f"  {node} -> {deps}")
+            else:
+                lines.append(str(dep_graph))
+            lines.append("")
+        if execution.get("execution_plan"):
+            lines.append("Execution Plan:")
+            plan = execution["execution_plan"]
+            if isinstance(plan, dict):
+                for k, v in plan.items():
+                    if k == "ordered_tests":
+                        lines.append(f"  Ordered Tests: {v}")
+                    elif k == "parallel_groups":
+                        continue
+                    elif k == "optimization_benefits":
+                        continue
+                    else:
+                        lines.append(f"  {k}: {v}")
+            else:
+                lines.append(str(plan))
+            lines.append("")
+        if execution.get("parallel_groups"):
+            lines.append("Parallel Execution Groups:")
+            for idx, group in enumerate(execution["parallel_groups"], 1):
+                lines.append(f"  Group {idx}: {group}")
+            lines.append("")
+        if execution.get("optimization_benefits"):
+            lines.append("Optimization Benefits:")
+            lines.append(str(execution["optimization_benefits"]))
+            lines.append("")
 
         # Analysis
         analysis = report["analysis"]
