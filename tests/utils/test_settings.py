@@ -85,13 +85,14 @@ def test_settings_post_init_without_project_root():
 
 def test_load_settings_none():
     """Test loading settings from a None config file, expecting pure defaults."""
-    # Ensure no default config file is found for this test
+    # Ensure no default config file is found for this test and no env vars interfere
     with (
         patch("pathlib.Path.is_file", return_value=False),
         patch(
             "pytest_analyzer.utils.configuration.ConfigurationManager._resolve_config_file_path",
             return_value=None,
         ),
+        patch.dict("os.environ", {}, clear=True),  # Clear all environment variables
     ):
         # Load settings from a None config file
         settings = load_settings(
@@ -108,13 +109,14 @@ def test_load_settings_none():
 
 def test_load_settings_nonexistent_file():
     """Test loading settings from a nonexistent file, expecting pure defaults."""
-    # Mock Path.is_file to return False for all files
+    # Mock Path.is_file to return False for all files and clear env vars
     with (
         patch("pathlib.Path.is_file", return_value=False),
         patch(
             "pytest_analyzer.utils.configuration.ConfigurationManager._resolve_config_file_path",
             return_value=None,
         ),
+        patch.dict("os.environ", {}, clear=True),  # Clear all environment variables
     ):
         settings = load_settings(
             "nonexistent_file.json", force_reload=True
