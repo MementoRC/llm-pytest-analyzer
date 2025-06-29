@@ -44,7 +44,14 @@ class EfficiencyReportCommand:
         """Parse command line arguments for the efficiency-report command."""
         parser = argparse.ArgumentParser(
             prog="pytest-analyzer efficiency-report",
-            description="Generate efficiency reports and analysis",
+            description="""
+Generate efficiency reports and analysis for test/fix sessions, including trends and recommendations.
+
+[bold]Examples:[/bold]
+  pytest-analyzer efficiency-report --time-range week
+  pytest-analyzer efficiency-report --compare --trends
+  pytest-analyzer efficiency-report --format json --output-file eff.json
+""",
             formatter_class=argparse.RawDescriptionHelpFormatter,
         )
 

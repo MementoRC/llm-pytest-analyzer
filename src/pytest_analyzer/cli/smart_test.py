@@ -61,7 +61,15 @@ class SmartTestCommand:
         """Parse command line arguments for the smart-test command."""
         parser = argparse.ArgumentParser(
             prog="pytest-analyzer smart-test",
-            description="Intelligently select and run relevant tests based on code changes",
+            description="""
+Intelligently select and run relevant tests based on code changes, test categories, or optimization.
+
+[bold]Examples:[/bold]
+  pytest-analyzer smart-test --all
+  pytest-analyzer smart-test --category unit
+  pytest-analyzer smart-test --optimize-order --parallel
+  pytest-analyzer smart-test --json --output-file smart_report.json
+""",
             formatter_class=argparse.RawDescriptionHelpFormatter,
         )
 

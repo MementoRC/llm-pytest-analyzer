@@ -52,7 +52,14 @@ class CheckEnvironmentCommand:
         """Parse command line arguments for the check-env command."""
         parser = argparse.ArgumentParser(
             prog="pytest-analyzer check-env",
-            description="Check and validate the development environment",
+            description="""
+Check and validate the development environment for Python, tools, and CI compatibility.
+
+[bold]Examples:[/bold]
+  pytest-analyzer check-env
+  pytest-analyzer check-env --json
+  pytest-analyzer check-env --output-file env_report.txt
+""",
             formatter_class=argparse.RawDescriptionHelpFormatter,
         )
 
