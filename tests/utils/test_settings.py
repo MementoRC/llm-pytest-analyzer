@@ -84,25 +84,47 @@ def test_settings_post_init_without_project_root():
 
 
 def test_load_settings_none():
-    """Test loading settings from a None config file."""
-    # Load settings from a None config file
-    settings = load_settings(None)
+    """Test loading settings from a None config file, expecting pure defaults."""
+    # Ensure no default config file is found for this test
+    with (
+        patch("pathlib.Path.is_file", return_value=False),
+        patch(
+            "pytest_analyzer.utils.configuration.ConfigurationManager._resolve_config_file_path",
+            return_value=None,
+        ),
+    ):
+        # Load settings from a None config file
+        settings = load_settings(
+            None, force_reload=True
+        )  # Force reload to ensure fresh instance
 
     # Verify that default settings were returned
     assert isinstance(settings, Settings)
-    assert settings.pytest_timeout == 300
+    assert (
+        settings.pytest_timeout == 300
+    )  # Should be default, not from pytest-analyzer.yaml
     assert settings.max_memory_mb == 1024
 
 
 def test_load_settings_nonexistent_file():
-    """Test loading settings from a nonexistent file."""
-    # Load settings from a nonexistent file
-    with patch("pathlib.Path.exists", return_value=False):
-        settings = load_settings("nonexistent_file.json")
+    """Test loading settings from a nonexistent file, expecting pure defaults."""
+    # Mock Path.is_file to return False for all files
+    with (
+        patch("pathlib.Path.is_file", return_value=False),
+        patch(
+            "pytest_analyzer.utils.configuration.ConfigurationManager._resolve_config_file_path",
+            return_value=None,
+        ),
+    ):
+        settings = load_settings(
+            "nonexistent_file.json", force_reload=True
+        )  # Force reload
 
     # Verify that default settings were returned
     assert isinstance(settings, Settings)
-    assert settings.pytest_timeout == 300
+    assert (
+        settings.pytest_timeout == 300
+    )  # Should be default, not from pytest-analyzer.yaml
     assert settings.max_memory_mb == 1024
 
 
