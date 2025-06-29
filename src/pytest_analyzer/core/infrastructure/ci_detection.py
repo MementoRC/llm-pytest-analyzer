@@ -2,6 +2,7 @@
 CI Environment Detection Module
 
 Detects CI environment and available tools for intelligent test execution.
+Also provides CI-specific configuration recommendations.
 """
 
 import logging
@@ -15,7 +16,42 @@ from typing import Dict, List, Optional
 logger = logging.getLogger("pytest_analyzer.ci_detection")
 logger.addHandler(logging.NullHandler())
 
-# --- New Dataclasses ---
+# --- Configuration Recommendation Dataclasses ---
+
+
+@dataclass(frozen=True)
+class ConfigurationRecommendation:
+    """Represents a CI configuration recommendation"""
+
+    template_name: str
+    platform: str
+    language: str
+    score: float
+    config_content: str
+    explanation: str
+
+
+@dataclass(frozen=True)
+class ConfigurationTemplate:
+    """Represents a CI configuration template"""
+
+    name: str
+    platform: str
+    language: str
+    template_content: str
+
+
+@dataclass(frozen=True)
+class ProjectStructure:
+    """Represents the structure of a project"""
+
+    root_path: str
+    has_pyproject: bool
+    has_package_json: bool
+    detected_languages: List[str]
+
+
+# --- CI Detection Dataclasses ---
 
 
 @dataclass(frozen=True)
@@ -274,6 +310,297 @@ class CIEnvironmentDetector:
         """Legacy: Check if tool is available in pixi environment"""
         pixi_env_path = Path(".pixi/env/bin") / tool
         return pixi_env_path.exists()
+
+
+# --- ConfigurationRecommender System ---
+
+
+class ConfigurationRecommender:
+    """Generate CI-specific configuration recommendations based on project analysis"""
+
+    _cache_lock = threading.Lock()
+    _structure_cache: Dict[str, ProjectStructure] = {}
+
+    def __init__(self):
+        """Initialize the configuration recommender"""
+        self._templates = self._initialize_templates()
+
+    def _initialize_templates(self) -> List[ConfigurationTemplate]:
+        """Initialize built-in configuration templates"""
+        return [
+            ConfigurationTemplate(
+                name="pytest-github",
+                platform="github",
+                language="python",
+                template_content="""name: Python CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest ruff mypy
+    - name: Run tests
+      run: pytest
+    - name: Run linting
+      run: ruff check .
+    - name: Run type checking
+      run: mypy .""",
+            ),
+            ConfigurationTemplate(
+                name="node-github",
+                platform="github",
+                language="node",
+                template_content="""name: Node.js CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ['18', '20', '22']
+    steps:
+    - uses: actions/checkout@v4
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+    - name: Install dependencies
+      run: npm ci
+    - name: Run tests
+      run: npm test
+    - name: Run linting
+      run: npm run lint""",
+            ),
+            ConfigurationTemplate(
+                name="pytest-gitlab",
+                platform="gitlab",
+                language="python",
+                template_content="""stages:
+  - test
+  - lint
+
+test:python:
+  stage: test
+  image: python:3.12
+  before_script:
+    - pip install pytest ruff mypy
+  script:
+    - pytest
+  parallel:
+    matrix:
+      - PYTHON_VERSION: ["3.10", "3.11", "3.12"]
+
+lint:python:
+  stage: lint
+  image: python:3.12
+  before_script:
+    - pip install ruff mypy
+  script:
+    - ruff check .
+    - mypy .""",
+            ),
+        ]
+
+    def analyze_project_structure(self, project_path: str) -> ProjectStructure:
+        """Analyze project structure to determine languages and configuration files"""
+        with self._cache_lock:
+            if project_path in self._structure_cache:
+                logger.debug(f"Using cached project structure for {project_path}")
+                return self._structure_cache[project_path]
+
+        try:
+            path = Path(project_path)
+            if not path.exists():
+                raise FileNotFoundError(f"Project path does not exist: {project_path}")
+
+            has_pyproject = (path / "pyproject.toml").exists()
+            has_package_json = (path / "package.json").exists()
+
+            detected_languages = []
+            if has_pyproject:
+                detected_languages.append("python")
+            if has_package_json:
+                detected_languages.append("node")
+
+            structure = ProjectStructure(
+                root_path=project_path,
+                has_pyproject=has_pyproject,
+                has_package_json=has_package_json,
+                detected_languages=detected_languages,
+            )
+
+            with self._cache_lock:
+                self._structure_cache[project_path] = structure
+
+            logger.info(
+                f"Analyzed project structure for {project_path}: {detected_languages}"
+            )
+            return structure
+
+        except Exception as e:
+            logger.error(f"Error analyzing project structure: {e}")
+            raise
+
+    def _get_templates_for_platform(
+        self, platform: str, language: str
+    ) -> List[ConfigurationTemplate]:
+        """Get templates matching the specified platform and language"""
+        return [
+            t
+            for t in self._templates
+            if t.platform == platform and t.language == language
+        ]
+
+    def get_recommendations_for_platform(
+        self, platform: str, project_structure: ProjectStructure
+    ) -> List[ConfigurationRecommendation]:
+        """Get configuration recommendations for a specific platform"""
+        recommendations = []
+
+        for language in project_structure.detected_languages:
+            templates = self._get_templates_for_platform(platform, language)
+
+            for template in templates:
+                score = self.score_recommendation(platform=platform, language=language)
+                config_content = self.generate_configuration(template, {})
+                explanation = self._generate_explanation(template, project_structure)
+
+                recommendation = ConfigurationRecommendation(
+                    template_name=template.name,
+                    platform=platform,
+                    language=language,
+                    score=score,
+                    config_content=config_content,
+                    explanation=explanation,
+                )
+                recommendations.append(recommendation)
+
+        # Sort by score (highest first)
+        recommendations.sort(key=lambda r: r.score, reverse=True)
+        logger.info(f"Generated {len(recommendations)} recommendations for {platform}")
+        return recommendations
+
+    def generate_configuration(
+        self, template: ConfigurationTemplate, variables: Dict[str, str]
+    ) -> str:
+        """Generate configuration content from template"""
+        if template is None:
+            raise ValueError("Template cannot be None")
+
+        try:
+            config = template.template_content
+            # Simple variable substitution (can be enhanced)
+            for key, value in variables.items():
+                config = config.replace(f"${{{key}}}", value)
+            return config
+        except Exception as e:
+            logger.error(f"Error generating configuration: {e}")
+            raise
+
+    def validate_configuration(self, config_content: str) -> bool:
+        """Validate configuration content (basic validation)"""
+        if not config_content or not config_content.strip():
+            return False
+
+        try:
+            # Basic YAML-like validation
+            lines = config_content.strip().split("\n")
+            if len(lines) < 1:
+                return False
+
+            # Check for basic structure (more permissive)
+            if not any(
+                line.strip().startswith(
+                    ("name:", "on:", "stages:", "jobs:", "steps:", "script:")
+                )
+                for line in lines
+            ):
+                return False
+
+            return True
+        except Exception as e:
+            logger.warning(f"Configuration validation error: {e}")
+            return False
+
+    def score_recommendation(self, platform: str, language: str, **kwargs) -> float:
+        """Score a recommendation based on platform, language, and other factors"""
+        return self._score_logic(platform, language, **kwargs)
+
+    def _score_logic(self, platform: str, language: str, **kwargs) -> float:
+        """Internal scoring logic"""
+        base_score = 0.5
+
+        # Platform scoring
+        if platform == "github":
+            base_score += 0.3
+        elif platform == "gitlab":
+            base_score += 0.2
+
+        # Language scoring
+        if language == "python":
+            base_score += 0.2
+        elif language == "node":
+            base_score += 0.1
+
+        return min(base_score, 1.0)
+
+    def _generate_explanation(
+        self, template: ConfigurationTemplate, project_structure: ProjectStructure
+    ) -> str:
+        """Generate explanation for why this template is recommended"""
+        explanations = []
+
+        explanations.append(
+            f"Recommended {template.platform} configuration for {template.language} projects."
+        )
+
+        if template.language == "python" and project_structure.has_pyproject:
+            explanations.append(
+                "Detected pyproject.toml indicating Python project structure."
+            )
+
+        if template.language == "node" and project_structure.has_package_json:
+            explanations.append(
+                "Detected package.json indicating Node.js project structure."
+            )
+
+        explanations.append(
+            f"Template '{template.name}' includes best practices for {template.platform} CI."
+        )
+
+        return " ".join(explanations)
+
+    def get_configuration_recommendations(
+        self, project_path: str, ci_platform: CIPlatform
+    ) -> List[ConfigurationRecommendation]:
+        """Main workflow: analyze project and generate recommendations"""
+        try:
+            structure = self.analyze_project_structure(project_path)
+            recommendations = self.get_recommendations_for_platform(
+                ci_platform.name, structure
+            )
+            logger.info(f"Generated {len(recommendations)} total recommendations")
+            return recommendations
+        except Exception as e:
+            logger.error(f"Error getting configuration recommendations: {e}")
+            raise
+
+    def clear_cache(self):
+        """Clear the project structure cache"""
+        with self._cache_lock:
+            self._structure_cache.clear()
+            logger.info("Project structure cache cleared")
 
 
 # --- CLI for manual testing ---
