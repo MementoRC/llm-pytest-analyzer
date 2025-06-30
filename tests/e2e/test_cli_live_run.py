@@ -42,7 +42,7 @@ def test_cli_direct_execution_help():
     sys.argv = original_argv
 
     # Check output
-    assert "Python Test Failure Analyzer" in output
+    assert "Enhanced Pytest Failure Analyzer" in output
     assert "analyze" in output  # Should show the analyze subcommand
     assert "mcp" in output  # Should show the mcp subcommand
     assert "Available commands" in output  # Should show subcommand help
