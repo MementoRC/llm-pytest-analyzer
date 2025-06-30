@@ -57,9 +57,31 @@ console = Console(
 
 
 def setup_parser() -> argparse.ArgumentParser:
-    """Set up the command-line argument parser."""
+    """Set up the command-line argument parser with enhanced help and examples."""
     parser = argparse.ArgumentParser(
-        description="Python Test Failure Analyzer with enhanced extraction strategies and MCP server"
+        description="""
+[bold blue]pytest-analyzer[/bold blue] - Enhanced Pytest Failure Analyzer
+
+Analyze test failures, suggest intelligent fixes, optimize test runs, and monitor efficiency.
+Use [bold]pytest-analyzer <command> --help[/bold] for detailed help and examples.
+
+[bold]Common commands:[/bold]
+  analyze            Analyze pytest failures and suggest fixes
+  smart-test         Intelligently select and run relevant tests
+  check-env          Validate your Python/project environment
+  efficiency-report  Generate efficiency and trend reports
+  mcp                Start/manage the MCP server for AI integration
+
+[bold]Quick examples:[/bold]
+  pytest-analyzer analyze tests/
+  pytest-analyzer smart-test --category unit
+  pytest-analyzer check-env --json
+  pytest-analyzer efficiency-report --compare --trends
+  pytest-analyzer mcp start --stdio
+
+For a full cheat sheet, see the README or run: pytest-analyzer --cheat-sheet
+""",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     # Add subcommands support
@@ -71,7 +93,17 @@ def setup_parser() -> argparse.ArgumentParser:
     analyze_parser = subparsers.add_parser(
         "analyze",
         help="Analyze pytest failures and suggest fixes",
-        description="Run pytest analysis to identify patterns and suggest fixes",
+        description="""
+Analyze pytest failures and suggest intelligent fixes.
+
+[bold]Examples:[/bold]
+  pytest-analyzer analyze tests/
+  pytest-analyzer analyze --output-file results.json
+  pytest-analyzer analyze tests/ --pytest-args "-v -x"
+  pytest-analyzer analyze tests/ -k "test_login"
+  pytest-analyzer analyze tests/ --env-manager poetry
+""",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     # Set up analyze command arguments (existing functionality)
@@ -86,66 +118,74 @@ def setup_parser() -> argparse.ArgumentParser:
     except ImportError as e:
         logger.warning(f"MCP functionality not available: {e}")
 
+    # Add --cheat-sheet global option
+    parser.add_argument(
+        "--cheat-sheet",
+        action="store_true",
+        help="Show a quick reference cheat sheet for all commands",
+    )
+
     # Make analyze the default command when no subcommand is specified
-    # This maintains backward compatibility
-    # NOTE: Removed setup_analyze_parser(parser) to avoid conflicting positional args
     parser.set_defaults(func=cmd_analyze)
 
     return parser
 
 
 def setup_analyze_parser(parser: argparse.ArgumentParser) -> None:
-    """Set up the analyze command arguments."""
+    """Set up the analyze command arguments with enhanced help and examples."""
 
     # Main arguments
     parser.add_argument(
         "test_path",
         type=str,
-        nargs="?",  # Make test_path optional
-        help="Path to the test file or directory to run",
+        nargs="?",
+        help="Path to the test file or directory to run. Example: tests/ or tests/test_example.py",
     )
     parser.add_argument(
-        "-k", "--test-functions", type=str, help="Pytest -k expression to filter tests"
+        "-k",
+        "--test-functions",
+        type=str,
+        help="Pytest -k expression to filter tests. Example: -k 'test_login or test_signup'",
     )
     parser.add_argument(
         "--output-file",
         type=str,
-        help="Parse failures from existing pytest output file instead of running tests",
+        help="Parse failures from an existing pytest output file instead of running tests. Example: --output-file results.json",
     )
 
     # Configuration options
     parser.add_argument(
         "--project-root",
         type=str,
-        help="Root directory of the project (auto-detected if not specified)",
+        help="Root directory of the project (auto-detected if not specified).",
     )
-    parser.add_argument("--config-file", type=str, help="Path to configuration file")
+    parser.add_argument("--config-file", type=str, help="Path to configuration file.")
 
     # Git integration options
     git_group = parser.add_argument_group("Git Integration")
     git_group.add_argument(
         "--use-git",
         action="store_true",
-        help="Use Git for version control when applying fixes (default)",
+        help="Use Git for version control when applying fixes (default).",
         dest="check_git",
         default=True,
     )
     git_group.add_argument(
         "--no-git",
         action="store_false",
-        help="Do not use Git for version control when applying fixes",
+        help="Do not use Git for version control when applying fixes.",
         dest="check_git",
     )
     git_group.add_argument(
         "--auto-init-git",
         action="store_true",
-        help="Automatically initialize Git repository without prompting if not in a Git repository",
+        help="Automatically initialize a Git repository if not present.",
         default=False,
     )
     git_group.add_argument(
         "--no-git-branches",
         action="store_false",
-        help="Do not create branches for fix suggestions",
+        help="Do not create branches for fix suggestions.",
         dest="use_git_branches",
         default=True,
     )
@@ -155,25 +195,25 @@ def setup_analyze_parser(parser: argparse.ArgumentParser) -> None:
         "--timeout",
         type=int,
         default=300,
-        help="Maximum execution time in seconds (default: 300)",
+        help="Maximum execution time in seconds (default: 300). Example: --timeout 600",
     )
     parser.add_argument(
         "--max-memory",
         type=int,
         default=1024,
-        help="Maximum memory usage in MB (default: 1024)",
+        help="Maximum memory usage in MB (default: 1024). Example: --max-memory 2048",
     )
 
     # Output format
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
-        "--json", action="store_true", help="Use JSON output format from pytest"
+        "--json", action="store_true", help="Use JSON output format from pytest."
     )
     group.add_argument(
-        "--xml", action="store_true", help="Use XML output format from pytest"
+        "--xml", action="store_true", help="Use XML output format from pytest."
     )
     group.add_argument(
-        "--plugin", action="store_true", help="Use direct pytest plugin integration"
+        "--plugin", action="store_true", help="Use direct pytest plugin integration."
     )
 
     # Analysis options
@@ -181,25 +221,25 @@ def setup_analyze_parser(parser: argparse.ArgumentParser) -> None:
         "--max-failures",
         type=int,
         default=100,
-        help="Maximum number of failures to analyze (default: 100)",
+        help="Maximum number of failures to analyze (default: 100).",
     )
     parser.add_argument(
         "--max-suggestions",
         type=int,
         default=3,
-        help="Maximum suggestions overall (default: 3)",
+        help="Maximum suggestions overall (default: 3).",
     )
     parser.add_argument(
         "--max-suggestions-per-failure",
         type=int,
         default=3,
-        help="Maximum suggestions per failure (default: 3)",
+        help="Maximum suggestions per failure (default: 3).",
     )
     parser.add_argument(
         "--min-confidence",
         type=float,
         default=0.5,
-        help="Minimum confidence for fix suggestions (default: 0.5)",
+        help="Minimum confidence for fix suggestions (default: 0.5).",
     )
 
     # LLM options
@@ -207,42 +247,49 @@ def setup_analyze_parser(parser: argparse.ArgumentParser) -> None:
     llm_group.add_argument(
         "--use-llm",
         action="store_true",
-        help="Enable LLM-based suggestions (requires API access)",
+        help="Enable LLM-based suggestions (requires API access).",
         default=True,
     )
     llm_group.add_argument(
         "--llm-timeout",
         type=int,
         default=60,
-        help="Timeout for LLM requests in seconds (default: 60)",
+        help="Timeout for LLM requests in seconds (default: 60).",
     )
     llm_group.add_argument(
         "--llm-api-key",
         type=str,
-        help="API key for LLM service (defaults to environment variable)",
+        help="API key for LLM service (defaults to environment variable).",
     )
     llm_group.add_argument(
         "--llm-model",
         type=str,
         default="auto",
-        help="Model to use (auto selects available models)",
+        help="Model to use (auto selects available models).",
     )
 
     # Add new Environment Manager group here
     env_manager_group = parser.add_argument_group("Environment Manager")
     env_manager_group.add_argument(
         "--env-manager",
-        type=str.lower,  # Ensure value is lowercase
+        type=str.lower,
         choices=["auto", "pixi", "poetry", "hatch", "uv", "pipenv", "pip+venv"],
         default="auto",
-        help="Specify the environment manager to use. 'auto' will attempt to detect it. (default: auto)",
+        help=(
+            "Specify the environment manager to use. "
+            "'auto' will attempt to detect it. "
+            "Choices: auto, pixi, poetry, hatch, uv, pipenv, pip+venv. "
+            "Example: --env-manager poetry"
+        ),
     )
 
     # Pytest options
     parser.add_argument(
-        "--pytest-args", type=str, help="Additional arguments for pytest (quoted)"
+        "--pytest-args",
+        type=str,
+        help='Additional arguments for pytest (quoted). Example: --pytest-args "-v -x"',
     )
-    parser.add_argument("--coverage", action="store_true", help="Enable pytest-cov")
+    parser.add_argument("--coverage", action="store_true", help="Enable pytest-cov.")
 
     # Output control
     verbosity_group = parser.add_argument_group("Output Verbosity")
@@ -252,24 +299,24 @@ def setup_analyze_parser(parser: argparse.ArgumentParser) -> None:
         type=int,
         choices=[0, 1, 2, 3],
         default=1,
-        help="Set output verbosity level (0=minimal, 1=normal, 2=detailed, 3=full)",
+        help="Set output verbosity level (0=minimal, 1=normal, 2=detailed, 3=full).",
     )
     verbosity_group.add_argument(
         "--quiet",
         "-q",
         action="store_true",
-        help="Equivalent to --verbosity=0 (minimal output)",
+        help="Equivalent to --verbosity=0 (minimal output).",
     )
     verbosity_group.add_argument(
         "-qq",
         action="store_true",
-        help="Super quiet mode - only show failures, minimal output",
+        help="Super quiet mode - only show failures, minimal output.",
     )
     verbosity_group.add_argument(
-        "--raw-output", action="store_true", help="Show raw pytest output"
+        "--raw-output", action="store_true", help="Show raw pytest output."
     )
     verbosity_group.add_argument(
-        "--debug", action="store_true", help="Enable debug logging"
+        "--debug", action="store_true", help="Enable debug logging."
     )
 
     # Fix application options
@@ -277,12 +324,12 @@ def setup_analyze_parser(parser: argparse.ArgumentParser) -> None:
     fix_group.add_argument(
         "--apply-fixes",
         action="store_true",
-        help="Interactively apply suggested fixes to files",
+        help="Interactively apply suggested fixes to files.",
     )
     fix_group.add_argument(
         "--auto-apply",
         action="store_true",
-        help="Automatically apply suggested fixes without confirmation (use with caution)",
+        help="Automatically apply suggested fixes without confirmation (use with caution).",
     )
 
 
@@ -771,10 +818,15 @@ def main() -> int:
     parser = setup_parser()
     args = parser.parse_args()
 
+    # Show cheat sheet if requested
+    if getattr(args, "cheat_sheet", False):
+        _show_cheat_sheet()
+        return 0
+
     # Input validation
     try:
         # Initialize security manager with project root
-        project_root = args.project_root or os.getcwd()
+        project_root = getattr(args, "project_root", None) or os.getcwd()
         from ..utils.config_types import SecuritySettings
 
         # Create more permissive security settings for CLI usage
@@ -812,6 +864,57 @@ def main() -> int:
 
     # Execute the appropriate command function
     return args.func(args)
+
+
+def _show_cheat_sheet():
+    """Display a quick reference cheat sheet for all commands."""
+    from rich.panel import Panel
+    from rich.table import Table
+
+    table = Table(title="pytest-analyzer CLI Cheat Sheet", show_lines=True)
+    table.add_column("Command", style="cyan", no_wrap=True)
+    table.add_column("Description", style="white")
+    table.add_column("Example", style="green")
+
+    table.add_row(
+        "analyze",
+        "Analyze test failures and suggest fixes",
+        "pytest-analyzer analyze tests/",
+    )
+    table.add_row(
+        "smart-test",
+        "Run only relevant/impacted tests",
+        "pytest-analyzer smart-test --category unit",
+    )
+    table.add_row(
+        "check-env",
+        "Validate environment and toolchain",
+        "pytest-analyzer check-env --json",
+    )
+    table.add_row(
+        "efficiency-report",
+        "Show test/fix efficiency and trends",
+        "pytest-analyzer efficiency-report --compare --trends",
+    )
+    table.add_row(
+        "mcp",
+        "Start/manage MCP server for AI integration",
+        "pytest-analyzer mcp start --stdio",
+    )
+    table.add_row(
+        "--help", "Show help for any command", "pytest-analyzer analyze --help"
+    )
+    table.add_row(
+        "Shell Completion",
+        "Enable Bash/Zsh completion",
+        'eval "$(_PYTEST_ANALYZER_COMPLETE=bash_source pytest-analyzer)"',
+    )
+
+    console = Console()
+    console.print(
+        Panel(table, title="pytest-analyzer CLI Quick Reference", border_style="blue")
+    )
+    console.print("\nFor more details, run: pytest-analyzer <command> --help\n")
 
 
 def show_file_diff(file_path: str, new_content: str) -> bool:
@@ -973,6 +1076,26 @@ def apply_suggestions_interactively(
                         console.print(f"[yellow]Rolled back:[/yellow] {file}")
 
     console.print("\n[bold green]Finished processing all suggestions.[/bold green]")
+
+
+def _generate_completion_script(shell: str = "bash") -> str:
+    """
+    Generate a shell completion script for Bash or Zsh.
+
+    Usage:
+      eval "$(_PYTEST_ANALYZER_COMPLETE=bash_source pytest-analyzer)"
+      eval "$(_PYTEST_ANALYZER_COMPLETE=zsh_source pytest-analyzer)"
+    """
+    if shell == "zsh":
+        return (
+            "# Zsh completion is supported via argcomplete\n"
+            'eval "$(_PYTEST_ANALYZER_COMPLETE=zsh_source pytest-analyzer)"'
+        )
+    else:
+        return (
+            "# Bash completion is supported via argcomplete\n"
+            'eval "$(_PYTEST_ANALYZER_COMPLETE=bash_source pytest-analyzer)"'
+        )
 
 
 if __name__ == "__main__":

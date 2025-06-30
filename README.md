@@ -28,26 +28,155 @@ pip install pytest-analyzer
 
 ### Command Line
 
+The `pytest-analyzer` CLI provides several powerful commands for test analysis, environment checking, and efficiency reporting. All commands support `-h`/`--help` for detailed help and examples.
+
+#### Main Command: `analyze`
+
+Analyze pytest failures and suggest fixes.
+
 ```bash
-# Basic usage
-pytest-analyzer path/to/tests
-
-# Specify extraction format
-pytest-analyzer path/to/tests --json
-pytest-analyzer path/to/tests --xml
-pytest-analyzer path/to/tests --plugin
-
-# Analyze existing output file
-pytest-analyzer --output-file path/to/pytest_output.json
-
-# Control resource usage
-pytest-analyzer path/to/tests --timeout 600 --max-memory 2048
-
-# Additional pytest arguments
-pytest-analyzer path/to/tests --pytest-args "--verbose --no-header"
-pytest-analyzer path/to/tests -k "test_specific_function"
-pytest-analyzer path/to/tests --env-manager poetry
+pytest-analyzer analyze path/to/tests
 ```
+
+**Common options:**
+- `--json`, `--xml`, `--plugin`: Choose extraction format
+- `--output-file FILE`: Analyze an existing pytest output file
+- `--timeout SECONDS`: Set a timeout for test runs
+- `--max-memory MB`: Limit memory usage
+- `--pytest-args "ARGS"`: Pass additional arguments to pytest
+- `-k "expr"`: Filter tests by expression
+- `--env-manager [auto|poetry|pixi|hatch|uv|pipenv|pip+venv]`: Specify environment manager
+
+**Examples:**
+```bash
+pytest-analyzer analyze tests/ --json
+pytest-analyzer analyze --output-file results.json
+pytest-analyzer analyze tests/ --pytest-args "-v -x"
+pytest-analyzer analyze tests/ -k "test_login"
+pytest-analyzer analyze tests/ --env-manager poetry
+```
+
+#### Smart Test Selection: `smart-test`
+
+Intelligently select and run only relevant tests based on code changes, categories, or optimization.
+
+```bash
+pytest-analyzer smart-test [OPTIONS]
+```
+
+**Key options:**
+- `--all`: Run all tests
+- `--category [unit|integration|functional|e2e|performance|security]`: Run only a specific category
+- `--optimize-order`: Optimize test execution order
+- `--parallel`: Plan parallel execution
+- `--fast-fail`: Prioritize likely-to-fail tests
+- `--historical-data`: Use historical data for optimization
+- `--json`: Output results in JSON format
+- `--output-file FILE`: Save report to file
+
+**Examples:**
+```bash
+pytest-analyzer smart-test --all
+pytest-analyzer smart-test --category unit
+pytest-analyzer smart-test --optimize-order --parallel
+pytest-analyzer smart-test --json --output-file smart_report.json
+```
+
+#### Environment Check: `check-env`
+
+Validate your development environment for Python, tools, and CI compatibility.
+
+```bash
+pytest-analyzer check-env [OPTIONS]
+```
+
+**Key options:**
+- `--json`: Output results in JSON format
+- `--output-file FILE`: Save report to file
+- `--skip-ci-checks`: Skip CI environment checks
+- `--skip-tool-checks`: Skip tool availability checks
+
+**Examples:**
+```bash
+pytest-analyzer check-env
+pytest-analyzer check-env --json
+pytest-analyzer check-env --output-file env_report.txt
+```
+
+#### Efficiency Report: `efficiency-report`
+
+Generate reports on test and fix efficiency, including trends and recommendations.
+
+```bash
+pytest-analyzer efficiency-report [OPTIONS]
+```
+
+**Key options:**
+- `--time-range [day|week|month|all]`: Select report period
+- `--compare`: Compare with previous period
+- `--trends`: Show trend analysis
+- `--recommendations`: Show improvement tips
+- `--format [table|json]`: Output format
+- `--output-file FILE`: Save report to file
+
+**Examples:**
+```bash
+pytest-analyzer efficiency-report --time-range week
+pytest-analyzer efficiency-report --compare --trends
+pytest-analyzer efficiency-report --format json --output-file eff.json
+```
+
+#### MCP Server: `mcp`
+
+Start and manage the MCP server for AI assistant integration.
+
+```bash
+pytest-analyzer mcp start [--stdio|--http] [--host HOST] [--port PORT]
+```
+
+**Examples:**
+```bash
+pytest-analyzer mcp start --stdio
+pytest-analyzer mcp start --http --host 0.0.0.0 --port 9000
+```
+
+### Interactive Help
+
+For any command, use `-h` or `--help` for detailed help, usage, and examples:
+
+```bash
+pytest-analyzer analyze --help
+pytest-analyzer smart-test --help
+pytest-analyzer check-env --help
+pytest-analyzer efficiency-report --help
+pytest-analyzer mcp --help
+```
+
+### Shell Completion
+
+Bash and Zsh completion scripts are available for enhanced CLI experience:
+
+```bash
+# Bash
+eval "$(_PYTEST_ANALYZER_COMPLETE=bash_source pytest-analyzer)"
+
+# Zsh
+eval "$(_PYTEST_ANALYZER_COMPLETE=zsh_source pytest-analyzer)"
+```
+
+Add the above to your shell profile for persistent completion.
+
+### Quick Reference Cheat Sheet
+
+| Command                        | Description                                 |
+|--------------------------------|---------------------------------------------|
+| `analyze`                      | Analyze test failures and suggest fixes     |
+| `smart-test`                   | Run only relevant/impacted tests           |
+| `check-env`                    | Validate environment and toolchain         |
+| `efficiency-report`            | Show test/fix efficiency and trends        |
+| `mcp`                          | Start/manage MCP server for AI integration |
+
+See `pytest-analyzer <command> --help` for all options.
 
 ### Python API
 

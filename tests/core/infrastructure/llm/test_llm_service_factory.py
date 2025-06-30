@@ -104,18 +104,24 @@ class TestOpenAIService:
     def test_send_prompt_returns_mock_response(self):
         """Test that send_prompt method works with mock provider."""
         mock_provider = Mock()
-        mock_provider.send_request.return_value = "Test response"
+        mock_response = Mock()
+        mock_response.choices = [Mock()]
+        mock_response.choices[0].message.content = "Test response"
+        mock_provider.chat.completions.create.return_value = mock_response
 
         service = OpenAIService(provider=mock_provider)
         result = service.send_prompt("Test prompt")
 
         assert result == "Test response"
-        mock_provider.send_request.assert_called_once_with("Test prompt")
+        mock_provider.chat.completions.create.assert_called_once()
 
     def test_analyze_failure_returns_failure_analysis(self):
         """Test that analyze_failure returns a FailureAnalysis object."""
         mock_provider = Mock()
-        mock_provider.send_request.return_value = "Analysis result"
+        mock_response = Mock()
+        mock_response.choices = [Mock()]
+        mock_response.choices[0].message.content = "Analysis result"
+        mock_provider.chat.completions.create.return_value = mock_response
 
         failure = PytestFailure(
             test_name="test_example",
@@ -137,7 +143,10 @@ class TestOpenAIService:
     def test_suggest_fixes_returns_fix_suggestions(self):
         """Test that suggest_fixes returns a list of FixSuggestion objects."""
         mock_provider = Mock()
-        mock_provider.send_request.return_value = "Fix suggestion"
+        mock_response = Mock()
+        mock_response.choices = [Mock()]
+        mock_response.choices[0].message.content = "Fix suggestion"
+        mock_provider.chat.completions.create.return_value = mock_response
 
         failure = PytestFailure(
             test_name="test_example",
@@ -164,13 +173,16 @@ class TestAnthropicService:
     def test_send_prompt_returns_mock_response(self):
         """Test that send_prompt method works with mock provider."""
         mock_provider = Mock()
-        mock_provider.send_request.return_value = "Anthropic response"
+        mock_response = Mock()
+        mock_response.content = [Mock()]
+        mock_response.content[0].text = "Anthropic response"
+        mock_provider.messages.create.return_value = mock_response
 
         service = AnthropicService(provider=mock_provider)
         result = service.send_prompt("Test prompt")
 
         assert result == "Anthropic response"
-        mock_provider.send_request.assert_called_once_with("Test prompt")
+        mock_provider.messages.create.assert_called_once()
 
     def test_analyze_failure_returns_failure_analysis(self):
         """Test that analyze_failure returns a FailureAnalysis object."""

@@ -27,6 +27,11 @@ class ConcreteTestLLMService(BaseLLMService):
         self.logger = logging.getLogger(self.__class__.__name__)
         super().__init__(provider=provider, settings=settings)
 
+    @property
+    def provider_name(self) -> str:
+        """Returns the name of the LLM provider for testing."""
+        return "test"
+
     def _create_default_provider(self) -> Any:  # Changed LLMProvider to Any
         """Override to provide a mock provider for tests if one isn't passed to __init__."""
         self.logger.info(f"{self.__class__.__name__}._create_default_provider called")
@@ -180,10 +185,10 @@ def test_get_system_prompt_returns_default_value(
 
 
 def test_instantiate_abstract_base_llm_service_raises_type_error():
-    """Tests that BaseLLMService cannot be instantiated directly due to abstract 'generate'."""
+    """Tests that BaseLLMService cannot be instantiated directly due to abstract methods."""
     with pytest.raises(
         TypeError,
-        match=r"Can't instantiate abstract class BaseLLMService (with abstract method generate|without an implementation for abstract method 'generate')",
+        match=r"Can't instantiate abstract class BaseLLMService.*abstract method",
     ):
         BaseLLMService()
 
@@ -192,6 +197,10 @@ def test_subclass_without_generate_raises_type_error(mock_settings: MagicMock):
     """Tests TypeError for subclass not implementing abstract 'generate'."""
 
     class SubclassWithoutGenerate(BaseLLMService):
+        @property
+        def provider_name(self) -> str:
+            return "subclass_no_generate"
+
         def _create_default_provider(
             self,
         ) -> Any:  # Return type Any
@@ -210,28 +219,29 @@ def test_subclass_calling_base_create_default_provider_raises_not_implemented_er
     mock_settings: MagicMock,
 ):
     """
-    Tests NotImplementedError if subclass implements 'generate' but calls base _create_default_provider.
+    Tests that subclass without _create_default_provider implementation cannot be instantiated.
     """
 
-    class SubclassRelyingOnBaseCreateDefault(BaseLLMService):
+    class SubclassWithoutCreateDefault(BaseLLMService):
+        @property
+        def provider_name(self) -> str:
+            return "subclass_without_create_default"
+
         def generate(
             self, prompt: str, context: Optional[Dict[str, Any]] = None
         ) -> str:
             return "generated"
 
-        # Does not override _create_default_provider, so base's version (which raises NI E) is called if provider=None.
+        # Does not override _create_default_provider, so this class cannot be instantiated
 
+    # Should fail with provider=None
     with pytest.raises(
-        NotImplementedError, match="Subclasses must implement _create_default_provider"
+        TypeError, match="Can't instantiate abstract class.*_create_default_provider"
     ):
-        SubclassRelyingOnBaseCreateDefault(settings=mock_settings, provider=None)
+        SubclassWithoutCreateDefault(settings=mock_settings, provider=None)
 
-    mock_provider = MagicMock()  # No spec
-    try:
-        instance = SubclassRelyingOnBaseCreateDefault(
-            settings=mock_settings, provider=mock_provider
-        )
-        assert isinstance(instance, SubclassRelyingOnBaseCreateDefault)
-        assert instance.provider == mock_provider
-    except NotImplementedError:  # pragma: no cover
-        pytest.fail("Instantiation should succeed when provider is supplied.")
+    # Should also fail with provider supplied because _create_default_provider is still abstract
+    with pytest.raises(
+        TypeError, match="Can't instantiate abstract class.*_create_default_provider"
+    ):
+        SubclassWithoutCreateDefault(settings=mock_settings, provider=MagicMock())

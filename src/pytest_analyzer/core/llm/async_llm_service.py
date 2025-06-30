@@ -8,6 +8,7 @@ for interacting with Language Models.
 import asyncio
 import contextlib
 import logging
+from enum import Enum, auto
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type
 
 # Attempt to import specific LLM SDKs with async support
@@ -17,9 +18,38 @@ except ImportError:
     openai = None  # type: ignore
 
 try:
-    from anthropic import AsyncAnthropic
+    from anthropic import Anthropic, AsyncAnthropic
 except ImportError:
     AsyncAnthropic = None  # type: ignore
+    Anthropic = None  # type: ignore
+
+# Azure OpenAI
+try:
+    from openai import AzureOpenAI
+
+    AZURE_OPENAI_AVAILABLE = True
+except ImportError:
+    AZURE_OPENAI_AVAILABLE = False
+    AzureOpenAI = None  # type: ignore
+
+# Together.ai
+try:
+    from together import Together
+
+    TOGETHER_AVAILABLE = True
+except ImportError:
+    TOGETHER_AVAILABLE = False
+    Together = None  # type: ignore
+
+# Ollama for local models
+try:
+    import ollama
+
+    OLLAMA_AVAILABLE = True
+except ImportError:
+    OLLAMA_AVAILABLE = False
+    ollama = None  # type: ignore
+
 
 from ...utils.resource_manager import ResourceMonitor, TimeoutError
 from ..errors import LLMServiceError, ParsingError
@@ -31,6 +61,61 @@ from ..prompts.prompt_builder import PromptBuilder
 from .llm_service_protocol import AsyncLLMServiceProtocol
 
 logger = logging.getLogger(__name__)
+
+
+class LLMProvider(Enum):
+    """Supported LLM providers."""
+
+    ANTHROPIC = auto()
+    OPENAI = auto()
+    AZURE_OPENAI = auto()
+    TOGETHER = auto()
+    OLLAMA = auto()
+    CUSTOM = auto()
+    UNKNOWN = auto()
+
+
+def get_provider_name(provider: LLMProvider) -> str:
+    """Get a human-readable name for a provider."""
+    return {
+        LLMProvider.ANTHROPIC: "Anthropic Claude",
+        LLMProvider.OPENAI: "OpenAI",
+        LLMProvider.AZURE_OPENAI: "Azure OpenAI",
+        LLMProvider.TOGETHER: "Together.ai",
+        LLMProvider.OLLAMA: "Ollama (local)",
+        LLMProvider.CUSTOM: "Custom",
+        LLMProvider.UNKNOWN: "Unknown",
+    }.get(provider, "Unknown")
+
+
+def determine_provider(client: Any) -> LLMProvider:
+    """
+    Determine the provider type from a client object.
+
+    Args:
+        client: An LLM client instance
+
+    Returns:
+        The identified provider type
+    """
+    if client is None:
+        return LLMProvider.UNKNOWN
+
+    # Get the module name for provider detection
+    module_name = client.__class__.__module__.lower()
+
+    if isinstance(client, (Anthropic, AsyncAnthropic)) or "anthropic" in module_name:
+        return LLMProvider.ANTHROPIC
+    elif isinstance(client, AzureOpenAI) or "azure" in module_name:
+        return LLMProvider.AZURE_OPENAI
+    elif "openai" in module_name:
+        return LLMProvider.OPENAI
+    elif isinstance(client, Together) or "together" in module_name:
+        return LLMProvider.TOGETHER
+    elif "ollama" in module_name:
+        return LLMProvider.OLLAMA
+    else:
+        return LLMProvider.CUSTOM
 
 
 @contextlib.asynccontextmanager
@@ -108,6 +193,12 @@ class AsyncLLMService(BaseLLMService, AsyncLLMServiceProtocol):
                 "No LLM client available or configured for AsyncLLMService. "
                 "Install 'anthropic' or 'openai' packages, or provide an llm_client."
             )
+
+    @property
+    def provider_name(self) -> str:
+        """Returns the name of the LLM provider (e.g., 'openai', 'anthropic')."""
+        provider_enum = determine_provider(self.provider)
+        return get_provider_name(provider_enum)
 
     def generate(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> str:
         """
