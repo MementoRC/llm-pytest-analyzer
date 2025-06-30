@@ -11,6 +11,7 @@ This module provides automated test case generation capabilities including:
 
 from .ast_analyzer import ASTAnalyzer
 from .coverage_analyzer import CoverageGapAnalyzer
+from .data_generator import TestDataGenerator
 from .generator import TestGenerator
 from .templates import TestTemplateEngine
 
@@ -19,4 +20,5 @@ __all__ = [
     "ASTAnalyzer",
     "TestTemplateEngine",
     "CoverageGapAnalyzer",
+    "TestDataGenerator",
 ]

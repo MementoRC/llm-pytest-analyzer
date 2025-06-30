@@ -67,6 +67,7 @@ dev = [
     "sphinx_rtd_theme",
     "pytest-timeout", # Added for dev environment
     "pytest-xdist",   # Added for dev environment
+    "hypothesis>=6.0.0", # Added for property-based testing in data generation
 ]
 
 test = [
