@@ -506,7 +506,7 @@ def test_{function_name}_property({param_names}):
         # Add a hash of the description for uniqueness if needed
         import hashlib
 
-        h = hashlib.sha1(desc.encode()).hexdigest()[:6]
+        h = hashlib.sha1(desc.encode(), usedforsecurity=False).hexdigest()[:6]
         return f"{base}_{h}"
 
     def _format_args(self, args: Any) -> str:
