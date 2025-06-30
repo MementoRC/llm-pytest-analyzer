@@ -151,39 +151,52 @@ class TestDataGenerator:
     def hypothesis_strategy_for_pytest_failure(self) -> st.SearchStrategy:
         """
         Return a Hypothesis strategy for generating PytestFailure instances.
+        Note: Returns a simple dictionary strategy if domain entities are not available.
         """
-        import uuid
-        from pathlib import Path
+        try:
+            import uuid
+            from pathlib import Path
 
-        from ..domain.entities.pytest_failure import (
-            PytestFailure as PytestFailureEntity,
-        )
-        from ..domain.value_objects.failure_type import FailureType
-        from ..domain.value_objects.test_location import TestLocation
-
-        def make_location():
-            return TestLocation(
-                file_path=Path(f"/tmp/{self._random_string(6)}.py"),
-                line_number=random.randint(1, 100),
-                function_name=self._random_string(8),
-                class_name=random.choice([self._random_string(6), None]),
+            from ..domain.entities.pytest_failure import (
+                PytestFailure as PytestFailureEntity,
             )
+            from ..domain.value_objects.failure_type import FailureType
+            from ..domain.value_objects.test_location import TestLocation
 
-        return st.builds(
-            PytestFailureEntity,
-            id=st.just(str(uuid.uuid4())),
-            test_name=st.text(min_size=1, max_size=30),
-            location=st.builds(make_location),
-            failure_message=st.text(min_size=1, max_size=100),
-            failure_type=st.sampled_from(list(FailureType)),
-            traceback=st.lists(st.text(min_size=1, max_size=80), max_size=5),
-            source_code=st.one_of(st.none(), st.text(min_size=1, max_size=200)),
-            raw_output_section=st.one_of(st.none(), st.text(min_size=1, max_size=200)),
-            related_project_files=st.lists(
-                st.text(min_size=1, max_size=50), max_size=3
-            ),
-            group_fingerprint=st.one_of(st.none(), st.text(min_size=1, max_size=32)),
-        )
+            def make_location():
+                return TestLocation(
+                    file_path=Path(f"/tmp/{self._random_string(6)}.py"),
+                    line_number=random.randint(1, 100),
+                    function_name=self._random_string(8),
+                    class_name=random.choice([self._random_string(6), None]),
+                )
+
+            return st.builds(
+                PytestFailureEntity,
+                id=st.just(str(uuid.uuid4())),
+                test_name=st.text(min_size=1, max_size=30),
+                location=st.builds(make_location),
+                failure_message=st.text(min_size=1, max_size=100),
+                failure_type=st.sampled_from(list(FailureType)),
+                traceback=st.lists(st.text(min_size=1, max_size=80), max_size=5),
+                source_code=st.one_of(st.none(), st.text(min_size=1, max_size=200)),
+                raw_output_section=st.one_of(
+                    st.none(), st.text(min_size=1, max_size=200)
+                ),
+                related_project_files=st.lists(
+                    st.text(min_size=1, max_size=50), max_size=3
+                ),
+                group_fingerprint=st.one_of(
+                    st.none(), st.text(min_size=1, max_size=32)
+                ),
+            )
+        except ImportError:
+            # Fallback to a simple dictionary strategy if domain entities are not available
+            return st.dictionaries(
+                st.text(min_size=1, max_size=20),
+                st.one_of(st.text(), st.integers(), st.booleans()),
+                max_size=5,
+            )
 
     def hypothesis_strategy_for_function(
         self, function_info: FunctionInfo
