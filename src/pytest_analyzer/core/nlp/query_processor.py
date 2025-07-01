@@ -46,8 +46,9 @@ class NLQueryProcessor:
             return response
 
         # Map intent to action
-        handler = getattr(self, f"_handle_{intent.name}", None)
-        if handler:
+        handler_name = f"_handle_{intent.name}"
+        if hasattr(self, handler_name):
+            handler = getattr(self, handler_name)
             result = handler(query, context)
             response.update(result)
         else:
