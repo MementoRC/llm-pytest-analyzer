@@ -64,6 +64,8 @@ Desktop.ini
 /.aider.tags.cache.v4/
 .aider.chat.history.md
 .aider.input.history
+.aider.conf.yml
+/.taskmaster/
 /tasks/
 /logs/
 scripts/prd.txt
@@ -93,6 +95,7 @@ node_modules/
 *.sln
 *.sw?
 # OS specific
+
 # Task files
 tasks.json
 tasks/

@@ -28,6 +28,10 @@ from .information import (
     get_failure_summary,
     get_test_coverage,
 )
+from .nl_query import (
+    NL_QUERY_TOOL_INFO,
+    nl_query_tool,
+)
 
 
 class ToolFactory(BaseFactory):
@@ -59,6 +63,7 @@ AVAILABLE_TOOLS = {
     "get_failure_summary": GET_FAILURE_SUMMARY_TOOL_INFO,
     "get_test_coverage": GET_TEST_COVERAGE_TOOL_INFO,
     "update_config": UPDATE_CONFIG_TOOL_INFO,
+    "nl_query": NL_QUERY_TOOL_INFO,
 }
 
 
@@ -79,4 +84,6 @@ __all__ = [
     "GET_FAILURE_SUMMARY_TOOL_INFO",
     "GET_TEST_COVERAGE_TOOL_INFO",
     "UPDATE_CONFIG_TOOL_INFO",
+    "NL_QUERY_TOOL_INFO",
+    "nl_query_tool",
 ]

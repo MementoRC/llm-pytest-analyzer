@@ -1,0 +1,320 @@
+name: Self-Healing CI
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+    branches: [main, development]
+
+jobs:
+  self_healing_test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write # Required for git push (if auto-applying fixes)
+      pull-requests: write # Required for creating PR comments
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Needed for git operations (e.g., creating new branches)
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Pixi
+        uses: prefix-dev/setup-pixi@v0.8.8
+        with:
+          pixi-version: latest
+          manifest-path: pyproject.toml
+
+      - name: Install dependencies with Pixi
+        run: pixi install -e dev -v || (echo "::error::Failed to install dev dependencies with Pixi." && exit 1)
+
+      - name: Run initial tests
+        id: run_initial_tests
+        run: |
+          echo "Running pytest and generating JSON report..."
+          # Ensure pytest-analyzer's src directory is in PYTHONPATH for the helper script to find it
+          export PYTHONPATH=$PYTHONPATH:$(pwd)/src
+          # Run pytest, capture output to JSON, and allow failure to continue workflow
+          # --json-report-file is used to specify the output file name
+          pixi run -e dev pytest --json-report --json-report-file=pytest-report.json --ignore=tests/integration --ignore=tests/e2e --ignore=tests/performance --ignore=tests/security -x || true
+          # Capture pytest exit code for conditional steps
+          echo "PYTEST_EXIT_CODE=$?" >> $GITHUB_OUTPUT
+        continue-on-error: true # Allow workflow to continue even if tests fail
+
+      - name: Analyze failures and determine fix
+        id: analyze_failures
+        # Only run if initial tests failed
+        if: steps.run_initial_tests.outputs.PYTEST_EXIT_CODE != '0'
+        run: |
+          echo "Tests failed. Analyzing failures with pytest-analyzer..."
+          export PYTHONPATH=$PYTHONPATH:$(pwd)/src
+          # Run the helper script to analyze the pytest report and output JSON
+          # Redirect stdout to a file for parsing
+          python scripts/run_analyzer.py analyze --report-file pytest-report.json > analyzer-results.json || true
+
+          # Parse analyzer-results.json to extract suggestion details and set step outputs
+          if [ -s analyzer-results.json ]; then
+            SUGGESTION_ID=$(jq -r '.suggestion_id // empty' analyzer-results.json)
+            TARGET_FILE=$(jq -r '.target_file // empty' analyzer-results.json)
+            CONFIDENCE=$(jq -r '.confidence_score // 0' analyzer-results.json)
+            EXPLANATION=$(jq -r '.explanation // empty' analyzer-results.json)
+
+            echo "SUGGESTION_ID=${SUGGESTION_ID}" >> $GITHUB_OUTPUT
+            echo "TARGET_FILE=${TARGET_FILE}" >> $GITHUB_OUTPUT
+            echo "CONFIDENCE=${CONFIDENCE}" >> $GITHUB_OUTPUT
+            echo "EXPLANATION=${EXPLANATION}" >> $GITHUB_OUTPUT
+
+            # Check if confidence is above threshold (0.8)
+            if (( $(echo "$CONFIDENCE > 0.8" | bc -l) )); then
+              echo "HAS_HIGH_CONFIDENCE_FIX=true" >> $GITHUB_OUTPUT
+              echo "High confidence fix found (ID: ${SUGGESTION_ID}, File: ${TARGET_FILE}, Confidence: ${CONFIDENCE})"
+            else
+              echo "HAS_HIGH_CONFIDENCE_FIX=false" >> $GITHUB_OUTPUT
+              echo "No high confidence fix found (Max Confidence: ${CONFIDENCE})"
+            fi
+          else
+            echo "HAS_HIGH_CONFIDENCE_FIX=false" >> $GITHUB_OUTPUT
+            echo "No analyzer results or suggestions found."
+          fi
+        shell: bash # Use bash for jq and bc -l
+        continue-on-error: true # Allow workflow to continue even if analysis fails
+
+      - name: Apply fix and push (for push events)
+        id: apply_fix_push
+        # Only run for push events if a high-confidence fix was found
+        if: github.event_name == 'push' && steps.analyze_failures.outputs.HAS_HIGH_CONFIDENCE_FIX == 'true'
+        run: |
+          echo "Attempting to apply fix and push to branch ${{ github.ref_name }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          export PYTHONPATH=$PYTHONPATH:$(pwd)/src
+          # Apply the fix using the helper script and capture its output
+          python scripts/run_analyzer.py apply \
+            --suggestion-id "${{ steps.analyze_failures.outputs.SUGGESTION_ID }}" \
+            --target-file "${{ steps.analyze_failures.outputs.TARGET_FILE }}" \
+            > apply-results.json || { echo "::error::Failed to apply fix locally."; exit 1; }
+
+          # Parse apply results to get diff preview
+          DIFF_PREVIEW=$(jq -r '.diff_preview // empty' apply-results.json)
+          echo "DIFF_PREVIEW<<EOF" >> $GITHUB_OUTPUT
+          echo "$DIFF_PREVIEW" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # Check if the apply operation was successful
+          APPLY_SUCCESS=$(jq -r '.success // false' apply-results.json)
+          if [ "$APPLY_SUCCESS" == "true" ]; then
+            git add .
+            # Commit only if there are actual changes
+            git commit -m "feat: Apply automated fix for failing tests
+
+            ${{ steps.analyze_failures.outputs.EXPLANATION }}
+
+            [Automated by Self-Healing CI]" || { echo "No changes to commit."; echo "FIX_APPLIED=false" >> $GITHUB_OUTPUT; exit 0; }
+
+            git push origin HEAD:${{ github.ref_name }} || { echo "::error::Failed to push automated fix."; exit 1; }
+            echo "FIX_APPLIED=true" >> $GITHUB_OUTPUT
+          else
+            echo "Fix application failed according to run_analyzer.py."
+            echo "FIX_APPLIED=false" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+        continue-on-error: true
+
+      - name: Apply fix, create branch, and push (for pull_request events)
+        id: apply_fix_pr
+        # Only run for pull_request events if a high-confidence fix was found
+        if: github.event_name == 'pull_request' && steps.analyze_failures.outputs.HAS_HIGH_CONFIDENCE_FIX == 'true'
+        run: |
+          echo "Attempting to apply fix, create new branch, and push for PR #${{ github.event.pull_request.number }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Create a new branch for the fix
+          FIX_BRANCH="auto-fix/pr-${{ github.event.pull_request.number }}-${{ github.sha }}"
+          git checkout -b "$FIX_BRANCH" || { echo "::error::Failed to create new branch."; exit 1; }
+
+          export PYTHONPATH=$PYTHONPATH:$(pwd)/src
+          # Apply the fix using the helper script and capture its output
+          python scripts/run_analyzer.py apply \
+            --suggestion-id "${{ steps.analyze_failures.outputs.SUGGESTION_ID }}" \
+            --target-file "${{ steps.analyze_failures.outputs.TARGET_FILE }}" \
+            > apply-results.json || { echo "::error::Failed to apply fix locally."; exit 1; }
+
+          # Parse apply results to get diff preview
+          DIFF_PREVIEW=$(jq -r '.diff_preview // empty' apply-results.json)
+          echo "DIFF_PREVIEW<<EOF" >> $GITHUB_OUTPUT
+          echo "$DIFF_PREVIEW" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # Check if the apply operation was successful
+          APPLY_SUCCESS=$(jq -r '.success // false' apply-results.json)
+          if [ "$APPLY_SUCCESS" == "true" ]; then
+            git add .
+            # Commit only if there are actual changes
+            git commit -m "feat: Apply automated fix for failing tests
+
+            ${{ steps.analyze_failures.outputs.EXPLANATION }}
+
+            [Automated by Self-Healing CI]" || { echo "No changes to commit."; echo "FIX_APPLIED=false" >> $GITHUB_OUTPUT; exit 0; }
+
+            git push origin "$FIX_BRANCH" || { echo "::error::Failed to push automated fix branch."; exit 1; }
+            echo "FIX_APPLIED=true" >> $GITHUB_OUTPUT
+            echo "FIX_BRANCH_NAME=$FIX_BRANCH" >> $GITHUB_OUTPUT
+          else
+            echo "Fix application failed according to run_analyzer.py."
+            echo "FIX_APPLIED=false" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+        continue-on-error: true
+
+      - name: Determine if fix was applied and get diff
+        id: fix_applied_status
+        run: |
+          # Check if either apply_fix_push or apply_fix_pr successfully applied a fix
+          FIX_WAS_APPLIED="false"
+          if [ "${{ steps.apply_fix_push.outputs.FIX_APPLIED }}" == "true" ] || \
+             [ "${{ steps.apply_fix_pr.outputs.FIX_APPLIED }}" == "true" ]; then
+            FIX_WAS_APPLIED="true"
+          fi
+          echo "FIX_WAS_APPLIED=$FIX_WAS_APPLIED" >> $GITHUB_OUTPUT
+
+          # Pass diff preview from the relevant apply step
+          DIFF_PREVIEW=""
+          if [ -n "${{ steps.apply_fix_push.outputs.DIFF_PREVIEW }}" ]; then
+            DIFF_PREVIEW="${{ steps.apply_fix_push.outputs.DIFF_PREVIEW }}"
+          elif [ -n "${{ steps.apply_fix_pr.outputs.DIFF_PREVIEW }}" ]; then
+            DIFF_PREVIEW="${{ steps.apply_fix_pr.outputs.DIFF_PREVIEW }}"
+          fi
+          echo "DIFF_PREVIEW<<EOF" >> $GITHUB_OUTPUT
+          echo "$DIFF_PREVIEW" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # Pass fix branch name for PRs
+          echo "FIX_BRANCH_NAME=${{ steps.apply_fix_pr.outputs.FIX_BRANCH_NAME }}" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Rerun tests after fix
+        id: rerun_tests
+        # Only rerun tests if a fix was successfully applied
+        if: steps.fix_applied_status.outputs.FIX_WAS_APPLIED == 'true'
+        run: |
+          echo "Rerunning tests after applying fix..."
+          export PYTHONPATH=$PYTHONPATH:$(pwd)/src
+          pixi run -e dev pytest --json-report --json-report-file=pytest-report-after-fix.json --ignore=tests/integration --ignore=tests/e2e --ignore=tests/performance --ignore=tests/security -x || true
+          echo "PYTEST_RERUN_EXIT_CODE=$?" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Generate PR comment body
+        id: generate_comment
+        run: |
+          COMMENT_BODY="### 🧪 Self-Healing CI Report 🧪\n\n"
+
+          # Initial Test Run Summary
+          INITIAL_EXIT_CODE="${{ steps.run_initial_tests.outputs.PYTEST_EXIT_CODE }}"
+          if [ "$INITIAL_EXIT_CODE" == "0" ]; then
+            COMMENT_BODY+="**Initial Test Run:** ✅ All tests passed. No fixes needed.\n"
+          else
+            COMMENT_BODY+="**Initial Test Run:** ❌ Tests failed (Exit Code: $INITIAL_EXIT_CODE).\n"
+            COMMENT_BODY+="See [initial pytest report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run.id }}/artifacts/pytest-report-initial) for details.\n\n"
+
+            # Analysis Summary
+            HAS_HIGH_CONFIDENCE_FIX="${{ steps.analyze_failures.outputs.HAS_HIGH_CONFIDENCE_FIX }}"
+            SUGGESTION_ID="${{ steps.analyze_failures.outputs.SUGGESTION_ID }}"
+            TARGET_FILE="${{ steps.analyze_failures.outputs.TARGET_FILE }}"
+            CONFIDENCE="${{ steps.analyze_failures.outputs.CONFIDENCE }}"
+            EXPLANATION="${{ steps.analyze_failures.outputs.EXPLANATION }}"
+            DIFF_PREVIEW="${{ steps.fix_applied_status.outputs.DIFF_PREVIEW }}" # Get diff from apply step
+
+            if [ "$HAS_HIGH_CONFIDENCE_FIX" == "true" ]; then
+              COMMENT_BODY+="**Analysis:** 💡 High confidence fix suggested.\n"
+              COMMENT_BODY+="* **Suggestion ID:** `$SUGGESTION_ID`\n"
+              COMMENT_BODY+="* **Target File:** `$TARGET_FILE`\n"
+              COMMENT_BODY+="* **Confidence:** `${CONFIDENCE}`\n"
+              COMMENT_BODY+="* **Explanation:**\n```\n$EXPLANATION\n```\n"
+              if [ -n "$DIFF_PREVIEW" ]; then
+                COMMENT_BODY+="* **Proposed Changes Preview:**\n```diff\n$DIFF_PREVIEW\n```\n"
+              fi
+              COMMENT_BODY+="\n"
+
+              # Fix Application Summary
+              FIX_WAS_APPLIED="${{ steps.fix_applied_status.outputs.FIX_WAS_APPLIED }}"
+              if [ "$FIX_WAS_APPLIED" == "true" ]; then
+                COMMENT_BODY+="**Fix Application:** ✅ Automated fix applied.\n"
+                if [ "${{ github.event_name }}" == "pull_request" ]; then
+                  FIX_BRANCH_NAME="${{ steps.fix_applied_status.outputs.FIX_BRANCH_NAME }}"
+                  COMMENT_BODY+="A new branch `$FIX_BRANCH_NAME` has been created with the fix. Please review and merge.\n"
+                  COMMENT_BODY+="[View Fix Branch](${{ github.server_url }}/${{ github.repository }}/tree/$FIX_BRANCH_NAME)\n"
+                elif [ "${{ github.event_name }}" == "push" ]; then
+                  COMMENT_BODY+="The fix has been pushed directly to `${{ github.ref_name }}`.\n"
+                fi
+                COMMENT_BODY+="\n"
+
+                # Rerun Test Summary
+                RERUN_EXIT_CODE="${{ steps.rerun_tests.outputs.PYTEST_RERUN_EXIT_CODE }}"
+                if [ "$RERUN_EXIT_CODE" == "0" ]; then
+                  COMMENT_BODY+="**Rerun Tests:** ✅ All tests passed after applying fix.\n"
+                else
+                  COMMENT_BODY+="**Rerun Tests:** ❌ Tests still failing after applying fix (Exit Code: $RERUN_EXIT_CODE).\n"
+                fi
+                COMMENT_BODY+="See [rerun pytest report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run.id }}/artifacts/pytest-report-after-fix) for details.\n"
+              else
+                COMMENT_BODY+="**Fix Application:** ⚠️ Automated fix was not applied.\n"
+                COMMENT_BODY+="* Reason: Fix application failed or no changes were detected after applying.\n"
+              fi
+            else
+              COMMENT_BODY+="**Analysis:** ℹ️ No high confidence fix suggested.\n"
+            fi
+          fi
+
+          # Final Status
+          COMMENT_BODY+="\n---\n"
+          COMMENT_BODY+="*Workflow Run: [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run.id }})*"
+
+          # Output the comment body for the next step
+          echo "COMMENT_BODY<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMENT_BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Create or update PR comment
+        # Only create comment for PRs, and if initial tests failed or a fix was applied
+        if: github.event_name == 'pull_request' && (steps.run_initial_tests.outputs.PYTEST_EXIT_CODE != '0' || steps.fix_applied_status.outputs.FIX_WAS_APPLIED == 'true')
+        uses: peter-evans/create-or-update-comment@v3
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: ${{ steps.generate_comment.outputs.COMMENT_BODY }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload initial pytest report
+        # Always upload if the initial test run step was executed and report file exists
+        if: always() && steps.run_initial_tests.outputs.PYTEST_EXIT_CODE != '' && (success() || failure())
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-report-initial
+          path: pytest-report.json
+          retention-days: 5
+
+      - name: Upload analyzer results
+        # Always upload if the analysis step was executed and results file exists
+        if: always() && steps.analyze_failures.outputs.HAS_HIGH_CONFIDENCE_FIX != '' && (success() || failure())
+        uses: actions/upload-artifact@v4
+        with:
+          name: analyzer-results
+          path: analyzer-results.json
+          retention-days: 5
+
+      - name: Upload rerun pytest report
+        # Always upload if the rerun tests step was executed and report file exists
+        if: always() && steps.rerun_tests.outputs.PYTEST_RERUN_EXIT_CODE != '' && (success() || failure())
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-report-after-fix
+          path: pytest-report-after-fix.json
+          retention-days: 5

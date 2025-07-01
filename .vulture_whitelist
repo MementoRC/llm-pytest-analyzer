@@ -1,0 +1,5 @@
+# Vulture whitelist for protocol method parameters
+# Protocol method parameters are used by implementations but flagged as unused
+
+# Plugin protocol parameters
+available_plugins  # Used in PluginDependencyProtocol.check_dependencies implementations

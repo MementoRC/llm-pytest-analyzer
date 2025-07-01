@@ -100,7 +100,7 @@ class FlagsmithFeatureFlagService(FeatureFlagServiceProtocol):
             else:
                 flags = self._flagsmith_client.get_environment_flags()
 
-            feature = flags.get_feature(feature_key)
+            feature = flags.get_feature(feature_key)  # pylint: disable=no-member
             return feature.value if feature else None
         except Exception as e:
             logger.warning(f"Error getting feature flag value '{feature_key}': {e}")

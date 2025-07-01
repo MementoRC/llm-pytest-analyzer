@@ -32,14 +32,17 @@ dependencies = [
     "anthropic",
     "flagsmith==3.1.0",
     "hvac>=1.1.0",
+    "hypothesis>=6.0.0",
     "injector==0.20.1",
     "mcp>=1.9.2",
     "openai",
+    "psutil>=5.8.0",
     "pydantic>=2.0.0",
     "pyyaml",
     "python-dotenv",
     "rich>=12.0.0",
     "structlog>=24.0.0",
+    "tiktoken>=0.5.0",
 ]
 
 [project.optional-dependencies]
@@ -63,6 +66,9 @@ dev = [
     "vulture>=2.7",
     "sphinx>=7.0.0",
     "sphinx_rtd_theme",
+    "pytest-timeout", # Added for dev environment
+    "pytest-xdist",   # Added for dev environment
+    "hypothesis>=6.0.0", # Added for property-based testing in data generation
 ]
 
 test = [
@@ -76,6 +82,8 @@ test = [
     "build>=0.8.0",
     "marshmallow==3.26.1",
     "injector==0.20.1",
+    "pytest-timeout", # Added for test environment
+    "pytest-xdist",   # Added for test environment
 ]
 
 mcp = [
@@ -117,6 +125,7 @@ markers = [
     "e2e: mark test as an end-to-end test",
     "ci_timeout: mark test as potentially timing out in CI",
 ]
+addopts = "--timeout=30 --durations=10 -n 2"
 
 
 [tool.mypy]
@@ -147,6 +156,8 @@ pytest = ">=7.0.0"
 pytest-asyncio = "*"
 pytest-cov = "*"
 pytest-json-report = ">=1.5.0"
+pytest-timeout = "*" # Added for pixi
+pytest-xdist = "*"   # Added for pixi
 
 [tool.pixi.environments]
 default = { solve-group = "default" }
@@ -161,14 +172,15 @@ lint = "ruff check src tests"
 lint-fix = "ruff check --fix src tests"
 format = "ruff format src tests"
 typecheck = "mypy src"
-test = { cmd = "python -m pytest tests || (echo '::error::Pytest failed, check dependencies and import paths' && exit 1)", depends-on = ["install-editable"] }
-test-cov = { cmd = "python -m pytest --cov=src/pytest_analyzer --cov-report=term-missing --cov-report=xml tests || (echo '::error::Pytest with coverage failed' && exit 1)", depends-on = ["install-editable"] }
+test = { cmd = "python -m pytest tests --ignore=tests/integration --ignore=tests/e2e --ignore=tests/performance --ignore=tests/security -x || (echo '::error::Pytest failed, check dependencies and import paths' && exit 1)", depends-on = ["install-editable"] }
+test-cov = { cmd = "python -m pytest --cov=src/pytest_analyzer --cov-report=term-missing --cov-report=xml tests --ignore=tests/integration --ignore=tests/e2e --ignore=tests/performance --ignore=tests/security -x || (echo '::error::Pytest with coverage failed' && exit 1)", depends-on = ["install-editable"] }
+test-heavy = { cmd = "python -m pytest tests/integration tests/e2e tests/performance tests/security || (echo '::error::Heavy tests failed' && exit 1)", depends-on = ["install-editable"] }
 build = { cmd = "hatch build", depends-on = ["install-editable"] }
 clean = "rm -rf dist build .ruff_cache .mypy_cache .pytest_cache *.egg-info src/pytest_analyzer.egg-info"
 security-scan = { cmd = "bandit -r src/ -f json -o security-report.json", depends-on = ["install-editable"] }
 security-scan-console = { cmd = "bandit -r src/ --severity-level high", depends-on = ["install-editable"] }
 complexity-check = { cmd = "radon cc src/ --min B", depends-on = ["install-editable"] }
-dead-code-check = { cmd = "vulture src/ --min-confidence 80", depends-on = ["install-editable"] }
+dead-code-check = { cmd = "vulture src/ .vulture_whitelist --min-confidence 80", depends-on = ["install-editable"] }
 safety-check = { cmd = "safety check --json --output safety-report.json", depends-on = ["install-editable"] }
 safety-check-console = { cmd = "echo 'Running safety check with debug output...' && pip list | head -n 10 && (safety check || (echo '::warning::Safety check failed - this may be due to network connectivity' && exit 0))", depends-on = ["install-editable"] }
 pylint-check = { cmd = "pylint src/pytest_analyzer --output-format=json --output=pylint-report.json", depends-on = ["install-editable"] }
