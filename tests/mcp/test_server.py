@@ -21,7 +21,9 @@ class TestPytestAnalyzerMCPServer:
         assert server.port == 8000
         assert server.settings is not None
         assert not server.is_running
-        assert len(server.get_registered_tools()) == 0
+        assert (
+            len(server.get_registered_tools()) == 8
+        )  # Should have all AVAILABLE_TOOLS registered
         assert len(server.get_registered_resources()) == 0
 
     def test_init_custom_settings(self):

@@ -22,6 +22,7 @@ from .prompts.templates import (
 )
 from .resources import ResourceManager, SessionManager
 from .security import SecurityError, SecurityManager
+from .tools import AVAILABLE_TOOLS
 
 
 class PytestAnalyzerMCPServer:
@@ -121,6 +122,9 @@ class PytestAnalyzerMCPServer:
 
         # Setup MCP tool handlers (once)
         self._setup_mcp_handlers()
+
+        # Register available tools
+        self._register_available_tools()
 
     # Compatibility properties for tests
     @property
@@ -693,6 +697,38 @@ class PytestAnalyzerMCPServer:
     def __str__(self) -> str:
         """String representation of the server."""
         return f"PytestAnalyzerMCPServer(transport={self.transport_type}, running={self._running})"
+
+    def _register_available_tools(self) -> None:
+        """Register all available tools from the tools module."""
+        from .tools.analysis import run_and_analyze, suggest_fixes
+        from .tools.configuration import update_config
+        from .tools.fixes import apply_suggestion, validate_suggestion
+        from .tools.information import get_failure_summary, get_test_coverage
+        from .tools.nl_query import nl_query_tool
+
+        # Map tool names to their handler functions
+        tool_handlers = {
+            "suggest_fixes": suggest_fixes,
+            "run_and_analyze": run_and_analyze,
+            "apply_suggestion": apply_suggestion,
+            "validate_suggestion": validate_suggestion,
+            "get_failure_summary": get_failure_summary,
+            "get_test_coverage": get_test_coverage,
+            "update_config": update_config,
+            "nl_query": nl_query_tool,
+        }
+
+        # Register each tool
+        for tool_name, tool_info in AVAILABLE_TOOLS.items():
+            if tool_name in tool_handlers:
+                self.register_tool(
+                    name=tool_info["name"],
+                    description=tool_info["description"],
+                    handler=tool_handlers[tool_name],
+                    input_schema=tool_info.get("inputSchema"),
+                )
+
+        self.logger.info(f"Registered {len(AVAILABLE_TOOLS)} available tools")
 
     def __repr__(self) -> str:
         """Detailed string representation of the server."""
