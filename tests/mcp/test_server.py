@@ -263,7 +263,7 @@ class TestPytestAnalyzerMCPServer:
         assert "host='localhost'" in repr_str
         assert "port=8080" in repr_str
         assert "running=False" in repr_str
-        assert "tools=0" in repr_str
+        assert "tools=8" in repr_str  # Server now auto-registers 8 tools
         assert "resources=0" in repr_str
 
 
@@ -330,7 +330,7 @@ class TestMCPServerIntegration:
 
         # Verify initial state
         assert not server.is_running
-        assert len(server.get_registered_tools()) == 0
+        assert len(server.get_registered_tools()) == 8  # Server auto-registers 8 tools
 
         # Register a tool
         def test_handler():
@@ -345,8 +345,8 @@ class TestMCPServerIntegration:
 
             server.register_tool("test_tool", "Test tool", test_handler)
 
-            # Verify tool registration
-            assert len(server.get_registered_tools()) == 1
+            # Verify tool registration (8 auto-registered + 1 test tool)
+            assert len(server.get_registered_tools()) == 9
             assert "test_tool" in server.get_registered_tools()
 
         # Register a resource
