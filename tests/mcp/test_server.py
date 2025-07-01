@@ -21,7 +21,9 @@ class TestPytestAnalyzerMCPServer:
         assert server.port == 8000
         assert server.settings is not None
         assert not server.is_running
-        assert len(server.get_registered_tools()) == 0
+        assert (
+            len(server.get_registered_tools()) == 8
+        )  # Should have all AVAILABLE_TOOLS registered
         assert len(server.get_registered_resources()) == 0
 
     def test_init_custom_settings(self):
@@ -209,13 +211,14 @@ class TestPytestAnalyzerMCPServer:
             async with server.lifespan():
                 raise ValueError("Test exception")
 
-    def test_get_server_capabilities_empty(self):
-        """Test server capabilities with no registered tools/resources."""
+    def test_get_server_capabilities_with_auto_registered_tools(self):
+        """Test server capabilities with automatically registered tools."""
         server = PytestAnalyzerMCPServer()
         capabilities = server._get_server_capabilities()
 
-        assert capabilities["tools"] is None
-        assert capabilities["resources"] is None
+        # Server now automatically registers 8 tools during initialization
+        assert capabilities["tools"] == {"listChanged": True}
+        assert capabilities["resources"] is None  # No resources registered by default
 
     def test_get_server_capabilities_with_tools_and_resources(self):
         """Test server capabilities with registered tools and resources."""
@@ -260,7 +263,7 @@ class TestPytestAnalyzerMCPServer:
         assert "host='localhost'" in repr_str
         assert "port=8080" in repr_str
         assert "running=False" in repr_str
-        assert "tools=0" in repr_str
+        assert "tools=8" in repr_str  # Server now auto-registers 8 tools
         assert "resources=0" in repr_str
 
 
@@ -327,7 +330,7 @@ class TestMCPServerIntegration:
 
         # Verify initial state
         assert not server.is_running
-        assert len(server.get_registered_tools()) == 0
+        assert len(server.get_registered_tools()) == 8  # Server auto-registers 8 tools
 
         # Register a tool
         def test_handler():
@@ -342,8 +345,8 @@ class TestMCPServerIntegration:
 
             server.register_tool("test_tool", "Test tool", test_handler)
 
-            # Verify tool registration
-            assert len(server.get_registered_tools()) == 1
+            # Verify tool registration (8 auto-registered + 1 test tool)
+            assert len(server.get_registered_tools()) == 9
             assert "test_tool" in server.get_registered_tools()
 
         # Register a resource
