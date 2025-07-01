@@ -211,13 +211,14 @@ class TestPytestAnalyzerMCPServer:
             async with server.lifespan():
                 raise ValueError("Test exception")
 
-    def test_get_server_capabilities_empty(self):
-        """Test server capabilities with no registered tools/resources."""
+    def test_get_server_capabilities_with_auto_registered_tools(self):
+        """Test server capabilities with automatically registered tools."""
         server = PytestAnalyzerMCPServer()
         capabilities = server._get_server_capabilities()
 
-        assert capabilities["tools"] is None
-        assert capabilities["resources"] is None
+        # Server now automatically registers 8 tools during initialization
+        assert capabilities["tools"] == {"listChanged": True}
+        assert capabilities["resources"] is None  # No resources registered by default
 
     def test_get_server_capabilities_with_tools_and_resources(self):
         """Test server capabilities with registered tools and resources."""
