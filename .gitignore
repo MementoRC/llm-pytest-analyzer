@@ -37,6 +37,9 @@ site/
 .pixi/
 pixi.lock
 
+# UV package manager files (project uses Pixi instead)
+uv.lock
+
 # IDE directories and files
 .idea/
 *.iml
