@@ -30,7 +30,7 @@
 # Start MCP server using pixi (recommended)
 pixi run mcp-server
 
-# Run tests in dev environment  
+# Run tests in dev environment
 pixi run -e dev test
 
 # Install dependencies
