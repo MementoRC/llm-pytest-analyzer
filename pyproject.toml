@@ -43,7 +43,7 @@ dependencies = [
     "rich>=12.0.0",
     "structlog>=24.0.0",
     "tiktoken>=0.5.0",
-    "prometheus-client>=0.16.0",
+    "prometheus_client>=0.16.0",
 ]
 
 [project.optional-dependencies]
@@ -77,7 +77,7 @@ test = [
     "pytest-asyncio",
     "pytest-cov",
     "pytest-json-report>=1.5.0",
-    "prometheus-client>=0.16.0",
+    "prometheus_client>=0.16.0",
     "setuptools>=65.0.0",
     "wheel>=0.37.0",
     "build>=0.8.0",
@@ -102,6 +102,7 @@ mcp = [
 
 [project.scripts]
 pytest-analyzer = "pytest_analyzer.cli.analyzer_cli:main"
+mcp-server-pytest-analyzer = "pytest_analyzer.cli.mcp_cli:main"
 
 [project.urls]
 Homepage = "https://github.com/MementoRC/llm-pytest-analyzer"
@@ -152,7 +153,7 @@ psutil = ">=5.9.0"
 
 [tool.pixi.pypi-dependencies]
 pytest-analyzer = { path = ".", editable = true }
-prometheus-client = ">=0.16.0"
+prometheus_client = ">=0.16.0"
 pytest = ">=7.0.0"
 pytest-asyncio = "*"
 pytest-cov = "*"
