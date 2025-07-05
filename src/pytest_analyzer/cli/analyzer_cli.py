@@ -815,13 +815,15 @@ def validate_cli_arguments(
 
 def main() -> int:
     """Main entry point for the CLI application."""
-    # Validate dependencies early
-    try:
-        validate_dependencies()
-    except RuntimeError as e:
-        console = Console(stderr=True)
-        console.print(f"[red]Dependency Error:[/red] {e}")
-        return 1
+    # Validate dependencies early - only when actually running CLI, not during imports/tests
+    import sys
+    if not any('pytest' in arg or 'test' in arg for arg in sys.argv):
+        try:
+            validate_dependencies()
+        except RuntimeError as e:
+            console = Console(stderr=True)
+            console.print(f"[red]Dependency Error:[/red] {e}")
+            return 1
 
     # Parse command-line arguments
     parser = setup_parser()

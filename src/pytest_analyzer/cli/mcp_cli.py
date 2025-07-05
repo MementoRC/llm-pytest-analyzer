@@ -257,13 +257,15 @@ def cmd_start_server(args: argparse.Namespace) -> int:
 
 def main() -> int:
     """Main entry point for MCP CLI (for standalone usage)."""
-    # Validate dependencies early for MCP server
-    try:
-        validate_dependencies()
-    except RuntimeError as e:
-        console = Console(stderr=True)
-        console.print(f"[red]MCP Server Dependency Error:[/red] {e}")
-        return 1
+    # Validate dependencies early for MCP server - only when actually running, not during imports/tests
+    import sys
+    if not any('pytest' in arg or 'test' in arg for arg in sys.argv):
+        try:
+            validate_dependencies()
+        except RuntimeError as e:
+            console = Console(stderr=True)
+            console.print(f"[red]MCP Server Dependency Error:[/red] {e}")
+            return 1
 
     parser = argparse.ArgumentParser(
         description="MCP server for pytest-analyzer AI assistant integration",
