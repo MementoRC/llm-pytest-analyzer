@@ -126,7 +126,7 @@ markers = [
     "e2e: mark test as an end-to-end test",
     "ci_timeout: mark test as potentially timing out in CI",
 ]
-addopts = "--timeout=30 --durations=10 -n 2"
+addopts = "--durations=10"
 
 
 [tool.mypy]

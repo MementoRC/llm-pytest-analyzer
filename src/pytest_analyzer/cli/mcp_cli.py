@@ -17,6 +17,7 @@ from pathlib import Path
 from rich.console import Console
 
 from ..mcp.server import MCPServerFactory, PytestAnalyzerMCPServer
+from ..utils.dependency_validator import validate_dependencies
 from ..utils.settings import Settings, load_settings
 
 # Load environment variables from .env file if present
@@ -256,6 +257,13 @@ def cmd_start_server(args: argparse.Namespace) -> int:
 
 def main() -> int:
     """Main entry point for MCP CLI (for standalone usage)."""
+    # Validate dependencies early for MCP server
+    try:
+        validate_dependencies()
+    except RuntimeError as e:
+        console = Console(stderr=True)
+        console.print(f"[red]MCP Server Dependency Error:[/red] {e}")
+        return 1
 
     parser = argparse.ArgumentParser(
         description="MCP server for pytest-analyzer AI assistant integration",

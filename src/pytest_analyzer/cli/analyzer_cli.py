@@ -25,6 +25,7 @@ from ..core.analyzer_service_di import DIPytestAnalyzerService
 from ..core.factory import create_analyzer_service
 from ..core.models.pytest_failure import FixSuggestion, PytestFailure
 from ..mcp.security import SecurityError, SecurityManager
+from ..utils.dependency_validator import validate_dependencies
 from ..utils.settings import Settings, load_settings
 
 # Create security logger locally
@@ -814,6 +815,14 @@ def validate_cli_arguments(
 
 def main() -> int:
     """Main entry point for the CLI application."""
+    # Validate dependencies early
+    try:
+        validate_dependencies()
+    except RuntimeError as e:
+        console = Console(stderr=True)
+        console.print(f"[red]Dependency Error:[/red] {e}")
+        return 1
+    
     # Parse command-line arguments
     parser = setup_parser()
     args = parser.parse_args()
