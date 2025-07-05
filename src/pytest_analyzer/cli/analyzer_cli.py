@@ -822,7 +822,7 @@ def main() -> int:
         console = Console(stderr=True)
         console.print(f"[red]Dependency Error:[/red] {e}")
         return 1
-    
+
     # Parse command-line arguments
     parser = setup_parser()
     args = parser.parse_args()
