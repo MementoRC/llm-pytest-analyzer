@@ -259,7 +259,8 @@ def main() -> int:
     """Main entry point for MCP CLI (for standalone usage)."""
     # Validate dependencies early for MCP server - only when actually running, not during imports/tests
     import sys
-    if not any('pytest' in arg or 'test' in arg for arg in sys.argv):
+
+    if not any("pytest" in arg or "test" in arg for arg in sys.argv):
         try:
             validate_dependencies()
         except RuntimeError as e:

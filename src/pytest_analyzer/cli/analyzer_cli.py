@@ -817,7 +817,8 @@ def main() -> int:
     """Main entry point for the CLI application."""
     # Validate dependencies early - only when actually running CLI, not during imports/tests
     import sys
-    if not any('pytest' in arg or 'test' in arg for arg in sys.argv):
+
+    if not any("pytest" in arg or "test" in arg for arg in sys.argv):
         try:
             validate_dependencies()
         except RuntimeError as e:
