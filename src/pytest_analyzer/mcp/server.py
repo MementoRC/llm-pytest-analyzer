@@ -23,6 +23,7 @@ from .prompts.templates import (
 from .resources import ResourceManager, SessionManager
 from .security import SecurityError, SecurityManager
 from .tools import AVAILABLE_TOOLS
+from .facade import MCPAnalyzerFacade
 
 
 class PytestAnalyzerMCPServer:
@@ -81,6 +82,10 @@ class PytestAnalyzerMCPServer:
             self.mcp_settings.security,
             project_root=getattr(self.settings, "project_root", None),
         )
+        
+        # Initialize facade for MCP tools
+        from ..core.analyzer_facade import PytestAnalyzerFacade
+        self.facade = MCPAnalyzerFacade(PytestAnalyzerFacade(self.settings))
 
         # Initialize MCP server with proper configuration
         self.mcp_server = Server(
@@ -269,9 +274,9 @@ class PytestAnalyzerMCPServer:
             try:
                 # Handler may be async or sync
                 if asyncio.iscoroutinefunction(handler):
-                    result = await handler(sanitized_args)
+                    result = await handler(sanitized_args, self.facade)
                 else:
-                    result = handler(sanitized_args)
+                    result = handler(sanitized_args, self.facade)
 
                 # Record success for circuit breaker
                 self.security_manager.record_success(tool_name=name)
