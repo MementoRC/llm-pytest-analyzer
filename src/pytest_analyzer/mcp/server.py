@@ -89,7 +89,7 @@ class PytestAnalyzerMCPServer:
         self.facade = MCPAnalyzerFacade(PytestAnalyzerFacade(self.settings))
 
         # Initialize MCP server with proper configuration
-        self.mcp_server = Server(
+        self.mcp_server: Server = Server(
             name="pytest-analyzer",
             version="1.0.0",
             instructions="MCP server for pytest test analysis and fix suggestions",
