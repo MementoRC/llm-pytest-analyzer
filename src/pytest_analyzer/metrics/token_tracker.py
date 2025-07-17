@@ -1,7 +1,7 @@
 import logging
 import sqlite3  # Added import for sqlite3
 import threading
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 try:
     import tiktoken
