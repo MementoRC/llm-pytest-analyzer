@@ -53,20 +53,25 @@ def test_validate_dependencies_with_missing():
             raise ImportError("No module named 'nonexistent_module'")
         return MagicMock()
 
-    with patch("pytest_analyzer.utils.dependency_validator.importlib.import_module", side_effect=mock_import):
+    with patch(
+        "pytest_analyzer.utils.dependency_validator.importlib.import_module",
+        side_effect=mock_import,
+    ):
         # Mock the required_deps list to include a missing dependency
         original_required_deps = [
             "pydantic",
-            "rich", 
+            "rich",
             "structlog",
             "prometheus_client",
             "mcp",
             "httpx",
             "nonexistent_module",  # This will trigger ImportError
         ]
-        
+
         with patch.object(
-            __import__("pytest_analyzer.utils.dependency_validator", fromlist=["required_deps"]),
+            __import__(
+                "pytest_analyzer.utils.dependency_validator", fromlist=["required_deps"]
+            ),
             "required_deps",
             original_required_deps,
         ):
@@ -79,9 +84,13 @@ def test_validate_dependencies_with_security_issue():
     """Test validation with security issues."""
     with patch("pytest_analyzer.utils.dependency_validator.importlib.import_module"):
         # Mock _check_version_security to return security warnings
-        with patch("pytest_analyzer.utils.dependency_validator._check_version_security") as mock_check:
-            mock_check.return_value = ["Security: test package version 1.0.0 is below minimum required version 2.0.0"]
-            
+        with patch(
+            "pytest_analyzer.utils.dependency_validator._check_version_security"
+        ) as mock_check:
+            mock_check.return_value = [
+                "Security: test package version 1.0.0 is below minimum required version 2.0.0"
+            ]
+
             with patch(
                 "pytest_analyzer.utils.dependency_validator._validate_package_integrity",
                 return_value=[],
