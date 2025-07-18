@@ -141,24 +141,18 @@ class TestValidatePackageIntegrity:
 
     def test_package_with_suspicious_files(self):
         """Test package with files in suspicious locations."""
-        # Test absolute path
-        mock_file_abs = Mock()
-        mock_file_abs.is_absolute.return_value = True
-        mock_file_abs.__str__ = lambda x: "/etc/passwd"
+        # Create string representations of suspicious paths
+        suspicious_file_abs = "/etc/passwd"
+        suspicious_file_sys = "etc/malicious/config"
 
-        # Test suspicious directory (etc is suspicious)
-        mock_file_sys = Mock()
-        mock_file_sys.is_absolute.return_value = False
-        mock_file_sys.__str__ = lambda x: "etc/malicious/config"
-
+        # Create mock distribution with file paths as strings
         mock_dist = Mock()
-        mock_dist.files = [mock_file_abs, mock_file_sys]
+        mock_dist.files = [suspicious_file_abs, suspicious_file_sys]
 
         with patch("importlib.metadata.distribution", return_value=mock_dist):
-            with patch("pathlib.Path", side_effect=[mock_file_abs, mock_file_sys]):
-                warnings = _validate_package_integrity("test_package")
-                assert len(warnings) >= 1
-                assert "suspicious locations" in warnings[0]
+            warnings = _validate_package_integrity("test_package")
+            assert len(warnings) >= 1
+            assert "suspicious locations" in warnings[0]
 
 
 class TestValidateDependencies:
@@ -194,9 +188,12 @@ class TestValidateDependencies:
 
     def test_security_issue_in_dependency(self):
         """Test when a dependency has security issues."""
-        with patch("importlib.import_module"):
-            # Mock version to be below minimum
-            with patch("importlib.metadata.version", return_value="1.0.0"):
+        # Mock import_module to succeed 
+        with patch("pytest_analyzer.utils.dependency_validator.importlib.import_module"):
+            # Mock version to return version below minimum for pydantic
+            with patch("pytest_analyzer.utils.dependency_validator.importlib.metadata.version") as mock_version:
+                mock_version.return_value = "1.0.0"  # Below minimum of 2.0.0 for pydantic
+                
                 with patch(
                     "pytest_analyzer.utils.dependency_validator._validate_package_integrity",
                     return_value=[],
