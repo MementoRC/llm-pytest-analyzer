@@ -223,7 +223,7 @@ quality = { depends-on = ["test", "lint", "typecheck"] }
 static-analysis = { depends-on = ["security-scan-console", "complexity-check", "dead-code-check", "safety-check-console", "pylint-check-console"] }
 check-all = { depends-on = ["lint", "typecheck", "test", "static-analysis"] }
 emergency-fix = "pixi run lint-fix && pixi run format && pixi run test"
-pre-commit = { cmd = "pre-commit run --all-files", env = { CLAUDECODE = "0" } }
-setup-pre-commit = { cmd = "pre-commit install --install-hooks", env = { CLAUDECODE = "0" } }
+pre-commit = { cmd = "pre-commit run --all-files", env = { PRE_COMMIT = "1" } }
+setup-pre-commit = { cmd = "pre-commit install --install-hooks", env = { PRE_COMMIT = "1" } }
 docs = "sphinx-build -b html docs docs/_build/html"
 mcp-server = { cmd = "python -m pytest_analyzer.cli.mcp_cli mcp start --stdio --project-root .", env = { PYTHONPATH = "src" } }

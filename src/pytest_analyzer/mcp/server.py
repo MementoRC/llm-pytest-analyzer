@@ -14,6 +14,7 @@ from pydantic import ValidationError
 
 from ..core.cross_cutting.error_handling import error_context, error_handler
 from ..utils.settings import Settings
+from .facade import MCPAnalyzerFacade
 from .prompts.templates import (
     get_prompt_registry,
     handle_get_prompt,
@@ -23,7 +24,6 @@ from .prompts.templates import (
 from .resources import ResourceManager, SessionManager
 from .security import SecurityError, SecurityManager
 from .tools import AVAILABLE_TOOLS
-from .facade import MCPAnalyzerFacade
 
 
 class PytestAnalyzerMCPServer:
