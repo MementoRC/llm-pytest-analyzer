@@ -29,75 +29,13 @@ classifiers = [
 ]
 
 dependencies = [
-    "anthropic",
-    "flagsmith==3.1.0",
-    "hvac>=1.1.0",
-    "hypothesis>=6.0.0",
-    "injector==0.20.1",
-    "mcp>=1.9.2",
-    "openai",
-    "psutil>=5.8.0",
-    "pydantic>=2.0.0",
-    "pyyaml",
-    "python-dotenv",
-    "rich>=12.0.0",
-    "structlog>=24.0.0",
-    "tiktoken>=0.5.0",
-    "prometheus_client>=0.16.0",
+    # Only add dependencies that are EXCLUSIVELY available on PyPI
+    # All conda-forge available packages MUST be in [tool.pixi.dependencies]
 ]
 
 [project.optional-dependencies]
-dev = [
-    "bandit[toml]>=1.7.5",
-    "clang-format",
-    "isort",
-    "mypy",
-    "pre-commit",
-    "pre-commit-hooks",
-    "pylint>=2.17.4",
-    "pytest>=8.4.0",
-    "pytest-asyncio",
-    "pytest-cov",
-    "pytest-json-report>=1.5.0",
-    "radon>=5.1.0",
-    "ruff",
-    "safety>=3.2.0,<3.3.0",
-    "marshmallow==3.26.1",
-    "types-pyyaml",
-    "vulture>=2.7",
-    "sphinx>=7.0.0",
-    "sphinx_rtd_theme",
-    "pytest-timeout", # Added for dev environment
-    "pytest-xdist",   # Added for dev environment
-    "hypothesis>=6.0.0", # Added for property-based testing in data generation
-]
-
-test = [
-    "pytest>=8.4.0",
-    "pytest-asyncio",
-    "pytest-cov",
-    "pytest-json-report>=1.5.0",
-    "prometheus_client>=0.16.0",
-    "setuptools>=65.0.0",
-    "wheel>=0.37.0",
-    "build>=0.8.0",
-    "marshmallow==3.26.1",
-    "injector==0.20.1",
-    "pytest-timeout", # Added for test environment
-    "pytest-xdist",   # Added for test environment
-]
-
-mcp = [
-    "httpx>=0.24.0",
-    "starlette>=0.27.0",
-    "uvicorn>=0.22.0",
-    "httpx-sse>=0.3.0",
-    "sse-starlette>=1.6.0",
-    "typer>=0.9.0",
-    "pytest-asyncio",
-    "pytest-cov",
-    "pytest-json-report>=1.5.0",
-]
+# Only add dependencies that are EXCLUSIVELY available on PyPI
+# All conda-forge available packages MUST be in [tool.pixi.feature.*.dependencies]
 
 [project.scripts]
 pytest-analyzer = "pytest_analyzer.cli.analyzer_cli:main"
@@ -146,24 +84,119 @@ channels = ["conda-forge"]
 platforms = ["linux-64"]
 
 [tool.pixi.dependencies]
-"pyyaml" = "*"
-"rich" = ">=12.0.0"
+# Core runtime dependencies (all available on conda-forge)
+python = ">=3.10"
+anthropic = "*"
+openai = "*"
+mcp = ">=1.9.2"
+hvac = ">=1.1.0"
+hypothesis = ">=6.0.0"
+injector = ">=0.20.1"
+pyyaml = ">=6.0"
+rich = ">=12.0.0"
 python-dotenv = ">=1.1.0,<2"
-psutil = ">=5.9.0"
+psutil = ">=5.8.0"
+pydantic = ">=2.0.0"
+structlog = ">=24.0.0"
+tiktoken = ">=0.5.0"
+prometheus_client = ">=0.16.0"
 
 [tool.pixi.pypi-dependencies]
-pytest-analyzer = { path = ".", editable = true }
-pytest = ">=8.4.0"  # Required for core imports even in MCP server mode
+# Packages requiring specific versions incompatible with conda-forge
+flagsmith = "==3.1.0"  # Requires marshmallow 3.x, conda-forge has 4.x
+marshmallow = "==3.26.1"  # Required by flagsmith, incompatible with conda-forge 4.x
+
+# ===== TIERED QUALITY FEATURES =====
+# TIER 1: Essential Quality Gates (ZERO-TOLERANCE)
+[tool.pixi.feature.quality.dependencies]
+# Core Testing Framework
+pytest = ">=8.4.0"
+pytest-cov = ">=4.0.0"
+pytest-timeout = ">=2.1.0"
+pytest-asyncio = ">=0.21.0"
+pytest-xdist = ">=3.3.0"
+pytest-json-report = ">=1.5.0"
+
+# Linting & Formatting
+ruff = ">=0.7.3"
+
+# Type Checking
+mypy = "*"
+
+[tool.pixi.feature.quality.pypi-dependencies]
+# Additional testing dependencies only on PyPI
+# (currently empty - all quality tools available on conda-forge)
+
+# TIER 2: Extended Quality & Security
+[tool.pixi.feature.quality-extended.dependencies]
+# Security Scanning
+bandit = ">=1.7.0"
+safety = ">=3.2.0,<3.3.0"
+
+# Code Quality Analysis
+pylint = ">=2.17.4"
+radon = ">=5.1.0"
+vulture = ">=2.7"
+
+# Git Hooks
+pre-commit = ">=3.0.0"
+pre-commit-hooks = "*"
+
+[tool.pixi.feature.quality-extended.pypi-dependencies]
+types-pyyaml = "*"
+
+# TIER 3: CI/CD & Build
+[tool.pixi.feature.quality-ci.dependencies]
+# Build Tools
+python-build = ">=1.0.0"
+setuptools = ">=65.0.0"
+wheel = ">=0.37.0"
+
+# Documentation
+sphinx = ">=7.0.0"
+sphinx_rtd_theme = "*"
+
+# Additional development tools
+isort = "*"
+clang-format = "*"
+
+# MCP-specific dependencies
+[tool.pixi.feature.mcp.dependencies]
+httpx = ">=0.24.0"
+starlette = ">=0.27.0"
+uvicorn = ">=0.22.0"
+typer = ">=0.9.0"
+
+[tool.pixi.feature.mcp.pypi-dependencies]
+httpx-sse = ">=0.3.0"
+sse-starlette = ">=1.6.0"
 
 [tool.pixi.environments]
+# Basic runtime environment
 default = { solve-group = "default" }
-dev = { features = ["dev"], solve-group = "default" }
-test = { features = ["test"], solve-group = "default" }
-mcp = { features = ["mcp"], solve-group = "default" }
+
+# Quality gate environments (tiered approach)
+quality = { features = ["quality"], solve-group = "default" }
+quality-extended = { features = ["quality", "quality-extended"], solve-group = "default" }
+quality-full = { features = ["quality", "quality-extended", "quality-ci"], solve-group = "default" }
+
+# Development environment (full quality + specialized tools)
+dev = { features = ["quality", "quality-extended", "quality-ci"], solve-group = "default" }
+
+# Legacy environments for backward compatibility
+test = { features = ["quality"], solve-group = "default" }
+mcp = { features = ["quality", "mcp"], solve-group = "default" }
+
+# CI environment (quality + CI reporting)
+ci = { features = ["quality", "quality-ci"], solve-group = "default" }
 
 [tool.pixi.tasks]
-dev = "pip install -e ."
+# ===== TIER 1: CORE DEVELOPMENT TASKS (ESSENTIAL) =====
+# Installation & Setup
 install-editable = "pip install -e . || (echo '::error::Editable installation failed' && exit 1)"
+dev-setup = { depends-on = ["install-editable"] }
+
+# Quality Gates (CRITICAL - MUST PASS) - PREVENT CI FAILURES
 lint = "ruff check src tests --select=F,E9"
 lint-fix = "ruff check --fix src tests"
 format = "ruff format src tests"
