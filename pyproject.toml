@@ -164,13 +164,13 @@ mcp = { features = ["mcp"], solve-group = "default" }
 [tool.pixi.tasks]
 dev = "pip install -e ."
 install-editable = "pip install -e . || (echo '::error::Editable installation failed' && exit 1)"
-lint = "ruff check src tests"
+lint = "ruff check src tests --select=F,E9"
 lint-fix = "ruff check --fix src tests"
 format = "ruff format src tests"
 typecheck = "mypy src"
-test = { cmd = "python -m pytest tests --ignore=tests/integration --ignore=tests/e2e --ignore=tests/performance --ignore=tests/security -x || (echo '::error::Pytest failed, check dependencies and import paths' && exit 1)", depends-on = ["install-editable"] }
-test-cov = { cmd = "python -m pytest --cov=src/pytest_analyzer --cov-report=term-missing --cov-report=xml tests --ignore=tests/integration --ignore=tests/e2e --ignore=tests/performance --ignore=tests/security --timeout=300 -x || (echo '::error::Pytest with coverage failed' && exit 1)", depends-on = ["install-editable"] }
-test-heavy = { cmd = "python -m pytest tests/integration tests/e2e tests/performance tests/security || (echo '::error::Heavy tests failed' && exit 1)", depends-on = ["install-editable"] }
+test = { cmd = "python -m pytest tests --ignore=tests/integration --ignore=tests/e2e --ignore=tests/performance --ignore=tests/security -x || (echo '::error::Pytest failed, check dependencies and import paths' && exit 1)", depends-on = ["install-editable"], env = { CLAUDECODE = "0" } }
+test-cov = { cmd = "python -m pytest --cov=src/pytest_analyzer --cov-report=term-missing --cov-report=xml tests --ignore=tests/integration --ignore=tests/e2e --ignore=tests/performance --ignore=tests/security --timeout=300 -x || (echo '::error::Pytest with coverage failed' && exit 1)", depends-on = ["install-editable"], env = { CLAUDECODE = "0" } }
+test-heavy = { cmd = "python -m pytest tests/integration tests/e2e tests/performance tests/security || (echo '::error::Heavy tests failed' && exit 1)", depends-on = ["install-editable"], env = { CLAUDECODE = "0" } }
 build = { cmd = "hatch build", depends-on = ["install-editable"] }
 clean = "rm -rf dist build .ruff_cache .mypy_cache .pytest_cache *.egg-info src/pytest_analyzer.egg-info"
 security-scan = { cmd = "bandit -r src/ -f json -o security-report.json", depends-on = ["install-editable"] }
@@ -181,8 +181,11 @@ safety-check = { cmd = "safety check --json --output safety-report.json", depend
 safety-check-console = { cmd = "echo 'Running safety check with debug output...' && pip list | head -n 10 && (safety check || (echo '::warning::Safety check failed - this may be due to network connectivity' && exit 0))", depends-on = ["install-editable"] }
 pylint-check = { cmd = "pylint src/pytest_analyzer --output-format=json --output=pylint-report.json", depends-on = ["install-editable"] }
 pylint-check-console = { cmd = "pylint src/pytest_analyzer --errors-only", depends-on = ["install-editable"] }
+quality = { depends-on = ["test", "lint", "typecheck"] }
 static-analysis = { depends-on = ["security-scan-console", "complexity-check", "dead-code-check", "safety-check-console", "pylint-check-console"] }
 check-all = { depends-on = ["lint", "typecheck", "test", "static-analysis"] }
-setup-pre-commit = "pre-commit install --install-hooks"
+emergency-fix = "pixi run lint-fix && pixi run format && pixi run test"
+pre-commit = { cmd = "pre-commit run --all-files", env = { CLAUDECODE = "0" } }
+setup-pre-commit = { cmd = "pre-commit install --install-hooks", env = { CLAUDECODE = "0" } }
 docs = "sphinx-build -b html docs docs/_build/html"
 mcp-server = { cmd = "python -m pytest_analyzer.cli.mcp_cli mcp start --stdio --project-root .", env = { PYTHONPATH = "src" } }
