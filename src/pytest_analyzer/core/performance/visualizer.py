@@ -58,7 +58,7 @@ class BenchmarkVisualizer:
         # Extract data points
         timestamps = [point["run_time"] for point in history]
         values = [point["value"] for point in history]
-        
+
         # Ensure values are numeric for statistics calculations
         numeric_values = [v for v in values if isinstance(v, (int, float))]
 
@@ -66,13 +66,19 @@ class BenchmarkVisualizer:
         if len(numeric_values) > 1:
             import statistics
 
-            recent_numeric = numeric_values[-min(5, len(numeric_values)) :]  # Last 5 values
-            baseline_numeric = numeric_values[: min(5, len(numeric_values))]  # First 5 values
+            recent_numeric = numeric_values[
+                -min(5, len(numeric_values)) :
+            ]  # Last 5 values
+            baseline_numeric = numeric_values[
+                : min(5, len(numeric_values))
+            ]  # First 5 values
 
             trend_stats = {
                 "mean": statistics.mean(numeric_values),
                 "median": statistics.median(numeric_values),
-                "stdev": statistics.stdev(numeric_values) if len(numeric_values) > 1 else 0,
+                "stdev": statistics.stdev(numeric_values)
+                if len(numeric_values) > 1
+                else 0,
                 "min": min(numeric_values),
                 "max": max(numeric_values),
                 "recent_mean": statistics.mean(recent_numeric),
@@ -102,14 +108,25 @@ class BenchmarkVisualizer:
             "x_axis": {
                 "label": "Date",
                 "type": "datetime",
-                "data": [ts.isoformat() if hasattr(ts, 'isoformat') else str(ts) for ts in timestamps],
+                "data": [
+                    ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+                    for ts in timestamps
+                ],
             },
             "y_axis": {"label": f"{metric_name}", "type": "numeric", "data": values},
             "series": [
                 {
                     "name": metric_name,
                     "type": "line",
-                    "data": list(zip([ts.isoformat() if hasattr(ts, 'isoformat') else str(ts) for ts in timestamps], values)),
+                    "data": list(
+                        zip(
+                            [
+                                ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+                                for ts in timestamps
+                            ],
+                            values,
+                        )
+                    ),
                 }
             ],
             "statistics": trend_stats,

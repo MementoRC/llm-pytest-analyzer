@@ -100,11 +100,14 @@ pydantic = ">=2.0.0"
 structlog = ">=24.0.0"
 tiktoken = ">=0.5.0"
 prometheus_client = ">=0.16.0"
-marshmallow = "==3.26.1"
+
+# Explicitly include conda-forge versions to prevent pip from installing PyPI versions
+# TODO: Remove these when flagsmith dependency is resolved/removed
+marshmallow = "==3.26.1"     # Required by flagsmith, prevent PyPI version
 
 [tool.pixi.pypi-dependencies]
-# Packages requiring specific versions incompatible with conda-forge
-# flagsmith = "==3.1.0"  # Requires marshmallow 3.x, conda-forge has 4.x
+# Packages that are truly PyPI-only (verified with pixi search)
+flagsmith = "==3.1.0"  # This installs 4 missing conda packages
 
 # ===== TIERED QUALITY FEATURES =====
 # TIER 1: Essential Quality Gates (ZERO-TOLERANCE)
@@ -142,8 +145,10 @@ vulture = ">=2.7"
 pre-commit = ">=3.0.0"
 pre-commit-hooks = "*"
 
+# Note: types-pyyaml moved to main dependencies to prevent flagsmith PyPI conflicts
+
 [tool.pixi.feature.quality-extended.pypi-dependencies]
-types-pyyaml = "*"
+# (currently empty - all tools available on conda-forge)
 
 # TIER 3: CI/CD & Build
 [tool.pixi.feature.quality-ci.dependencies]
@@ -166,10 +171,10 @@ httpx = ">=0.24.0"
 starlette = ">=0.27.0"
 uvicorn = ">=0.22.0"
 typer = ">=0.9.0"
+# Note: httpx-sse and sse-starlette moved to main dependencies to prevent flagsmith PyPI conflicts
 
 [tool.pixi.feature.mcp.pypi-dependencies]
-httpx-sse = ">=0.3.0"
-sse-starlette = ">=1.6.0"
+# (currently empty - all MCP tools available on conda-forge)
 
 [tool.pixi.environments]
 # Basic runtime environment
