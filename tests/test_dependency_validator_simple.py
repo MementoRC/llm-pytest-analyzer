@@ -53,10 +53,22 @@ def test_validate_dependencies_with_missing():
             raise ImportError("No module named 'nonexistent_module'")
         return MagicMock()
 
-    with patch("importlib.import_module", side_effect=mock_import):
-        with patch(
-            "pytest_analyzer.utils.dependency_validator.required_deps",
-            ["nonexistent_module"],
+    with patch("pytest_analyzer.utils.dependency_validator.importlib.import_module", side_effect=mock_import):
+        # Mock the required_deps list to include a missing dependency
+        original_required_deps = [
+            "pydantic",
+            "rich", 
+            "structlog",
+            "prometheus_client",
+            "mcp",
+            "httpx",
+            "nonexistent_module",  # This will trigger ImportError
+        ]
+        
+        with patch.object(
+            __import__("pytest_analyzer.utils.dependency_validator", fromlist=["required_deps"]),
+            "required_deps",
+            original_required_deps,
         ):
             with pytest.raises(RuntimeError) as exc_info:
                 validate_dependencies()
@@ -65,8 +77,11 @@ def test_validate_dependencies_with_missing():
 
 def test_validate_dependencies_with_security_issue():
     """Test validation with security issues."""
-    with patch("importlib.import_module"):
-        with patch("importlib.metadata.version", return_value="1.0.0"):
+    with patch("pytest_analyzer.utils.dependency_validator.importlib.import_module"):
+        # Mock _check_version_security to return security warnings
+        with patch("pytest_analyzer.utils.dependency_validator._check_version_security") as mock_check:
+            mock_check.return_value = ["Security: test package version 1.0.0 is below minimum required version 2.0.0"]
+            
             with patch(
                 "pytest_analyzer.utils.dependency_validator._validate_package_integrity",
                 return_value=[],
