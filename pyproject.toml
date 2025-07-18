@@ -100,11 +100,11 @@ pydantic = ">=2.0.0"
 structlog = ">=24.0.0"
 tiktoken = ">=0.5.0"
 prometheus_client = ">=0.16.0"
+marshmallow = "==3.26.1"
 
 [tool.pixi.pypi-dependencies]
 # Packages requiring specific versions incompatible with conda-forge
-flagsmith = "==3.1.0"  # Requires marshmallow 3.x, conda-forge has 4.x
-marshmallow = "==3.26.1"  # Required by flagsmith, incompatible with conda-forge 4.x
+# flagsmith = "==3.1.0"  # Requires marshmallow 3.x, conda-forge has 4.x
 
 # ===== TIERED QUALITY FEATURES =====
 # TIER 1: Essential Quality Gates (ZERO-TOLERANCE)
