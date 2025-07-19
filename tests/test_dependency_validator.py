@@ -201,7 +201,7 @@ class TestValidateDependencies:
                 mock_security.return_value = [
                     "Security: test package version 1.0.0 is below minimum required version 2.0.0"
                 ]
-                
+
                 with patch(
                     "pytest_analyzer.utils.dependency_validator._validate_package_integrity",
                     return_value=[],
