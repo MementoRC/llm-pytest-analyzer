@@ -30,9 +30,14 @@ jobs:
         run: |
           pixi run -e dev pre-commit
           if [ -n "$(git status --porcelain)" ]; then
-            echo "::error::Code is not properly formatted. Please run formatters locally before pushing."
-            git diff
-            exit 1
+            echo "::warning::Pre-commit hooks made formatting changes. Committing fixes..."
+            git config --local user.email "action@github.com"
+            git config --local user.name "GitHub Action"
+            git add .
+            git commit -m "style: auto-fix formatting via pre-commit hooks
+
+🤖 Auto-applied by CI pre-commit hooks"
+            git push
           fi
 
   static_analysis:
