@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 try:
     import tiktoken
 except ImportError:
-    tiktoken = None
+    tiktoken = None  # type: ignore[assignment]
     logging.warning(
         "tiktoken not installed. OpenAI token estimation will be less accurate. "
         "Install with 'pip install tiktoken'."
@@ -104,7 +104,7 @@ class TokenTracker(EfficiencyTracker):
     @error_handler(
         "start token tracking session", TokenTrackerError, logger=logger, reraise=True
     )
-    def start_session(self) -> int:
+    def start_session(self) -> Optional[int]:
         """
         Starts a new tracking session and resets real-time counters.
         Overrides parent to add real-time counter reset.
@@ -123,7 +123,7 @@ class TokenTracker(EfficiencyTracker):
     @error_handler(
         "end token tracking session", TokenTrackerError, logger=logger, reraise=True
     )
-    def end_session(self) -> float:
+    def end_session(self) -> Optional[float]:
         """
         Ends the current tracking session.
         Overrides parent to log final real-time stats.
@@ -221,8 +221,8 @@ class TokenTracker(EfficiencyTracker):
             provider: The LLM provider (e.g., "openai", "anthropic").
             model: The specific LLM model used (e.g., "gpt-4", "claude-3-sonnet").
         """
-        input_tokens = self._estimate_tokens(prompt, model, provider)
-        output_tokens = self._estimate_tokens(response, model, provider)
+        input_tokens = self._estimate_tokens(prompt, model, provider) or 0
+        output_tokens = self._estimate_tokens(response, model, provider) or 0
         total_tokens = input_tokens + output_tokens
         estimated_cost = self._estimate_cost(
             input_tokens, output_tokens, provider, model
@@ -236,22 +236,22 @@ class TokenTracker(EfficiencyTracker):
         with self._lock:
             self._current_session_realtime_tokens.setdefault(operation_type, 0)
             self._current_session_realtime_tokens[operation_type] += total_tokens
-            self._current_session_realtime_cost += estimated_cost
+            self._current_session_realtime_cost += estimated_cost or 0
 
             self._check_budget(operation_type, self._current_session_realtime_cost)
 
-        self.metrics_client.gauge("llm_tokens_used_total", total_tokens)
-        self.metrics_client.gauge("llm_cost_usd_total", estimated_cost)
-        self.metrics_client.gauge(
+        self.metrics_client.gauge("llm_tokens_used_total", total_tokens)  # type: ignore[attr-defined]
+        self.metrics_client.gauge("llm_cost_usd_total", estimated_cost)  # type: ignore[attr-defined]
+        self.metrics_client.gauge(  # type: ignore[attr-defined]
             f"llm_tokens_used_by_op_{operation_type}", total_tokens
         )
-        self.metrics_client.gauge(
+        self.metrics_client.gauge(  # type: ignore[attr-defined]
             f"llm_cost_usd_by_op_{operation_type}", estimated_cost
         )
-        self.metrics_client.gauge(
+        self.metrics_client.gauge(  # type: ignore[attr-defined]
             f"llm_tokens_used_by_provider_{provider}", total_tokens
         )
-        self.metrics_client.gauge(
+        self.metrics_client.gauge(  # type: ignore[attr-defined]
             f"llm_cost_usd_by_provider_{provider}", estimated_cost
         )
 
@@ -293,7 +293,7 @@ class TokenTracker(EfficiencyTracker):
                 f"🚨 Token budget alert for '{operation_type}': "
                 f"Current cost ${current_cost:.4f} exceeds budget ${budget:.2f}!"
             )
-            self.metrics_client.increment(f"llm_budget_exceeded_{operation_type}")
+            self.metrics_client.increment(f"llm_budget_exceeded_{operation_type}")  # type: ignore[attr-defined]
         elif current_cost > budget * 0.8:
             logger.info(
                 f"⚠️ Token budget warning for '{operation_type}': "

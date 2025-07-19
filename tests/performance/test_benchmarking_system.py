@@ -337,6 +337,7 @@ def test_storage_result_operations(storage, sample_result):
     assert metric.metric_type == MetricType.EXECUTION_TIME
 
 
+@pytest.mark.timeout(30)
 def test_storage_recent_results(storage):
     """Test retrieving recent benchmark results."""
     # Store multiple results with different timestamps
@@ -362,6 +363,7 @@ def test_storage_recent_results(storage):
     assert recent[2].benchmark_id == "test-2"
 
 
+@pytest.mark.timeout(30)
 def test_storage_baseline_result(storage):
     """Test retrieving baseline results."""
     # Store successful result
