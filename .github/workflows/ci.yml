@@ -107,6 +107,7 @@ jobs:
   performance_test:
     runs-on: ubuntu-latest
     needs: lint_and_types
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
