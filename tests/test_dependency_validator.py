@@ -188,23 +188,26 @@ class TestValidateDependencies:
 
     def test_security_issue_in_dependency(self):
         """Test when a dependency has security issues."""
-        # Create a mock that directly triggers the security issue path
+        # Mock import_module to succeed for all dependencies
         with patch(
             "pytest_analyzer.utils.dependency_validator.importlib.import_module"
         ):
             with patch(
                 "pytest_analyzer.utils.dependency_validator.importlib.metadata.version",
-                return_value="999.0.0",
+                return_value="1.0.0",
             ):
-                # Mock _check_version_security to always return a security warning
-                with patch(
-                    "pytest_analyzer.utils.dependency_validator._check_version_security"
-                ) as mock_check:
-                    # Return security warnings for any package
-                    mock_check.return_value = [
-                        "Security: test package version 1.0.0 is below minimum required version 2.0.0"
-                    ]
+                # Mock _check_version_security to return security warnings for pydantic
+                def mock_security_check(dep, version):
+                    if dep == "pydantic":  # First required dependency
+                        return [
+                            f"Security: {dep} version {version} is below minimum required version 2.0.0"
+                        ]
+                    return []
 
+                with patch(
+                    "pytest_analyzer.utils.dependency_validator._check_version_security",
+                    side_effect=mock_security_check,
+                ):
                     with patch(
                         "pytest_analyzer.utils.dependency_validator._validate_package_integrity",
                         return_value=[],
@@ -212,7 +215,7 @@ class TestValidateDependencies:
                         with pytest.raises(RuntimeError) as exc_info:
                             validate_dependencies()
                         assert "Security" in str(exc_info.value)
-                        assert "below minimum required version" in str(exc_info.value)
+                        assert "security issues were found" in str(exc_info.value)
 
     def test_integrity_issue_in_dependency(self):
         """Test when a dependency has integrity issues."""
