@@ -34,9 +34,7 @@ jobs:
             git config --local user.email "action@github.com"
             git config --local user.name "GitHub Action"
             git add .
-            git commit -m "style: auto-fix formatting via pre-commit hooks
-
-🤖 Auto-applied by CI pre-commit hooks"
+            git commit -m "style: auto-fix formatting via pre-commit hooks\n\n🤖 Auto-applied by CI pre-commit hooks"
             git push
           fi
 
