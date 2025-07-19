@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Installation Guide - llm-pytest-analyzer</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Installation Guide";
+        var mkdocs_page_input_path = "mcp/installation.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> llm-pytest-analyzer
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../api-user-guide/">API User Guide</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../security-practices/">Security Practices</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../operations-guide/">Operations & Maintenance</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../disaster-recovery/">Disaster Recovery</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../project-retrospective/">Project Retrospective</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../environment-managers/">Environment Managers</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../DEPENDENCY_INJECTION/">Dependency Injection</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">llm-pytest-analyzer</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Installation Guide</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer/edit/main/docs/mcp/installation.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="installation-guide">Installation Guide</h1>
+<p>This guide covers installing and setting up the Pytest Analyzer MCP Server for use with Claude Desktop and other MCP clients.</p>
+<h2 id="prerequisites">Prerequisites</h2>
+<ul>
+<li><strong>Python 3.10+</strong> (required for MCP SDK compatibility)</li>
+<li><strong>pytest</strong> installed in your project</li>
+<li><strong>Claude Desktop</strong> or another MCP client</li>
+</ul>
+<h2 id="installation-methods">Installation Methods</h2>
+<h3 id="method-1-pypi-installation-recommended">Method 1: PyPI Installation (Recommended)</h3>
+<pre><code class="language-bash"># Install with MCP support
+pip install pytest-analyzer[mcp]
+
+# Verify installation
+python -m pytest_analyzer.mcp --version
+</code></pre>
+<h3 id="method-2-development-installation">Method 2: Development Installation</h3>
+<pre><code class="language-bash"># Clone the repository
+git clone https://github.com/MementoRC/llm-pytest-analyzer.git
+cd llm-pytest-analyzer
+
+# Install with pixi (recommended)
+pixi install
+pixi shell
+
+# Or with pip
+pip install -e .[mcp]
+</code></pre>
+<h2 id="claude-desktop-configuration">Claude Desktop Configuration</h2>
+<h3 id="step-1-locate-configuration-file">Step 1: Locate Configuration File</h3>
+<p>The Claude Desktop configuration file location depends on your operating system:</p>
+<ul>
+<li><strong>macOS</strong>: <code>~/Library/Application Support/Claude/claude_desktop_config.json</code></li>
+<li><strong>Windows</strong>: <code>%APPDATA%\Claude\claude_desktop_config.json</code></li>
+<li><strong>Linux</strong>: <code>~/.config/claude/claude_desktop_config.json</code></li>
+</ul>
+<h3 id="step-2-add-mcp-server-configuration">Step 2: Add MCP Server Configuration</h3>
+<p>Create or edit the configuration file:</p>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;pytest-analyzer&quot;: {
+      &quot;command&quot;: &quot;python&quot;,
+      &quot;args&quot;: [&quot;-m&quot;, &quot;pytest_analyzer.mcp&quot;],
+      &quot;cwd&quot;: &quot;/path/to/your/project&quot;,
+      &quot;env&quot;: {
+        &quot;PYTEST_ANALYZER_LOG_LEVEL&quot;: &quot;INFO&quot;
+      }
+    }
+  }
+}
+</code></pre>
+<h2 id="testing-the-installation">Testing the Installation</h2>
+<h3 id="test-claude-desktop-integration">Test Claude Desktop Integration</h3>
+<ol>
+<li><strong>Restart Claude Desktop</strong> after configuration changes</li>
+<li><strong>Start a new conversation</strong></li>
+<li><strong>Test the connection</strong>:</li>
+</ol>
+<pre><code>Hi Claude! Can you help me analyze my pytest failures using the pytest-analyzer MCP server?
+</code></pre>
+<p>If configured correctly, Claude should respond with access to pytest analysis tools.</p>
+<hr />
+<p><strong>Need help?</strong> Check the <a href="../troubleshooting/">Troubleshooting Guide</a> or <a href="../faq/">FAQ</a></p>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>
