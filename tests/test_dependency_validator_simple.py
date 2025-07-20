@@ -47,6 +47,7 @@ def test_parse_version():
 
 def test_validate_dependencies_with_missing():
     """Test validation with missing dependencies."""
+
     # Mock importlib.import_module to simulate a missing dependency
     def mock_import_module(name):
         # Simulate that 'prometheus_client' is missing
@@ -61,14 +62,16 @@ def test_validate_dependencies_with_missing():
     ):
         with pytest.raises(RuntimeError) as exc_info:
             validate_dependencies()
-        
+
         # Check that the error message contains information about missing dependencies
         error_message = str(exc_info.value)
         assert "missing" in error_message.lower()
         assert "prometheus_client" in error_message
 
 
-@pytest.mark.skip(reason="Security test requires complex mocking - functionality tested elsewhere")
+@pytest.mark.skip(
+    reason="Security test requires complex mocking - functionality tested elsewhere"
+)
 def test_validate_dependencies_with_security_issue():
     """Test validation with security issues."""
     # This test is skipped because the mocking is complex and the functionality
