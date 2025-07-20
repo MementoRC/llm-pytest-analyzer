@@ -11,7 +11,7 @@ import importlib.metadata
 import logging
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 # Configure logging for this module
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ MIN_VERSIONS = {
 }
 
 # Security: Known vulnerable versions to block
-VULNERABLE_VERSIONS = {
+VULNERABLE_VERSIONS: Dict[str, List[str]] = {
     # Format: "package": ["vulnerable_version1", "vulnerable_version2"]
     # Add specific vulnerable versions as they are discovered
 }
@@ -279,7 +279,7 @@ def validate_dependencies() -> None:
         )
 
 
-def get_dependency_report() -> Dict[str, any]:
+def get_dependency_report() -> Dict[str, Any]:
     """
     Generate a detailed dependency security report.
 
