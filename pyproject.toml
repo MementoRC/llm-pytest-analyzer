@@ -91,6 +91,8 @@ platforms = ["linux-64"]
 [tool.pixi.dependencies]
 # Core runtime dependencies (all available on conda-forge)
 python = ">=3.10"
+pytest = ">=8.4.0"  # Essential for MCP server operation
+python-levenshtein = "*"  # For better fuzzy matching performance
 anthropic = "*"
 openai = "*"
 mcp = ">=1.9.2"
