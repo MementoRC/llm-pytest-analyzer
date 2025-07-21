@@ -29,8 +29,13 @@ def pytest_configure(config):
 
 
 @pytest.fixture(autouse=True)
-def isolate_logging(caplog):
+def isolate_logging(caplog, request):
     """Ensure logger isolation between tests to prevent shared state issues and proper caplog capture."""
+    # Skip logging isolation for async tests to prevent event loop interference
+    if hasattr(request, 'node') and any(mark.name == 'asyncio' for mark in request.node.iter_markers()):
+        yield
+        return
+    
     # Store original logging state
     original_handlers = {}
     original_levels = {}
