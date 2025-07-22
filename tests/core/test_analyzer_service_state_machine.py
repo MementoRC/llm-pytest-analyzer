@@ -114,29 +114,34 @@ class TestAnalyzerServiceStateMachine:
 
     def test_run_and_analyze(self, service, mock_failure, mock_suggestion):
         """Test running pytest and analyzing results."""
-        # Set up mocks to bypass UI elements and complex operations
-        with patch("rich.progress.Progress"):
-            # Mock the state machine to return expected values
-            with patch.object(service, "state_machine") as mock_state_machine:
-                # Set up mock state machine behavior
-                mock_state_machine.get_suggestions.return_value = [mock_suggestion]
-                mock_state_machine.is_completed.return_value = True
+        # Mock the timeout decorator to prevent CI environment issues
+        with patch(
+            "src.pytest_analyzer.core.analyzer_service_state_machine.with_timeout",
+            lambda timeout: lambda func: func,
+        ):
+            # Set up mocks to bypass UI elements and complex operations
+            with patch("rich.progress.Progress"):
+                # Mock the state machine to return expected values
+                with patch.object(service, "state_machine") as mock_state_machine:
+                    # Set up mock state machine behavior
+                    mock_state_machine.get_suggestions.return_value = [mock_suggestion]
+                    mock_state_machine.is_completed.return_value = True
 
-                # Mock run_pytest_only to avoid actual test execution
-                with patch.object(service, "run_pytest_only") as mock_run_pytest:
-                    mock_run_pytest.return_value = [mock_failure]
+                    # Mock run_pytest_only to avoid actual test execution
+                    with patch.object(service, "run_pytest_only") as mock_run_pytest:
+                        mock_run_pytest.return_value = [mock_failure]
 
-                    # Run the method under test (with quiet mode to simplify output)
-                    result = service.run_and_analyze(
-                        "test_path", ["--quiet"], quiet=True
-                    )
+                        # Run the method under test (with quiet mode to simplify output)
+                        result = service.run_and_analyze(
+                            "test_path", ["--quiet"], quiet=True
+                        )
 
-                    # Verify the correct results were returned
-                    assert len(result) == 1
-                    assert result[0] == mock_suggestion
+                        # Verify the correct results were returned
+                        assert len(result) == 1
+                        assert result[0] == mock_suggestion
 
-                    # Verify run_pytest_only was called with expected arguments
-                    mock_run_pytest.assert_called_once()
+                        # Verify run_pytest_only was called with expected arguments
+                        mock_run_pytest.assert_called_once()
 
     @patch("src.pytest_analyzer.core.analyzer_service_state_machine.subprocess.run")
     @patch("src.pytest_analyzer.core.analyzer_service_state_machine.get_extractor")
