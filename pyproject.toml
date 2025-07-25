@@ -213,7 +213,7 @@ lint-fix = "ruff check --fix src tests"
 format = "ruff format src tests"
 typecheck = "mypy src"
 test = { cmd = "python -m pytest tests --ignore=tests/integration --ignore=tests/e2e --ignore=tests/performance --ignore=tests/security -x || (echo '::error::Pytest failed, check dependencies and import paths' && exit 1)", depends-on = ["install-editable"], env = { CLAUDECODE = "0" } }
-test-cov = { cmd = "python -m pytest --cov=src/pytest_analyzer --cov-report=term-missing --cov-report=xml tests --ignore=tests/integration --ignore=tests/e2e --ignore=tests/performance --ignore=tests/security --timeout=60 --maxfail=3 -x --tb=short || (echo '::error::Pytest with coverage failed' && exit 1)", depends-on = ["install-editable-quality"], env = { CLAUDECODE = "0" } }
+test-cov = { cmd = "python -m pytest --cov=src/pytest_analyzer --cov-report=term-missing --cov-report=xml tests --ignore=tests/integration --ignore=tests/e2e --ignore=tests/performance --ignore=tests/security --ignore=tests/core/infrastructure/test_ci_detection.py --timeout=30 --maxfail=5 -x --tb=short || (echo '::error::Pytest with coverage failed' && exit 1)", depends-on = ["install-editable-quality"], env = { CLAUDECODE = "0" } }
 test-heavy = { cmd = "python -m pytest tests/integration tests/e2e tests/performance tests/security || (echo '::error::Heavy tests failed' && exit 1)", depends-on = ["install-editable"], env = { CLAUDECODE = "0" } }
 build = { cmd = "hatch build", depends-on = ["install-editable"] }
 clean = "rm -rf dist build .ruff_cache .mypy_cache .pytest_cache *.egg-info src/pytest_analyzer.egg-info"
