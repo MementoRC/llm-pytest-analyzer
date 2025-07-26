@@ -14,6 +14,7 @@ from pydantic import ValidationError
 
 from ..core.cross_cutting.error_handling import error_context, error_handler
 from ..utils.settings import Settings
+from .facade import MCPAnalyzerFacade
 from .prompts.templates import (
     get_prompt_registry,
     handle_get_prompt,
@@ -82,8 +83,13 @@ class PytestAnalyzerMCPServer:
             project_root=getattr(self.settings, "project_root", None),
         )
 
+        # Initialize facade for MCP tools
+        from ..core.analyzer_facade import PytestAnalyzerFacade
+
+        self.facade = MCPAnalyzerFacade(PytestAnalyzerFacade(self.settings))
+
         # Initialize MCP server with proper configuration
-        self.mcp_server = Server(
+        self.mcp_server: Server = Server(
             name="pytest-analyzer",
             version="1.0.0",
             instructions="MCP server for pytest test analysis and fix suggestions",
@@ -269,9 +275,9 @@ class PytestAnalyzerMCPServer:
             try:
                 # Handler may be async or sync
                 if asyncio.iscoroutinefunction(handler):
-                    result = await handler(sanitized_args)
+                    result = await handler(sanitized_args, self.facade)
                 else:
-                    result = handler(sanitized_args)
+                    result = handler(sanitized_args, self.facade)
 
                 # Record success for circuit breaker
                 self.security_manager.record_success(tool_name=name)
@@ -614,9 +620,9 @@ class PytestAnalyzerMCPServer:
         try:
             # Handler may be async or sync
             if asyncio.iscoroutinefunction(handler):
-                result = await handler(sanitized_args)
+                result = await handler(sanitized_args, self.facade)
             else:
-                result = handler(sanitized_args)
+                result = handler(sanitized_args, self.facade)
 
             # Record success for circuit breaker
             self.security_manager.record_success(tool_name=name)

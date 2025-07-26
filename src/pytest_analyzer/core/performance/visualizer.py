@@ -59,34 +59,45 @@ class BenchmarkVisualizer:
         timestamps = [point["run_time"] for point in history]
         values = [point["value"] for point in history]
 
+        # Ensure values are numeric for statistics calculations
+        numeric_values = [v for v in values if isinstance(v, (int, float))]
+
         # Calculate trend statistics
-        if len(values) > 1:
+        if len(numeric_values) > 1:
             import statistics
 
-            recent_values = values[-min(5, len(values)) :]  # Last 5 values
-            baseline_values = values[: min(5, len(values))]  # First 5 values
+            recent_numeric = numeric_values[
+                -min(5, len(numeric_values)) :
+            ]  # Last 5 values
+            baseline_numeric = numeric_values[
+                : min(5, len(numeric_values))
+            ]  # First 5 values
 
             trend_stats = {
-                "mean": statistics.mean(values),
-                "median": statistics.median(values),
-                "stdev": statistics.stdev(values) if len(values) > 1 else 0,
-                "min": min(values),
-                "max": max(values),
-                "recent_mean": statistics.mean(recent_values),
-                "baseline_mean": statistics.mean(baseline_values),
+                "mean": statistics.mean(numeric_values),
+                "median": statistics.median(numeric_values),
+                "stdev": statistics.stdev(numeric_values)
+                if len(numeric_values) > 1
+                else 0,
+                "min": min(numeric_values),
+                "max": max(numeric_values),
+                "recent_mean": statistics.mean(recent_numeric),
+                "baseline_mean": statistics.mean(baseline_numeric),
                 "trend_direction": "improving"
-                if statistics.mean(recent_values) < statistics.mean(baseline_values)
+                if statistics.mean(recent_numeric) < statistics.mean(baseline_numeric)
                 else "declining",
             }
         else:
+            # Use first numeric value or fallback to 0
+            first_numeric = numeric_values[0] if numeric_values else 0
             trend_stats = {
-                "mean": values[0],
-                "median": values[0],
+                "mean": first_numeric,
+                "median": first_numeric,
                 "stdev": 0,
-                "min": values[0],
-                "max": values[0],
-                "recent_mean": values[0],
-                "baseline_mean": values[0],
+                "min": first_numeric,
+                "max": first_numeric,
+                "recent_mean": first_numeric,
+                "baseline_mean": first_numeric,
                 "trend_direction": "stable",
             }
 
@@ -97,14 +108,25 @@ class BenchmarkVisualizer:
             "x_axis": {
                 "label": "Date",
                 "type": "datetime",
-                "data": [ts.isoformat() for ts in timestamps],
+                "data": [
+                    ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+                    for ts in timestamps
+                ],
             },
             "y_axis": {"label": f"{metric_name}", "type": "numeric", "data": values},
             "series": [
                 {
                     "name": metric_name,
                     "type": "line",
-                    "data": list(zip([ts.isoformat() for ts in timestamps], values)),
+                    "data": list(
+                        zip(
+                            [
+                                ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+                                for ts in timestamps
+                            ],
+                            values,
+                        )
+                    ),
                 }
             ],
             "statistics": trend_stats,

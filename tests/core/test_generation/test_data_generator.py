@@ -50,9 +50,17 @@ def test_hypothesis_strategy_for_function():
     gen = TestDataGenerator()
     func_info = sample_function_info()
     strat = gen.hypothesis_strategy_for_function(func_info)
-    # Just check that the strategy can produce a value
-    example = strat.example()
-    assert "a" in example and "b" in example
+    # Use hypothesis to safely generate examples with controlled settings
+    import hypothesis
+
+    @hypothesis.given(strat)
+    @hypothesis.settings(max_examples=1, deadline=1000)
+    def check_example(example):
+        assert "a" in example and "b" in example
+        assert isinstance(example, dict)
+
+    # Run the test just once to verify the strategy works
+    check_example()
 
 
 def test_llm_edge_case_generation(monkeypatch):

@@ -1,7 +1,7 @@
 from typing import List, Tuple
 
 try:
-    import ahocorasick
+    import ahocorasick  # type: ignore[import-not-found]
 
     AHOCORASICK_AVAILABLE = True
 except ImportError:
