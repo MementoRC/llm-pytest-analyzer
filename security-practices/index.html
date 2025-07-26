@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Security Practices - llm-pytest-analyzer</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Security Practices";
+        var mkdocs_page_input_path = "security-practices.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> llm-pytest-analyzer
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../api-user-guide/">API User Guide</a>
+                </li>
+              </ul>
+              <ul class="current">
+                <li class="toctree-l1 current"><a class="reference internal current" href="#">Security Practices</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#1-exception-handling-and-securityerror-usage">1. Exception Handling and SecurityError Usage</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#2-input-validation">2. Input Validation</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#3-subprocess-and-file-operations">3. Subprocess and File Operations</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#4-dependency-and-supply-chain-security">4. Dependency and Supply Chain Security</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#5-authentication-and-authorization">5. Authentication and Authorization</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#6-secret-management">6. Secret Management</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#7-configuration-security">7. Configuration Security</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#8-security-testing-and-monitoring">8. Security Testing and Monitoring</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#9-incident-response">9. Incident Response</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#references">References</a>
+    </li>
+    </ul>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../operations-guide/">Operations & Maintenance</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../disaster-recovery/">Disaster Recovery</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../project-retrospective/">Project Retrospective</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../environment-managers/">Environment Managers</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../DEPENDENCY_INJECTION/">Dependency Injection</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">llm-pytest-analyzer</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Security Practices</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer/edit/main/docs/security-practices.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="security-practices-guide">Security Practices Guide</h1>
+<p>This guide summarizes the security practices for developers and operators of <code>pytest-analyzer</code>, based on the latest security audits and recommendations.</p>
+<hr />
+<h2 id="1-exception-handling-and-securityerror-usage">1. Exception Handling and SecurityError Usage</h2>
+<ul>
+<li>Use the <code>SecurityError</code> exception for all security-related failures.</li>
+<li>Never silently ignore exceptions in security-sensitive code; always log security events.</li>
+<li>Integrate security logging and monitoring for all authentication, authorization, and file access events.</li>
+</ul>
+<h2 id="2-input-validation">2. Input Validation</h2>
+<ul>
+<li>Validate all user inputs, including CLI arguments, API payloads, and file paths.</li>
+<li>Use schema-based validation for complex data (e.g., JSON).</li>
+<li>Sanitize all inputs before use, especially those passed to subprocesses or file operations.</li>
+</ul>
+<h2 id="3-subprocess-and-file-operations">3. Subprocess and File Operations</h2>
+<ul>
+<li>Avoid shell=True in subprocess calls.</li>
+<li>Use strict input validation and <code>shlex.quote()</code> for all arguments passed to subprocesses.</li>
+<li>Prefer using libraries (e.g., GitPython) over raw subprocess calls for git operations.</li>
+<li>Always validate and sanitize file paths to prevent path traversal and symlink attacks.</li>
+</ul>
+<h2 id="4-dependency-and-supply-chain-security">4. Dependency and Supply Chain Security</h2>
+<ul>
+<li>Pin all dependencies and use lock files with checksums.</li>
+<li>Run regular dependency vulnerability scans (e.g., with Safety).</li>
+<li>Review and approve dependency updates.</li>
+<li>Audit AI API usage for data leakage risks.</li>
+</ul>
+<h2 id="5-authentication-and-authorization">5. Authentication and Authorization</h2>
+<ul>
+<li>Enforce token-based authentication for all sensitive operations.</li>
+<li>Implement role-based access control and fine-grained permissions.</li>
+<li>Enable multi-factor authentication (MFA) for all privileged accounts in production.</li>
+<li>Log all authentication and authorization events.</li>
+</ul>
+<h2 id="6-secret-management">6. Secret Management</h2>
+<ul>
+<li>Never store secrets in code or configuration files.</li>
+<li>Use a dedicated secret management system (e.g., HashiCorp Vault).</li>
+<li>Rotate secrets regularly and audit access.</li>
+</ul>
+<h2 id="7-configuration-security">7. Configuration Security</h2>
+<ul>
+<li>Use secure-by-default configuration.</li>
+<li>Validate all configuration files and environment variables.</li>
+<li>Document all security-related configuration options.</li>
+</ul>
+<h2 id="8-security-testing-and-monitoring">8. Security Testing and Monitoring</h2>
+<ul>
+<li>Include security tests for input validation, injection prevention, and access control.</li>
+<li>Integrate static analysis (Bandit), dependency scanning (Safety), and dynamic testing (OWASP ZAP) into CI/CD.</li>
+<li>Monitor audit logs and set up alerts for suspicious activity.</li>
+</ul>
+<h2 id="9-incident-response">9. Incident Response</h2>
+<ul>
+<li>Maintain a documented incident response plan.</li>
+<li>Retain audit logs for at least 90 days.</li>
+<li>Review and update security policies quarterly.</li>
+</ul>
+<hr />
+<h2 id="references">References</h2>
+<ul>
+<li>Security Audit Report (in project repository)</li>
+<li>Final Security Audit (in project analysis_reports directory)</li>
+<li><a href="https://owasp.org/www-project-top-ten/">OWASP Top 10</a></li>
+<li><a href="https://cwe.mitre.org/top25/archive/2023/2023_cwe_top25.html">CWE/SANS Top 25</a></li>
+<li><a href="https://www.nist.gov/cyberframework">NIST Cybersecurity Framework</a></li>
+</ul>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../api-user-guide/" class="btn btn-neutral float-left" title="API User Guide"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../operations-guide/" class="btn btn-neutral float-right" title="Operations & Maintenance">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+      <span><a href="../api-user-guide/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../operations-guide/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

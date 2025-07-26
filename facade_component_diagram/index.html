@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Facade Component Diagram - llm-pytest-analyzer</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Facade Component Diagram";
+        var mkdocs_page_input_path = "facade_component_diagram.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> llm-pytest-analyzer
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../api-user-guide/">API User Guide</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../security-practices/">Security Practices</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../operations-guide/">Operations & Maintenance</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../disaster-recovery/">Disaster Recovery</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../project-retrospective/">Project Retrospective</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../environment-managers/">Environment Managers</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../DEPENDENCY_INJECTION/">Dependency Injection</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">llm-pytest-analyzer</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Facade Component Diagram</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer/edit/main/docs/facade_component_diagram.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="facade-component-diagram">Facade Component Diagram</h1>
+<h2 id="overview">Overview</h2>
+<p>The following component diagram illustrates the role of the facade within the pytest-analyzer's architecture. It shows how the facade provides backward compatibility with the legacy API while leveraging the new architecture components.</p>
+<h2 id="component-diagram">Component Diagram</h2>
+<pre><code class="language-mermaid">graph TD
+    %% Client components
+    Client[Client Code] --&gt; LegacyService[PytestAnalyzerService]
+    Client --&gt; Facade[PytestAnalyzerFacade]
+    NewClient[New Client Code] --&gt; DIService[DIPytestAnalyzerService]
+
+    %% Facade pattern components
+    subgraph &quot;Backward Compatibility Layer&quot;
+        LegacyService --&gt; Facade
+    end
+
+    %% New architecture components
+    subgraph &quot;New Architecture&quot;
+        Facade --&gt; StateMachine[AnalyzerStateMachine]
+        DIService --&gt; StateMachine
+
+        %% DI Container
+        DIContainer[DI Container] --- Facade
+        DIContainer --- DIService
+        DIContainer --&gt; ExtractorImpl[Extractor Implementations]
+        DIContainer --&gt; AnalyzerImpl[Analyzer Implementations]
+        DIContainer --&gt; SuggesterImpl[Suggester Implementations]
+        DIContainer --&gt; ApplierImpl[Applier Implementations]
+        DIContainer --&gt; LLMService[LLM Service]
+
+        %% State Machine
+        StateMachine --&gt; Extraction[Extraction State]
+        StateMachine --&gt; Analysis[Analysis State]
+        StateMachine --&gt; Suggestion[Suggestion State]
+        StateMachine --&gt; Application[Application State]
+
+        %% Protocol implementations
+        Extraction --&gt; Extractor[Extractor Protocol]
+        Analysis --&gt; Analyzer[Analyzer Protocol]
+        Suggestion --&gt; Suggester[Suggester Protocol]
+        Application --&gt; Applier[Applier Protocol]
+
+        %% Protocol concrete implementations
+        Extractor --&gt; ExtractorImpl
+        Analyzer --&gt; AnalyzerImpl
+        Suggester --&gt; SuggesterImpl
+        Applier --&gt; ApplierImpl
+    end
+
+    %% Styling
+    classDef client fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef facade fill:#bbf,stroke:#333,stroke-width:2px;
+    classDef component fill:#dfd,stroke:#333,stroke-width:1px;
+    classDef protocol fill:#ffc,stroke:#333,stroke-width:1px;
+    classDef state fill:#eff,stroke:#333,stroke-width:1px;
+
+    class Client,NewClient client;
+    class LegacyService,Facade,DIService facade;
+    class DIContainer,StateMachine component;
+    class Extractor,Analyzer,Suggester,Applier protocol;
+    class Extraction,Analysis,Suggestion,Application state;
+</code></pre>
+<h2 id="key-components">Key Components</h2>
+<h3 id="client-layer">Client Layer</h3>
+<ul>
+<li><strong>Client Code</strong>: Existing code using the legacy API</li>
+<li><strong>New Client Code</strong>: New code using the DI-based API</li>
+<li><strong>PytestAnalyzerService</strong>: Legacy class name that inherits from the facade</li>
+<li><strong>PytestAnalyzerFacade</strong>: Facade implementation that provides backward compatibility</li>
+<li><strong>DIPytestAnalyzerService</strong>: New service that directly uses the DI container</li>
+</ul>
+<h3 id="architecture-layer">Architecture Layer</h3>
+<ul>
+<li><strong>DI Container</strong>: Manages dependencies and component instantiation</li>
+<li><strong>AnalyzerStateMachine</strong>: Coordinates the analysis workflow</li>
+</ul>
+<h3 id="protocol-layer">Protocol Layer</h3>
+<ul>
+<li><strong>Extractor Protocol</strong>: Interface for extracting test failures</li>
+<li><strong>Analyzer Protocol</strong>: Interface for analyzing failures</li>
+<li><strong>Suggester Protocol</strong>: Interface for suggesting fixes</li>
+<li><strong>Applier Protocol</strong>: Interface for applying fixes</li>
+</ul>
+<h3 id="implementation-layer">Implementation Layer</h3>
+<ul>
+<li><strong>Extractor Implementations</strong>: Concrete extractor classes</li>
+<li><strong>Analyzer Implementations</strong>: Concrete analyzer classes</li>
+<li><strong>Suggester Implementations</strong>: Concrete suggester classes</li>
+<li><strong>Applier Implementations</strong>: Concrete applier classes</li>
+<li><strong>LLM Service</strong>: Language model service for AI-based suggestions</li>
+</ul>
+<h2 id="flow-of-control">Flow of Control</h2>
+<ol>
+<li>Client code interacts with either the legacy service, facade, or DI-based service</li>
+<li>The facade delegates to the state machine</li>
+<li>The state machine coordinates the workflow through various states</li>
+<li>Each state interacts with the appropriate protocol</li>
+<li>Protocols are implemented by concrete implementations</li>
+<li>The DI container manages the instantiation and configuration of all components</li>
+</ol>
+<p>This architecture provides a clean migration path from the legacy API to the new architecture while maintaining backward compatibility.</p>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>
