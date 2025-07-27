@@ -16,8 +16,8 @@ from typing import (
 
 # Type variables for generic types
 TState = TypeVar("TState", bound="State")
-TContext = TypeVar("TContext", contravariant=True)
-TEvent = TypeVar("TEvent", contravariant=True)
+TContext = TypeVar("TContext")
+TEvent = TypeVar("TEvent")
 TStateMachine = TypeVar("TStateMachine", bound="StateMachine")
 
 
@@ -44,7 +44,7 @@ class TransitionResult(Enum):
 
 
 @runtime_checkable
-class State(Protocol[TContext]):
+class State(Protocol[TContext]):  # type: ignore[misc]
     """Protocol for a state in the state machine."""
 
     @property
@@ -72,7 +72,7 @@ class State(Protocol[TContext]):
 
 
 @runtime_checkable
-class Transition(Protocol[TContext, TEvent]):
+class Transition(Protocol[TContext, TEvent]):  # type: ignore[misc]
     """Protocol for a transition between states."""
 
     @property
@@ -117,7 +117,7 @@ class Transition(Protocol[TContext, TEvent]):
 
 
 @runtime_checkable
-class StateMachine(Protocol[TContext, TEvent]):
+class StateMachine(Protocol[TContext, TEvent]):  # type: ignore[misc]
     """Protocol for a state machine."""
 
     @property

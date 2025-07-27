@@ -163,19 +163,28 @@ class TestDataGenerator:
             from ..domain.value_objects.failure_type import FailureType
             from ..domain.value_objects.test_location import TestLocation
 
-            def make_location():
-                return TestLocation(
-                    file_path=Path(f"/tmp/{self._random_string(6)}.py"),
-                    line_number=random.randint(1, 100),
-                    function_name=self._random_string(8),
-                    class_name=random.choice([self._random_string(6), None]),
-                )
-
+            # Use proper Hypothesis strategies instead of direct random calls
             return st.builds(
                 PytestFailureEntity,
                 id=st.just(str(uuid.uuid4())),
                 test_name=st.text(min_size=1, max_size=30),
-                location=st.builds(make_location),
+                location=st.builds(
+                    TestLocation,
+                    file_path=st.builds(
+                        Path,
+                        st.text(
+                            alphabet=string.ascii_letters, min_size=6, max_size=6
+                        ).map(lambda x: f"/tmp/{x}.py"),
+                    ),
+                    line_number=st.integers(min_value=1, max_value=100),
+                    function_name=st.text(
+                        alphabet=string.ascii_letters, min_size=8, max_size=8
+                    ),
+                    class_name=st.one_of(
+                        st.none(),
+                        st.text(alphabet=string.ascii_letters, min_size=6, max_size=6),
+                    ),
+                ),
                 failure_message=st.text(min_size=1, max_size=100),
                 failure_type=st.sampled_from(list(FailureType)),
                 traceback=st.lists(st.text(min_size=1, max_size=80), max_size=5),

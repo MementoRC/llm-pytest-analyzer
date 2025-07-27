@@ -6,7 +6,7 @@ Provides advanced test-to-code traceability analysis for the TestMaintainer syst
 
 import ast
 from pathlib import Path
-from typing import Dict, List, Set, Union
+from typing import Any, Dict, List, Set, Union
 
 
 class TraceabilityAnalyzer:
@@ -21,7 +21,7 @@ class TraceabilityAnalyzer:
 
     def analyze(
         self, test_file: Union[str, Path], source_files: List[Union[str, Path]]
-    ) -> Dict[str, Set[str]]:
+    ) -> Dict[str, Any]:
         """
         Returns:
             {
@@ -42,8 +42,8 @@ class TraceabilityAnalyzer:
 
         tested_functions = set()
         tested_classes = set()
-        test_to_code_map = {}
-        code_to_test_map = {}
+        test_to_code_map: dict[str, list[str]] = {}
+        code_to_test_map: dict[str, list[str]] = {}
 
         for src, struct in code_structs.items():
             src_funcs = {f["name"] for f in struct.get("functions", [])}
@@ -61,8 +61,8 @@ class TraceabilityAnalyzer:
 
         orphaned_tests = {t for t in test_funcs if t not in test_to_code_map}
 
-        all_src_funcs = set()
-        all_src_classes = set()
+        all_src_funcs: set[str] = set()
+        all_src_classes: set[str] = set()
         for struct in code_structs.values():
             all_src_funcs.update(f["name"] for f in struct.get("functions", []))
             all_src_classes.update(c["name"] for c in struct.get("classes", []))
@@ -75,8 +75,8 @@ class TraceabilityAnalyzer:
             "tested_classes": tested_classes,
             "orphaned_tests": orphaned_tests,
             "missing_coverage": missing_coverage,
-            "test_to_code_map": test_to_code_map,
-            "code_to_test_map": code_to_test_map,
+            "test_to_code_map": dict(test_to_code_map),
+            "code_to_test_map": dict(code_to_test_map),
         }
 
     def _parse_ast(self, file_path: Union[str, Path]) -> ast.AST:
