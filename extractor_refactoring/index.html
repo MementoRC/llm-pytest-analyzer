@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Extractor Layer Refactoring - llm-pytest-analyzer</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Extractor Layer Refactoring";
+        var mkdocs_page_input_path = "extractor_refactoring.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> llm-pytest-analyzer
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../api-user-guide/">API User Guide</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../security-practices/">Security Practices</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../operations-guide/">Operations & Maintenance</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../disaster-recovery/">Disaster Recovery</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../project-retrospective/">Project Retrospective</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../environment-managers/">Environment Managers</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../DEPENDENCY_INJECTION/">Dependency Injection</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">llm-pytest-analyzer</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Extractor Layer Refactoring</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer/edit/main/docs/extractor_refactoring.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="extractor-layer-refactoring">Extractor Layer Refactoring</h1>
+<h2 id="overview">Overview</h2>
+<p>This document describes the refactoring of the extractor layer in the pytest-analyzer project. The goal was to establish a more consistent API design across all extractors, improve code reuse, and enhance maintainability.</p>
+<h2 id="key-changes">Key Changes</h2>
+<ol>
+<li><strong>Created Base Extractor Class</strong>:</li>
+<li>Implemented a <code>BaseExtractor</code> abstract class that defines the common interface and behavior.</li>
+<li>Extracted common functionality into the base class to reduce code duplication.</li>
+<li>
+<p>Added abstract methods that concrete extractors must implement.</p>
+</li>
+<li>
+<p><strong>Consistent API Design</strong>:</p>
+</li>
+<li>All extractors now implement a consistent <code>extract()</code> method that returns a dictionary containing extracted failures and metadata.</li>
+<li>The method handles different input types (string, Path, dictionary) consistently across all extractors.</li>
+<li>
+<p>Maintained backward compatibility with the old <code>extract_failures()</code> method.</p>
+</li>
+<li>
+<p><strong>Improved Error Handling</strong>:</p>
+</li>
+<li>Standardized error handling across all extractors.</li>
+<li>Added proper error propagation and logging.</li>
+<li>
+<p>Made error handling more robust and consistent.</p>
+</li>
+<li>
+<p><strong>Code Duplication Reduction</strong>:</p>
+</li>
+<li>Removed duplicated code in the XML and JSON extractors.</li>
+<li>Created helper methods for handling different input types.</li>
+<li>
+<p>Shared common functionality through the base class.</p>
+</li>
+<li>
+<p><strong>Improved Test Coverage</strong>:</p>
+</li>
+<li>Added comprehensive tests for all extractors.</li>
+<li>Ensured all edge cases are properly tested.</li>
+<li>
+<p>Added tests for the new <code>extract()</code> method on all extractor types.</p>
+</li>
+<li>
+<p><strong>Project Management Improvements</strong>:</p>
+</li>
+<li>Updated .gitignore to exclude backup files and other artifacts.</li>
+<li>Added a clean_project.sh script to help with project maintenance.</li>
+<li>Established better practices for file management.</li>
+</ol>
+<h2 id="implementation-details">Implementation Details</h2>
+<h3 id="baseextractor-class">BaseExtractor Class</h3>
+<p>The <code>BaseExtractor</code> class provides:</p>
+<ul>
+<li>A common <code>extract()</code> method that handles different input types.</li>
+<li>A backward-compatible <code>extract_failures()</code> method.</li>
+<li>Abstract methods <code>_do_extract()</code> and <code>_extract_from_dict()</code> that concrete extractors must implement.</li>
+<li>Common helper methods like <code>_extract_from_path()</code>.</li>
+</ul>
+<h3 id="concrete-extractors">Concrete Extractors</h3>
+<ol>
+<li><strong>XmlResultExtractor</strong>:</li>
+<li>Refactored to extend <code>BaseExtractor</code>.</li>
+<li>Implemented abstract methods specific to XML parsing.</li>
+<li>
+<p>Added specialized extraction from XML elements.</p>
+</li>
+<li>
+<p><strong>JsonResultExtractor</strong>:</p>
+</li>
+<li>Already extended <code>BaseExtractor</code>.</li>
+<li>Added tests for the <code>extract()</code> method behavior.</li>
+<li>
+<p>Ensured consistent behavior with other extractors.</p>
+</li>
+<li>
+<p><strong>PytestOutputExtractor</strong>:</p>
+</li>
+<li>Refactored to match the API design of other extractors.</li>
+<li>Added <code>_extract_from_text()</code> helper method.</li>
+<li>Ensured proper error handling.</li>
+</ol>
+<h2 id="benefits">Benefits</h2>
+<ul>
+<li><strong>Maintainability</strong>: The code is now more maintainable with clear interfaces and responsibilities.</li>
+<li><strong>Extensibility</strong>: Adding new extractors is easier with the base class in place.</li>
+<li><strong>Reliability</strong>: Better error handling and test coverage makes the code more reliable.</li>
+<li><strong>Readability</strong>: Consistent API design makes the code easier to understand.</li>
+<li><strong>Scalability</strong>: The architecture can now more easily accommodate new input types or formats.</li>
+</ul>
+<h2 id="future-considerations">Future Considerations</h2>
+<ul>
+<li>Add more specialized extractors for different pytest output formats.</li>
+<li>Further consolidate common parsing logic into shared utilities.</li>
+<li>Consider a factory pattern for dynamically selecting the appropriate extractor based on input.</li>
+</ul>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

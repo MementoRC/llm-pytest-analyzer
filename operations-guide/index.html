@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Operations & Maintenance - llm-pytest-analyzer</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Operations \u0026 Maintenance";
+        var mkdocs_page_input_path = "operations-guide.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> llm-pytest-analyzer
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../api-user-guide/">API User Guide</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../security-practices/">Security Practices</a>
+                </li>
+              </ul>
+              <ul class="current">
+                <li class="toctree-l1 current"><a class="reference internal current" href="#">Operations & Maintenance</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#1-deployment">1. Deployment</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#2-configuration">2. Configuration</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#3-running-the-analyzer">3. Running the Analyzer</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#4-monitoring-and-logging">4. Monitoring and Logging</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#5-backup-and-data-management">5. Backup and Data Management</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#6-upgrades-and-maintenance">6. Upgrades and Maintenance</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#7-troubleshooting">7. Troubleshooting</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#8-support-and-community">8. Support and Community</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#quick-reference">Quick Reference</a>
+    </li>
+    </ul>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../disaster-recovery/">Disaster Recovery</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../project-retrospective/">Project Retrospective</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../environment-managers/">Environment Managers</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../DEPENDENCY_INJECTION/">Dependency Injection</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">llm-pytest-analyzer</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Operations & Maintenance</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer/edit/main/docs/operations-guide.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="operations-maintenance-guide">Operations &amp; Maintenance Guide</h1>
+<p>This guide provides best practices and procedures for operating and maintaining the <code>pytest-analyzer</code> system in production and development environments.</p>
+<hr />
+<h2 id="1-deployment">1. Deployment</h2>
+<ul>
+<li>Deploy using a virtual environment or supported environment manager (Pixi, Poetry, Hatch, UV, Pipenv).</li>
+<li>Install dependencies using the lock file to ensure reproducibility.</li>
+<li>Use environment variables or a secret manager for sensitive configuration.</li>
+</ul>
+<h2 id="2-configuration">2. Configuration</h2>
+<ul>
+<li>Project and user configuration can be set in <code>.pytest-analyzer.yaml</code> or <code>.pytest-analyzer.json</code>.</li>
+<li>Key settings: environment manager, LLM integration, resource limits, security options.</li>
+<li>Validate configuration before deployment.</li>
+</ul>
+<h2 id="3-running-the-analyzer">3. Running the Analyzer</h2>
+<ul>
+<li>Use the CLI for most operations:
+  <code>pytest-analyzer path/to/tests [options]</code></li>
+<li>For automation, use the Python API.</li>
+<li>Monitor resource usage (CPU, memory) and adjust limits as needed.</li>
+</ul>
+<h2 id="4-monitoring-and-logging">4. Monitoring and Logging</h2>
+<ul>
+<li>Enable and monitor audit and application logs.</li>
+<li>Integrate with centralized logging and monitoring systems (e.g., ELK, Prometheus).</li>
+<li>Set up alerts for failures, security events, and resource exhaustion.</li>
+</ul>
+<h2 id="5-backup-and-data-management">5. Backup and Data Management</h2>
+<ul>
+<li>Regularly back up configuration files, test results, and any persistent cache or state.</li>
+<li>Store backups securely and test restoration procedures.</li>
+</ul>
+<h2 id="6-upgrades-and-maintenance">6. Upgrades and Maintenance</h2>
+<ul>
+<li>Review release notes before upgrading.</li>
+<li>Test upgrades in a staging environment.</li>
+<li>Run <code>safety check</code> and static analysis after upgrades.</li>
+<li>Rotate secrets and review access controls regularly.</li>
+</ul>
+<h2 id="7-troubleshooting">7. Troubleshooting</h2>
+<ul>
+<li>Check logs for errors and warnings.</li>
+<li>Use the <code>--debug</code> flag for verbose output.</li>
+<li>Validate environment manager detection and configuration.</li>
+<li>For LLM/API issues, check API keys and network connectivity.</li>
+</ul>
+<h2 id="8-support-and-community">8. Support and Community</h2>
+<ul>
+<li>Report issues on the <a href="https://github.com/MementoRC/llm-pytest-analyzer">GitHub repository</a>.</li>
+<li>Consult the <a href="../api-user-guide/">API User Guide</a> and <a href="../architecture/">Architecture</a> for advanced troubleshooting.</li>
+</ul>
+<hr />
+<h2 id="quick-reference">Quick Reference</h2>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Command/Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Run analyzer</td>
+<td><code>pytest-analyzer path/to/tests</code></td>
+</tr>
+<tr>
+<td>Specify env manager</td>
+<td><code>--env-manager poetry</code></td>
+</tr>
+<tr>
+<td>Enable LLM</td>
+<td><code>--use-llm --llm-api-key &lt;key&gt;</code></td>
+</tr>
+<tr>
+<td>Check dependencies</td>
+<td><code>safety check</code></td>
+</tr>
+<tr>
+<td>View logs</td>
+<td>Check configured log directory or system logs</td>
+</tr>
+<tr>
+<td>Backup config</td>
+<td>Copy <code>.pytest-analyzer.yaml</code> to secure storage</td>
+</tr>
+<tr>
+<td>Restore config</td>
+<td>Copy backup to project root</td>
+</tr>
+</tbody>
+</table>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../security-practices/" class="btn btn-neutral float-left" title="Security Practices"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../disaster-recovery/" class="btn btn-neutral float-right" title="Disaster Recovery">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+      <span><a href="../security-practices/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../disaster-recovery/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

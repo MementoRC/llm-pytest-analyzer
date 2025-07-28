@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>API User Guide - llm-pytest-analyzer</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "API User Guide";
+        var mkdocs_page_input_path = "api-user-guide.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> llm-pytest-analyzer
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../architecture/">Architecture</a>
+                </li>
+              </ul>
+              <ul class="current">
+                <li class="toctree-l1 current"><a class="reference internal current" href="#">API User Guide</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#command-line-usage">Command Line Usage</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#basic-usage">Basic Usage</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#extraction-format">Extraction Format</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#analyze-existing-output">Analyze Existing Output</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#resource-controls">Resource Controls</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#additional-pytest-arguments">Additional Pytest Arguments</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#llm-integration">LLM Integration</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#python-api-usage">Python API Usage</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#basic-example">Basic Example</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#analyze-existing-output_1">Analyze Existing Output</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#features-reference">Features Reference</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#configuration">Configuration</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#cli-flags">CLI Flags</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#configuration-file">Configuration File</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#troubleshooting">Troubleshooting</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#further-reading">Further Reading</a>
+    </li>
+    </ul>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../security-practices/">Security Practices</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../operations-guide/">Operations & Maintenance</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../disaster-recovery/">Disaster Recovery</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../project-retrospective/">Project Retrospective</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../environment-managers/">Environment Managers</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../DEPENDENCY_INJECTION/">Dependency Injection</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">llm-pytest-analyzer</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">API User Guide</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer/edit/main/docs/api-user-guide.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="api-user-guide">API User Guide</h1>
+<p>This guide provides comprehensive instructions for using the <code>pytest-analyzer</code> both from the command line and as a Python API. It compiles and expands on the usage documentation from the README and other sources.</p>
+<hr />
+<h2 id="command-line-usage">Command Line Usage</h2>
+<h3 id="basic-usage">Basic Usage</h3>
+<pre><code class="language-bash">pytest-analyzer path/to/tests
+</code></pre>
+<h3 id="extraction-format">Extraction Format</h3>
+<ul>
+<li>JSON (default):
+  <code>pytest-analyzer path/to/tests --json</code></li>
+<li>XML:
+  <code>pytest-analyzer path/to/tests --xml</code></li>
+<li>Plugin:
+  <code>pytest-analyzer path/to/tests --plugin</code></li>
+</ul>
+<h3 id="analyze-existing-output">Analyze Existing Output</h3>
+<pre><code class="language-bash">pytest-analyzer --output-file path/to/pytest_output.json
+</code></pre>
+<h3 id="resource-controls">Resource Controls</h3>
+<pre><code class="language-bash">pytest-analyzer path/to/tests --timeout 600 --max-memory 2048
+</code></pre>
+<h3 id="additional-pytest-arguments">Additional Pytest Arguments</h3>
+<pre><code class="language-bash">pytest-analyzer path/to/tests --pytest-args &quot;--verbose --no-header&quot;
+pytest-analyzer path/to/tests -k &quot;test_specific_function&quot;
+pytest-analyzer path/to/tests --env-manager poetry
+</code></pre>
+<h3 id="llm-integration">LLM Integration</h3>
+<p>Enable LLM-based suggestions:</p>
+<pre><code class="language-bash">pytest-analyzer path/to/tests --use-llm
+pytest-analyzer path/to/tests --use-llm --llm-api-key YOUR_API_KEY --llm-model claude-3-haiku
+</code></pre>
+<hr />
+<h2 id="python-api-usage">Python API Usage</h2>
+<h3 id="basic-example">Basic Example</h3>
+<pre><code class="language-python">from pytest_analyzer import PytestAnalyzerService, Settings
+
+settings = Settings(
+    max_failures=10,
+    max_suggestions=3,
+    min_confidence=0.7,
+    preferred_format=&quot;json&quot;
+)
+
+analyzer = PytestAnalyzerService(settings=settings)
+suggestions = analyzer.run_and_analyze(&quot;tests/&quot;, [&quot;--verbose&quot;])
+
+for suggestion in suggestions:
+    print(f&quot;Test: {suggestion.failure.test_name}&quot;)
+    print(f&quot;Error: {suggestion.failure.error_type}: {suggestion.failure.error_message}&quot;)
+    print(f&quot;Suggestion: {suggestion.suggestion}&quot;)
+    print(f&quot;Confidence: {suggestion.confidence}&quot;)
+</code></pre>
+<h3 id="analyze-existing-output_1">Analyze Existing Output</h3>
+<pre><code class="language-python">suggestions = analyzer.analyze_pytest_output(&quot;pytest_output.json&quot;)
+</code></pre>
+<hr />
+<h2 id="features-reference">Features Reference</h2>
+<ul>
+<li><strong>Multiple Extraction Formats</strong>: JSON, XML, plugin</li>
+<li><strong>LLM Integration</strong>: Anthropic Claude, OpenAI GPT, hybrid suggestions</li>
+<li><strong>Environment Manager Integration</strong>: Pixi, Poetry, Hatch, UV, Pipenv, Pip+Venv</li>
+<li><strong>Resource Monitoring</strong>: Timeouts, memory limits</li>
+<li><strong>Path Resolution</strong>: Safe path handling, mock directories</li>
+<li><strong>Intelligent Fix Suggestions</strong>: Error-type analysis, confidence scoring, code context</li>
+<li><strong>Rich Console Output</strong>: Syntax highlighting, organized layout, progress info</li>
+</ul>
+<hr />
+<h2 id="configuration">Configuration</h2>
+<h3 id="cli-flags">CLI Flags</h3>
+<ul>
+<li><code>--json</code>, <code>--xml</code>, <code>--plugin</code>: Extraction format</li>
+<li><code>--output-file</code>: Analyze existing output</li>
+<li><code>--timeout</code>, <code>--max-memory</code>: Resource limits</li>
+<li><code>--pytest-args</code>: Pass arguments to pytest</li>
+<li><code>--env-manager</code>: Specify environment manager</li>
+<li><code>--use-llm</code>, <code>--llm-api-key</code>, <code>--llm-model</code>: LLM integration</li>
+</ul>
+<h3 id="configuration-file">Configuration File</h3>
+<p>You can use <code>.pytest-analyzer.yaml</code> or <code>.pytest-analyzer.json</code> to set defaults.</p>
+<pre><code class="language-yaml">max_failures: 10
+max_suggestions: 3
+min_confidence: 0.7
+preferred_format: &quot;json&quot;
+environment_manager: &quot;poetry&quot;
+use_llm: true
+llm_model: &quot;auto&quot;
+</code></pre>
+<hr />
+<h2 id="troubleshooting">Troubleshooting</h2>
+<ul>
+<li><strong>Incorrect environment manager detected</strong>: Use <code>--env-manager</code> to override.</li>
+<li><strong>LLM suggestions not working</strong>: Check API key and model availability.</li>
+<li><strong>Resource errors</strong>: Adjust <code>--timeout</code> and <code>--max-memory</code>.</li>
+<li><strong>No suggestions generated</strong>: Lower <code>min_confidence</code> or check test output.</li>
+</ul>
+<hr />
+<h2 id="further-reading">Further Reading</h2>
+<ul>
+<li><a href="../environment-managers/">Environment Manager Integration</a></li>
+<li><a href="../DEPENDENCY_INJECTION/">Dependency Injection</a></li>
+<li><a href="../architecture/">Architecture</a></li>
+<li><a href="../security-practices/">Security Practices</a></li>
+</ul>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../architecture/" class="btn btn-neutral float-left" title="Architecture"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../security-practices/" class="btn btn-neutral float-right" title="Security Practices">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/MementoRC/llm-pytest-analyzer" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+      <span><a href="../architecture/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../security-practices/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>
